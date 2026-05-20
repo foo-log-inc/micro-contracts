@@ -1,0 +1,113 @@
+version: 1
+system:
+  id: micro-contracts
+  name: Micro-Contracts Agent System
+  default_workflow_order:
+    - openapi-audit
+    - published-review
+    - overlay-proposal
+    - guardrails-audit
+
+agents: { $ref: "./agents/" }
+tasks: { $ref: "./tasks.yaml" }
+handoff_types: { $ref: "./handoff-types.yaml" }
+artifacts: { $ref: "./artifacts.yaml" }
+
+guardrails:
+  output-schema-conformance:
+    description: >-
+      Ensure all agent outputs conform to AgentAuditResult schema.
+      Validation is performed at runtime via Zod schema in handoff definition.
+    scope:
+      agents:
+        - openapi-design-reviewer
+      tasks:
+        - audit-openapi-design
+        - audit-published-api
+        - propose-overlay-candidates
+        - audit-guardrails-coverage
+    rationale: >-
+      Structured output conformance is critical for CLI parsing and
+      downstream tooling integration.
+
+  no-file-modification:
+    description: >-
+      Agent must never modify OpenAPI specs, overlays, config, or any
+      source files. Agent operates in read-only mode for analysis only.
+    scope:
+      agents:
+        - openapi-design-reviewer
+    rationale: >-
+      openapi-design-reviewer is a static analysis agent.
+      File modification capabilities have been moved to artifact-contracts.
+
+  confidence-threshold:
+    description: >-
+      Findings with confidence below 0.5 must include an explicit
+      uncertainty disclaimer in their recommendation.
+    scope:
+      tasks:
+        - audit-openapi-design
+        - audit-published-api
+        - propose-overlay-candidates
+        - audit-guardrails-coverage
+    rationale: >-
+      Low-confidence findings without disclaimers may mislead operators
+      into applying unnecessary changes to API design.
+
+guardrail_policies:
+  openapi-review-policy:
+    description: >-
+      Policy governing OpenAPI design review operations.
+      Groups all guardrails applicable to the openapi-design-reviewer agent.
+    rules:
+      - guardrail: output-schema-conformance
+        severity: critical
+        action: block
+      - guardrail: no-file-modification
+        severity: critical
+        action: block
+      - guardrail: confidence-threshold
+        severity: warning
+        action: warn
+
+workflow:
+  openapi-audit:
+    description: Audit OpenAPI design quality and module boundary alignment
+    trigger: cli-command
+    entry_conditions:
+      - OpenAPI specification and config are available
+    steps:
+      - type: delegate
+        task: audit-openapi-design
+        from_agent: openapi-design-reviewer
+
+  published-review:
+    description: Review published API surface for internal leakage and compatibility
+    trigger: cli-command
+    entry_conditions:
+      - Both master and published specs are available
+    steps:
+      - type: delegate
+        task: audit-published-api
+        from_agent: openapi-design-reviewer
+
+  overlay-proposal:
+    description: Propose cross-cutting overlay candidates
+    trigger: cli-command
+    entry_conditions:
+      - OpenAPI specification and existing overlays are available
+    steps:
+      - type: delegate
+        task: propose-overlay-candidates
+        from_agent: openapi-design-reviewer
+
+  guardrails-audit:
+    description: Audit guardrails configuration for drift and lint coverage
+    trigger: cli-command
+    entry_conditions:
+      - guardrails.yaml configuration exists
+    steps:
+      - type: delegate
+        task: audit-guardrails-coverage
+        from_agent: openapi-design-reviewer

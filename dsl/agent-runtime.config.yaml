@@ -1,0 +1,2 @@
+dsl: ./micro-contracts-dsl.yaml
+generated_dir: ../src/generated/dsl

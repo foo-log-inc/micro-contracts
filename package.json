@@ -1,6 +1,6 @@
 {
   "name": "micro-contracts",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Contract-first OpenAPI toolchain that keeps TypeScript UI and microservices aligned via code generation",
   "type": "module",
   "main": "dist/index.js",
@@ -21,6 +21,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "generate": "tsx src/cli.ts generate",
+    "contract:validate": "npx cli-contracts validate",
+    "contract:generate": "npx cli-contracts generate",
+    "dsl:generate": "npx agent-runtime generate --config dsl/agent-runtime.config.yaml",
     "docs:sync": "npx embedoc build",
     "docs:check": "npx embedoc build && git diff --exit-code README.md docs/",
     "prepublishOnly": "npm run build && npm test"
@@ -47,15 +50,30 @@
     "url": "https://github.com/foo-ogawa/micro-contracts/issues"
   },
   "dependencies": {
+    "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "glob": "^10.3.10",
     "handlebars": "^4.7.8",
     "js-yaml": "^4.1.0",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "zod": "^3.22.0"
+  },
+  "peerDependencies": {
+    "agent-contracts-runtime": ">=0.30.0"
+  },
+  "peerDependenciesMeta": {
+    "agent-contracts-runtime": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@cursor/sdk": "^1.0.13",
+    "@google/genai": "^2.4.0",
+    "@openai/agents": "^0.11.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.0",
+    "agent-contracts": "^0.30.1",
+    "agent-contracts-runtime": "^0.30.0",
     "cli-contracts": "^0.30.2",
     "embedoc": "^0.9.0",
     "tsx": "^4.7.0",

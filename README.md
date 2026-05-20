@@ -451,6 +451,68 @@ Generate or verify manifest for generated artifacts.
 | `--verify` | Verify existing manifest |
 | `-o, --output <path>` | Output manifest path |
 
+### audit-openapi
+
+Run LLM-based OpenAPI design quality audit. Evaluates path design, module boundary alignment, schema bloat, and cross-cutting concern coverage. Requires `agent-contracts-runtime`.
+
+| Option | Description |
+|--------|-------------|
+| `-c, --config <path>` | Path to config file |
+| `-m, --module <name>` | Module name to audit (default: all) |
+| `-a, --adapter <name>` | SDK adapter (`cursor`, `claude`, `openai`, `gemini`, `mock`) |
+| `--model <name>` | LLM model override |
+| `--show-prompt` | Output the constructed prompt without calling LLM |
+| `--fail-on <level>` | Minimum severity for non-zero exit (`warning`, `error`, `critical`) |
+| `-o, --output <file>` | Write result to a file |
+| `--report-format <fmt>` | Output format (`json`, `text`, `yaml`; default: `text`) |
+
+### review-published
+
+Review published API surface for internal type leakage and backward compatibility risks.
+
+| Option | Description |
+|--------|-------------|
+| `-c, --config <path>` | Path to config file |
+| `-m, --module <name>` | Module name to review (default: all) |
+| `-a, --adapter <name>` | SDK adapter (`cursor`, `claude`, `openai`, `gemini`, `mock`) |
+| `--model <name>` | LLM model override |
+| `--show-prompt` | Output the constructed prompt without calling LLM |
+| `--fail-on <level>` | Minimum severity for non-zero exit |
+| `-o, --output <file>` | Write result to a file |
+| `--report-format <fmt>` | Output format (default: `text`) |
+
+### propose-overlays
+
+Propose cross-cutting overlay candidates for authentication, tenancy, rate limiting, and audit logging.
+
+| Option | Description |
+|--------|-------------|
+| `-c, --config <path>` | Path to config file |
+| `-m, --module <name>` | Module name to analyze (default: all) |
+| `-a, --adapter <name>` | SDK adapter (`cursor`, `claude`, `openai`, `gemini`, `mock`) |
+| `--model <name>` | LLM model override |
+| `--show-prompt` | Output the constructed prompt without calling LLM |
+| `--fail-on <level>` | Minimum severity for non-zero exit |
+| `-o, --output <file>` | Write result to a file |
+| `--report-format <fmt>` | Output format (default: `json`) |
+
+### audit-guardrails
+
+Audit guardrails configuration for drift detection and lint rule coverage. File permission and editing checks have been moved to `artifact-contracts`.
+
+| Option | Description |
+|--------|-------------|
+| `-c, --config <path>` | Path to config file |
+| `-g, --guardrails <path>` | Path to guardrails.yaml |
+| `-a, --adapter <name>` | SDK adapter (`cursor`, `claude`, `openai`, `gemini`, `mock`) |
+| `--model <name>` | LLM model override |
+| `--show-prompt` | Output the constructed prompt without calling LLM |
+| `--fail-on <level>` | Minimum severity for non-zero exit |
+| `-o, --output <file>` | Write result to a file |
+| `--report-format <fmt>` | Output format (default: `text`) |
+
+> LLM commands require [`agent-contracts-runtime`](https://www.npmjs.com/package/agent-contracts-runtime) as a peer dependency. Install it to use these commands, or use `--show-prompt` to inspect the prompt without calling the LLM.
+
 ---
 
 ## Generated Code
