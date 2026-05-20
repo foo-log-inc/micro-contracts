@@ -5,7 +5,10 @@ node_modules/
 dist/
 
 # Generated files (auto-generated from OpenAPI, do not commit)
-**/generated/
+examples/**/generated/
+
+# cli-contracts / dsl generated code (must be committed)
+!src/generated/
 
 # IDE
 .idea/
