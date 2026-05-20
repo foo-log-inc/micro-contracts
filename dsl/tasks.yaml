@@ -1,0 +1,96 @@
+audit-openapi-design:
+  description: Audit OpenAPI specification design quality and module boundary alignment
+  target_agent: openapi-design-reviewer
+  allowed_from_agents:
+    - openapi-design-reviewer
+  workflow: openapi-audit
+  input_artifacts:
+    - openapi-spec-input
+    - config-source
+    - overlay-definitions
+    - lint-results-input
+    - deps-graph-input
+  invocation_handoff: openapi-audit-request
+  result_handoff: openapi-audit-result
+  responsibilities:
+    - Evaluate all paths for module boundary alignment
+    - Check operationId and x-micro-contracts-service consistency
+    - Detect schema bloat and excessive coupling
+    - Assess CRUD vs use-case-oriented design
+    - Review overlay usage and cross-cutting concerns
+  completion_criteria:
+    - All paths and operations have been evaluated for design quality
+    - Findings classified by category (design_quality, responsibility_boundary, api_bloat, dependency_coupling)
+    - Module boundary alignment explicitly assessed
+    - Recommendations reference specific paths and operations
+    - Output conforms to AgentAuditResult schema
+
+audit-published-api:
+  description: Review published API surface for internal type leakage and compatibility
+  target_agent: openapi-design-reviewer
+  allowed_from_agents:
+    - openapi-design-reviewer
+  workflow: published-review
+  input_artifacts:
+    - openapi-spec-input
+    - published-spec-input
+    - config-source
+    - deps-graph-input
+  invocation_handoff: openapi-audit-request
+  result_handoff: published-review-result
+  responsibilities:
+    - Compare master spec against published spec for leakage
+    - Identify schemas with x-micro-contracts-non-exportable that appear in published surface
+    - Assess backward compatibility of published endpoint changes
+    - Enumerate published endpoints with their operation details
+  completion_criteria:
+    - All published endpoints enumerated with operationId, path, method
+    - Leaked internal types identified with referencing context
+    - Backward compatibility risks assessed for each published endpoint
+    - Output conforms to PublishedReviewResult schema (publishedEndpoints, leakedInternalTypes)
+
+propose-overlay-candidates:
+  description: Propose cross-cutting overlay candidates for the API specification
+  target_agent: openapi-design-reviewer
+  allowed_from_agents:
+    - openapi-design-reviewer
+  workflow: overlay-proposal
+  input_artifacts:
+    - openapi-spec-input
+    - overlay-definitions
+    - config-source
+  invocation_handoff: openapi-audit-request
+  result_handoff: overlay-proposal-result
+  responsibilities:
+    - Identify endpoints needing cross-cutting concerns (auth, tenancy, rate limit, audit log)
+    - Generate overlay candidates with endpoint, type, rationale, and suggested config
+    - Verify proposals do not conflict with existing overlay definitions
+    - Group candidates by overlay type for batch application
+  completion_criteria:
+    - Candidate overlays identified for endpoints lacking cross-cutting concerns
+    - Each candidate includes endpoint, overlayType, rationale, and suggestedConfig
+    - No conflicts with existing overlay definitions confirmed
+    - Output conforms to OverlayProposalResult schema (overlayCandidates)
+
+audit-guardrails-coverage:
+  description: Audit guardrails.yaml for drift detection and lint rule coverage
+  target_agent: openapi-design-reviewer
+  allowed_from_agents:
+    - openapi-design-reviewer
+  workflow: guardrails-audit
+  input_artifacts:
+    - guardrails-config-input
+    - config-source
+    - openapi-spec-input
+  invocation_handoff: openapi-audit-request
+  result_handoff: guardrails-audit-result
+  responsibilities:
+    - Verify generated file patterns cover all configured output directories
+    - Check that drift detection covers all generated artifact types
+    - Verify OpenAPI lint rules are configured for all spec files
+    - Identify uncovered paths in guardrails configuration
+  completion_criteria:
+    - All configured output directories checked against guardrails generated patterns
+    - Covered and uncovered paths explicitly listed
+    - Lint rule coverage for each spec file assessed
+    - Output conforms to GuardrailsAuditResult schema (coveredPaths, uncoveredPaths)

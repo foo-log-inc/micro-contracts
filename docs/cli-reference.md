@@ -15,6 +15,10 @@ Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contr
   - [deps](#micro-contracts-deps)
   - [guardrails-init](#micro-contracts-guardrails-init)
   - [manifest](#micro-contracts-manifest)
+  - [audit-openapi](#micro-contracts-audit-openapi)
+  - [review-published](#micro-contracts-review-published)
+  - [propose-overlays](#micro-contracts-propose-overlays)
+  - [audit-guardrails](#micro-contracts-audit-guardrails)
 
 ---
 
@@ -511,6 +515,302 @@ x-agent:
   idempotent: true
   side_effects: 
     - file_write
+```
+
+---
+
+### audit-openapi
+
+Run LLM-based OpenAPI design quality audit.
+
+Performs a semantic review of OpenAPI specification design quality using an LLM agent. Evaluates path design, module boundary alignment, schema bloat, CRUD vs use-case orientation, and cross-cutting concern coverage. Requires agent-contracts-runtime.
+
+**Usage:**
+
+```
+micro-contracts audit-openapi
+```
+```
+micro-contracts audit-openapi -m core
+```
+```
+micro-contracts audit-openapi --adapter cursor --report-format text
+```
+```
+micro-contracts audit-openapi --show-prompt
+```
+
+#### Options
+
+| Option | Aliases | Required | Default | Description |
+|---|---|---|---|---|
+| `--config` | -c | No |  | Path to config file (micro-contracts.config.yaml). |
+| `--module` | -m | No |  | Module name to audit (default is all modules). |
+| `--adapter` | -a | No |  | SDK adapter to use for LLM execution. |
+| `--model` |  | No |  | LLM model override. |
+| `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
+| `--output` | -o | No |  | Write result to a file instead of stdout. |
+| `--report-format` |  | No | `"text"` | Output format for the audit report. |
+
+#### Exit Codes
+
+**Exit 0:** Audit completed, no blocking findings.
+
+- **stdout:** format=`{options.report-format}`
+
+**Exit 1:** Unexpected error.
+
+- **stderr:** format=`text`
+
+**Exit 3:** Input validation failed (config not found, spec invalid).
+
+- **stderr:** format=`text`
+
+**Exit 10:** Completed with blocking findings.
+
+- **stdout:** format=`{options.report-format}`
+
+**Exit 11:** Runtime dependency missing (agent-contracts-runtime).
+
+- **stderr:** format=`text`
+
+**Exit 12:** LLM provider or adapter error.
+
+- **stderr:** format=`text`
+
+#### Extensions
+
+```yaml
+x-agent: 
+  risk_level: low
+  requires_confirmation: false
+  idempotent: true
+  side_effects: 
+    - network
+  sideEffectNote: Network calls to LLM provider when adapter is not mock. Filesystem write only when --output is specified.
+  safe_dry_run_option: show-prompt
+  expectedDurationMs: 120000
+  retryableExitCodes: 
+    - 12
+```
+
+---
+
+### review-published
+
+Review published API surface for internal leakage.
+
+Analyzes the published (public-facing) API specification for internal type leakage, backward compatibility risks, and x-micro-contracts-non-exportable violations. Requires agent-contracts-runtime.
+
+**Usage:**
+
+```
+micro-contracts review-published
+```
+```
+micro-contracts review-published -m billing
+```
+```
+micro-contracts review-published --adapter claude --report-format json
+```
+
+#### Options
+
+| Option | Aliases | Required | Default | Description |
+|---|---|---|---|---|
+| `--config` | -c | No |  | Path to config file (micro-contracts.config.yaml). |
+| `--module` | -m | No |  | Module name to review (default is all modules). |
+| `--adapter` | -a | No |  | SDK adapter to use for LLM execution. |
+| `--model` |  | No |  | LLM model override. |
+| `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
+| `--output` | -o | No |  | Write result to a file instead of stdout. |
+| `--report-format` |  | No | `"text"` | Output format for the review report. |
+
+#### Exit Codes
+
+**Exit 0:** Review completed, no blocking findings.
+
+- **stdout:** format=`{options.report-format}`
+
+**Exit 1:** Unexpected error.
+
+- **stderr:** format=`text`
+
+**Exit 3:** Input validation failed.
+
+- **stderr:** format=`text`
+
+**Exit 10:** Completed with blocking findings.
+
+- **stdout:** format=`{options.report-format}`
+
+**Exit 11:** Runtime dependency missing (agent-contracts-runtime).
+
+- **stderr:** format=`text`
+
+**Exit 12:** LLM provider or adapter error.
+
+- **stderr:** format=`text`
+
+#### Extensions
+
+```yaml
+x-agent: 
+  risk_level: low
+  requires_confirmation: false
+  idempotent: true
+  side_effects: 
+    - network
+  sideEffectNote: Network calls to LLM provider when adapter is not mock. Filesystem write only when --output is specified.
+  safe_dry_run_option: show-prompt
+  expectedDurationMs: 120000
+  retryableExitCodes: 
+    - 12
+```
+
+---
+
+### propose-overlays
+
+Propose cross-cutting overlay candidates.
+
+Analyzes the OpenAPI specification and proposes cross-cutting overlay candidates for authentication, tenancy, rate limiting, audit logging, and other patterns. Verifies proposals do not conflict with existing overlay definitions. Requires agent-contracts-runtime.
+
+**Usage:**
+
+```
+micro-contracts propose-overlays
+```
+```
+micro-contracts propose-overlays -m core
+```
+```
+micro-contracts propose-overlays --adapter openai --report-format json
+```
+
+#### Options
+
+| Option | Aliases | Required | Default | Description |
+|---|---|---|---|---|
+| `--config` | -c | No |  | Path to config file (micro-contracts.config.yaml). |
+| `--module` | -m | No |  | Module name to analyze (default is all modules). |
+| `--adapter` | -a | No |  | SDK adapter to use for LLM execution. |
+| `--model` |  | No |  | LLM model override. |
+| `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
+| `--output` | -o | No |  | Write result to a file instead of stdout. |
+| `--report-format` |  | No | `"json"` | Output format for the proposal report. |
+
+#### Exit Codes
+
+**Exit 0:** Proposal generated successfully.
+
+- **stdout:** format=`{options.report-format}`
+
+**Exit 1:** Unexpected error.
+
+- **stderr:** format=`text`
+
+**Exit 3:** Input validation failed.
+
+- **stderr:** format=`text`
+
+**Exit 10:** Completed with blocking findings.
+
+- **stdout:** format=`{options.report-format}`
+
+**Exit 11:** Runtime dependency missing (agent-contracts-runtime).
+
+- **stderr:** format=`text`
+
+**Exit 12:** LLM provider or adapter error.
+
+- **stderr:** format=`text`
+
+#### Extensions
+
+```yaml
+x-agent: 
+  risk_level: low
+  requires_confirmation: false
+  idempotent: true
+  side_effects: 
+    - network
+  sideEffectNote: Network calls to LLM provider when adapter is not mock. Filesystem write only when --output is specified.
+  safe_dry_run_option: show-prompt
+  expectedDurationMs: 120000
+  retryableExitCodes: 
+    - 12
+```
+
+---
+
+### audit-guardrails
+
+Audit guardrails configuration for drift and lint coverage.
+
+Checks that guardrails.yaml configuration covers all generated output directories for drift detection and that OpenAPI lint rules are properly configured. Note: file permission and editing checks have been moved to artifact-contracts. Requires agent-contracts-runtime.
+
+**Usage:**
+
+```
+micro-contracts audit-guardrails
+```
+```
+micro-contracts audit-guardrails --adapter mock --report-format json
+```
+
+#### Options
+
+| Option | Aliases | Required | Default | Description |
+|---|---|---|---|---|
+| `--config` | -c | No |  | Path to config file (micro-contracts.config.yaml). |
+| `--guardrails` | -g | No |  | Path to guardrails.yaml. |
+| `--adapter` | -a | No |  | SDK adapter to use for LLM execution. |
+| `--model` |  | No |  | LLM model override. |
+| `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
+| `--output` | -o | No |  | Write result to a file instead of stdout. |
+| `--report-format` |  | No | `"text"` | Output format for the audit report. |
+
+#### Exit Codes
+
+**Exit 0:** Audit completed, no blocking findings.
+
+- **stdout:** format=`{options.report-format}`
+
+**Exit 1:** Unexpected error.
+
+- **stderr:** format=`text`
+
+**Exit 3:** Input validation failed (guardrails.yaml not found).
+
+- **stderr:** format=`text`
+
+**Exit 10:** Completed with blocking findings.
+
+- **stdout:** format=`{options.report-format}`
+
+**Exit 11:** Runtime dependency missing (agent-contracts-runtime).
+
+- **stderr:** format=`text`
+
+**Exit 12:** LLM provider or adapter error.
+
+- **stderr:** format=`text`
+
+#### Extensions
+
+```yaml
+x-agent: 
+  risk_level: low
+  requires_confirmation: false
+  idempotent: true
+  side_effects: 
+    - network
+  sideEffectNote: Network calls to LLM provider when adapter is not mock. Filesystem write only when --output is specified.
+  safe_dry_run_option: show-prompt
+  expectedDurationMs: 120000
+  retryableExitCodes: 
+    - 12
 ```
 
 ---

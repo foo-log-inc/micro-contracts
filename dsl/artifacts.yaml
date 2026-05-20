@@ -1,0 +1,39 @@
+openapi-spec-input:
+  type: document
+  description: "OpenAPI specification file(s) loaded from config modules (ephemeral input)"
+  authority: derived
+
+config-source:
+  type: document
+  description: "micro-contracts.config.yaml configuration (ephemeral input)"
+  authority: derived
+
+overlay-definitions:
+  type: document
+  description: "Overlay YAML files from shared and module-specific overlay directories (ephemeral input)"
+  authority: derived
+
+lint-results-input:
+  type: document
+  description: "Spectral lint results for the target OpenAPI spec (ephemeral input)"
+  authority: derived
+
+deps-graph-input:
+  type: document
+  description: "Module dependency graph from deps command analysis (ephemeral input)"
+  authority: derived
+
+published-spec-input:
+  type: document
+  description: "Published (public-facing) OpenAPI spec for comparison with master spec (ephemeral input)"
+  authority: derived
+
+guardrails-config-input:
+  type: document
+  description: "guardrails.yaml configuration for coverage analysis (ephemeral input)"
+  authority: derived
+
+cli-contract-source:
+  type: document
+  description: "cli-contract.yaml for reference (ephemeral input)"
+  authority: derived

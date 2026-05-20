@@ -751,3 +751,623 @@ command_sets:
           idempotent: true
           side_effects:
             - file_write
+
+      # ── audit-openapi ──────────────────────────────
+      audit-openapi:
+        path: [audit-openapi]
+        summary: Run LLM-based OpenAPI design quality audit.
+        description: >-
+          Performs a semantic review of OpenAPI specification design quality
+          using an LLM agent. Evaluates path design, module boundary alignment,
+          schema bloat, CRUD vs use-case orientation, and cross-cutting
+          concern coverage. Requires agent-contracts-runtime.
+        usage:
+          - micro-contracts audit-openapi
+          - micro-contracts audit-openapi -m core
+          - micro-contracts audit-openapi --adapter cursor --report-format text
+          - micro-contracts audit-openapi --show-prompt
+
+        options:
+          - name: config
+            aliases: [c]
+            description: Path to config file (micro-contracts.config.yaml).
+            value_name: path
+            schema:
+              type: string
+            file:
+              mode: read
+              exists: false
+              media_type: application/yaml
+              encoding: utf-8
+
+          - name: module
+            aliases: [m]
+            description: Module name to audit (default is all modules).
+            value_name: name
+            schema:
+              type: string
+
+          - name: adapter
+            aliases: [a]
+            description: SDK adapter to use for LLM execution.
+            value_name: name
+            schema:
+              type: string
+              enum: [cursor, claude, openai, gemini, mock]
+
+          - name: model
+            description: LLM model override.
+            value_name: name
+            schema:
+              type: string
+
+          - name: fail-on
+            description: Minimum severity that causes a non-zero exit.
+            value_name: level
+            schema:
+              type: string
+              enum: [warning, error, critical]
+              default: error
+
+          - name: output
+            aliases: [o]
+            description: Write result to a file instead of stdout.
+            value_name: file
+            schema:
+              type: string
+            file:
+              mode: write
+              media_type: application/json
+              encoding: utf-8
+
+          - name: report-format
+            description: Output format for the audit report.
+            value_name: fmt
+            schema:
+              type: string
+              enum: [json, text, yaml]
+              default: text
+
+        exits:
+          '0':
+            description: Audit completed, no blocking findings.
+            stdout:
+              format: '{options.report-format}'
+              schema:
+                $ref: '#/components/schemas/OpenApiAuditResult'
+
+          '1':
+            description: Unexpected error.
+            stderr:
+              format: text
+
+          '3':
+            description: Input validation failed (config not found, spec invalid).
+            stderr:
+              format: text
+
+          '10':
+            description: Completed with blocking findings.
+            stdout:
+              format: '{options.report-format}'
+              schema:
+                $ref: '#/components/schemas/OpenApiAuditResult'
+
+          '11':
+            description: Runtime dependency missing (agent-contracts-runtime).
+            stderr:
+              format: text
+
+          '12':
+            description: LLM provider or adapter error.
+            stderr:
+              format: text
+
+        effects:
+          reads: [openapi-specs, config]
+          writes: []
+          network:
+            description: LLM API calls when adapter is not mock
+            requires_secrets: []
+            idempotent: true
+
+        x-agent:
+          risk_level: low
+          requires_confirmation: false
+          idempotent: true
+          side_effects: [network]
+          sideEffectNote: >-
+            Network calls to LLM provider when adapter is not mock.
+            Filesystem write only when --output is specified.
+          safe_dry_run_option: show-prompt
+          expectedDurationMs: 120000
+          retryableExitCodes: [12]
+
+      # ── review-published ───────────────────────────
+      review-published:
+        path: [review-published]
+        summary: Review published API surface for internal leakage.
+        description: >-
+          Analyzes the published (public-facing) API specification for
+          internal type leakage, backward compatibility risks, and
+          x-micro-contracts-non-exportable violations.
+          Requires agent-contracts-runtime.
+        usage:
+          - micro-contracts review-published
+          - micro-contracts review-published -m billing
+          - micro-contracts review-published --adapter claude --report-format json
+
+        options:
+          - name: config
+            aliases: [c]
+            description: Path to config file (micro-contracts.config.yaml).
+            value_name: path
+            schema:
+              type: string
+            file:
+              mode: read
+              exists: false
+              media_type: application/yaml
+              encoding: utf-8
+
+          - name: module
+            aliases: [m]
+            description: Module name to review (default is all modules).
+            value_name: name
+            schema:
+              type: string
+
+          - name: adapter
+            aliases: [a]
+            description: SDK adapter to use for LLM execution.
+            value_name: name
+            schema:
+              type: string
+              enum: [cursor, claude, openai, gemini, mock]
+
+          - name: model
+            description: LLM model override.
+            value_name: name
+            schema:
+              type: string
+
+          - name: fail-on
+            description: Minimum severity that causes a non-zero exit.
+            value_name: level
+            schema:
+              type: string
+              enum: [warning, error, critical]
+              default: error
+
+          - name: output
+            aliases: [o]
+            description: Write result to a file instead of stdout.
+            value_name: file
+            schema:
+              type: string
+            file:
+              mode: write
+              media_type: application/json
+              encoding: utf-8
+
+          - name: report-format
+            description: Output format for the review report.
+            value_name: fmt
+            schema:
+              type: string
+              enum: [json, text, yaml]
+              default: text
+
+        exits:
+          '0':
+            description: Review completed, no blocking findings.
+            stdout:
+              format: '{options.report-format}'
+              schema:
+                $ref: '#/components/schemas/PublishedReviewResult'
+
+          '1':
+            description: Unexpected error.
+            stderr:
+              format: text
+
+          '3':
+            description: Input validation failed.
+            stderr:
+              format: text
+
+          '10':
+            description: Completed with blocking findings.
+            stdout:
+              format: '{options.report-format}'
+              schema:
+                $ref: '#/components/schemas/PublishedReviewResult'
+
+          '11':
+            description: Runtime dependency missing (agent-contracts-runtime).
+            stderr:
+              format: text
+
+          '12':
+            description: LLM provider or adapter error.
+            stderr:
+              format: text
+
+        effects:
+          reads: [openapi-specs, config, generated-packages]
+          writes: []
+          network:
+            description: LLM API calls when adapter is not mock
+            requires_secrets: []
+            idempotent: true
+
+        x-agent:
+          risk_level: low
+          requires_confirmation: false
+          idempotent: true
+          side_effects: [network]
+          sideEffectNote: >-
+            Network calls to LLM provider when adapter is not mock.
+            Filesystem write only when --output is specified.
+          safe_dry_run_option: show-prompt
+          expectedDurationMs: 120000
+          retryableExitCodes: [12]
+
+      # ── propose-overlays ───────────────────────────
+      propose-overlays:
+        path: [propose-overlays]
+        summary: Propose cross-cutting overlay candidates.
+        description: >-
+          Analyzes the OpenAPI specification and proposes cross-cutting
+          overlay candidates for authentication, tenancy, rate limiting,
+          audit logging, and other patterns. Verifies proposals do not
+          conflict with existing overlay definitions.
+          Requires agent-contracts-runtime.
+        usage:
+          - micro-contracts propose-overlays
+          - micro-contracts propose-overlays -m core
+          - micro-contracts propose-overlays --adapter openai --report-format json
+
+        options:
+          - name: config
+            aliases: [c]
+            description: Path to config file (micro-contracts.config.yaml).
+            value_name: path
+            schema:
+              type: string
+            file:
+              mode: read
+              exists: false
+              media_type: application/yaml
+              encoding: utf-8
+
+          - name: module
+            aliases: [m]
+            description: Module name to analyze (default is all modules).
+            value_name: name
+            schema:
+              type: string
+
+          - name: adapter
+            aliases: [a]
+            description: SDK adapter to use for LLM execution.
+            value_name: name
+            schema:
+              type: string
+              enum: [cursor, claude, openai, gemini, mock]
+
+          - name: model
+            description: LLM model override.
+            value_name: name
+            schema:
+              type: string
+
+          - name: fail-on
+            description: Minimum severity that causes a non-zero exit.
+            value_name: level
+            schema:
+              type: string
+              enum: [warning, error, critical]
+              default: error
+
+          - name: output
+            aliases: [o]
+            description: Write result to a file instead of stdout.
+            value_name: file
+            schema:
+              type: string
+            file:
+              mode: write
+              media_type: application/json
+              encoding: utf-8
+
+          - name: report-format
+            description: Output format for the proposal report.
+            value_name: fmt
+            schema:
+              type: string
+              enum: [json, text, yaml]
+              default: json
+
+        exits:
+          '0':
+            description: Proposal generated successfully.
+            stdout:
+              format: '{options.report-format}'
+              schema:
+                $ref: '#/components/schemas/OverlayProposalResult'
+
+          '1':
+            description: Unexpected error.
+            stderr:
+              format: text
+
+          '3':
+            description: Input validation failed.
+            stderr:
+              format: text
+
+          '10':
+            description: Completed with blocking findings.
+            stdout:
+              format: '{options.report-format}'
+              schema:
+                $ref: '#/components/schemas/OverlayProposalResult'
+
+          '11':
+            description: Runtime dependency missing (agent-contracts-runtime).
+            stderr:
+              format: text
+
+          '12':
+            description: LLM provider or adapter error.
+            stderr:
+              format: text
+
+        effects:
+          reads: [openapi-specs, config]
+          writes: []
+          network:
+            description: LLM API calls when adapter is not mock
+            requires_secrets: []
+            idempotent: true
+
+        x-agent:
+          risk_level: low
+          requires_confirmation: false
+          idempotent: true
+          side_effects: [network]
+          sideEffectNote: >-
+            Network calls to LLM provider when adapter is not mock.
+            Filesystem write only when --output is specified.
+          safe_dry_run_option: show-prompt
+          expectedDurationMs: 120000
+          retryableExitCodes: [12]
+
+      # ── audit-guardrails ───────────────────────────
+      audit-guardrails:
+        path: [audit-guardrails]
+        summary: Audit guardrails configuration for drift and lint coverage.
+        description: >-
+          Checks that guardrails.yaml configuration covers all generated
+          output directories for drift detection and that OpenAPI lint
+          rules are properly configured. Note: file permission and
+          editing checks have been moved to artifact-contracts.
+          Requires agent-contracts-runtime.
+        usage:
+          - micro-contracts audit-guardrails
+          - micro-contracts audit-guardrails --adapter mock --report-format json
+
+        options:
+          - name: config
+            aliases: [c]
+            description: Path to config file (micro-contracts.config.yaml).
+            value_name: path
+            schema:
+              type: string
+            file:
+              mode: read
+              exists: false
+              media_type: application/yaml
+              encoding: utf-8
+
+          - name: guardrails
+            aliases: [g]
+            description: Path to guardrails.yaml.
+            value_name: path
+            schema:
+              type: string
+            file:
+              mode: read
+              exists: false
+              media_type: application/yaml
+              encoding: utf-8
+
+          - name: adapter
+            aliases: [a]
+            description: SDK adapter to use for LLM execution.
+            value_name: name
+            schema:
+              type: string
+              enum: [cursor, claude, openai, gemini, mock]
+
+          - name: model
+            description: LLM model override.
+            value_name: name
+            schema:
+              type: string
+
+          - name: fail-on
+            description: Minimum severity that causes a non-zero exit.
+            value_name: level
+            schema:
+              type: string
+              enum: [warning, error, critical]
+              default: error
+
+          - name: output
+            aliases: [o]
+            description: Write result to a file instead of stdout.
+            value_name: file
+            schema:
+              type: string
+            file:
+              mode: write
+              media_type: application/json
+              encoding: utf-8
+
+          - name: report-format
+            description: Output format for the audit report.
+            value_name: fmt
+            schema:
+              type: string
+              enum: [json, text, yaml]
+              default: text
+
+        exits:
+          '0':
+            description: Audit completed, no blocking findings.
+            stdout:
+              format: '{options.report-format}'
+              schema:
+                $ref: '#/components/schemas/GuardrailsAuditResult'
+
+          '1':
+            description: Unexpected error.
+            stderr:
+              format: text
+
+          '3':
+            description: Input validation failed (guardrails.yaml not found).
+            stderr:
+              format: text
+
+          '10':
+            description: Completed with blocking findings.
+            stdout:
+              format: '{options.report-format}'
+              schema:
+                $ref: '#/components/schemas/GuardrailsAuditResult'
+
+          '11':
+            description: Runtime dependency missing (agent-contracts-runtime).
+            stderr:
+              format: text
+
+          '12':
+            description: LLM provider or adapter error.
+            stderr:
+              format: text
+
+        effects:
+          reads: [guardrails-config, config]
+          writes: []
+          network:
+            description: LLM API calls when adapter is not mock
+            requires_secrets: []
+            idempotent: true
+
+        x-agent:
+          risk_level: low
+          requires_confirmation: false
+          idempotent: true
+          side_effects: [network]
+          sideEffectNote: >-
+            Network calls to LLM provider when adapter is not mock.
+            Filesystem write only when --output is specified.
+          safe_dry_run_option: show-prompt
+          expectedDurationMs: 120000
+          retryableExitCodes: [12]
+
+components:
+  schemas:
+    # ── AI Agent Interoperability Schemas ──────────────────
+    AgentEvidence:
+      $ref: 'components.yaml#/schemas/agent-evidence'
+    AgentFinding:
+      $ref: 'components.yaml#/schemas/agent-finding'
+    AgentRecommendedAction:
+      $ref: 'components.yaml#/schemas/agent-recommended-action'
+    OpenApiAuditResult:
+      $ref: 'components.yaml#/schemas/agent-audit-result'
+
+    PublishedReviewResult:
+      type: object
+      description: >-
+        Result from review-published command. Contains published endpoint
+        enumeration and internal type leakage analysis.
+      allOf:
+        - $ref: 'components.yaml#/schemas/agent-audit-result'
+        - type: object
+          required: [publishedEndpoints, leakedInternalTypes]
+          properties:
+            publishedEndpoints:
+              type: array
+              items:
+                type: object
+                required: [operationId, path, method]
+                properties:
+                  operationId:
+                    type: string
+                  path:
+                    type: string
+                  method:
+                    type: string
+            leakedInternalTypes:
+              type: array
+              items:
+                type: object
+                required: [schemaName, referencedBy, reason]
+                properties:
+                  schemaName:
+                    type: string
+                  referencedBy:
+                    type: string
+                  reason:
+                    type: string
+
+    OverlayProposalResult:
+      type: object
+      description: >-
+        Result from propose-overlays command. Contains overlay candidate
+        proposals with endpoint, type, rationale, and suggested config.
+      allOf:
+        - $ref: 'components.yaml#/schemas/agent-audit-result'
+        - type: object
+          required: [overlayCandidates]
+          properties:
+            overlayCandidates:
+              type: array
+              items:
+                type: object
+                required: [endpoint, overlayType, rationale]
+                properties:
+                  endpoint:
+                    type: string
+                  overlayType:
+                    type: string
+                    enum: [auth, tenancy, rateLimit, auditLog, custom]
+                  rationale:
+                    type: string
+                  suggestedConfig:
+                    type: object
+                    additionalProperties: true
+
+    GuardrailsAuditResult:
+      type: object
+      description: >-
+        Result from audit-guardrails command. Contains drift detection
+        and lint rule coverage analysis.
+      allOf:
+        - $ref: 'components.yaml#/schemas/agent-audit-result'
+        - type: object
+          required: [coveredPaths, uncoveredPaths]
+          properties:
+            coveredPaths:
+              type: array
+              items:
+                type: string
+            uncoveredPaths:
+              type: array
+              items:
+                type: string
