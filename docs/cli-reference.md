@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.14.2
+**Version:** 0.15.0
 
 ## Table of Contents
 
@@ -87,12 +87,12 @@ micro-contracts generate --force
 
 ```yaml
 x-agent: 
-  riskLevel: medium
-  requiresConfirmation: false
+  risk_level: medium
+  requires_confirmation: false
   idempotent: true
-  sideEffects: 
+  side_effects: 
     - file_write
-  recommendedBeforeUse: 
+  recommended_before_use: 
     - Ensure micro-contracts.config.yaml exists.
     - Verify OpenAPI specs are valid.
 ```
@@ -140,10 +140,10 @@ micro-contracts lint spec/core/openapi/core.yaml --strict
 
 ```yaml
 x-agent: 
-  riskLevel: low
-  requiresConfirmation: false
+  risk_level: low
+  requires_confirmation: false
   idempotent: true
-  sideEffects: 
+  side_effects: 
 
 ```
 
@@ -205,10 +205,10 @@ micro-contracts init users --skip-templates
 
 ```yaml
 x-agent: 
-  riskLevel: medium
-  requiresConfirmation: false
+  risk_level: medium
+  requires_confirmation: false
   idempotent: true
-  sideEffects: 
+  side_effects: 
     - file_write
     - directory_create
 ```
@@ -273,12 +273,12 @@ micro-contracts check --list-gates
 
 ```yaml
 x-agent: 
-  riskLevel: low
-  requiresConfirmation: false
+  risk_level: low
+  requires_confirmation: false
   idempotent: true
-  sideEffects: 
+  side_effects: 
 
-  recommendedBeforeUse: 
+  recommended_before_use: 
     - Run generate first so generated files exist.
 ```
 
@@ -340,12 +340,12 @@ micro-contracts pipeline --contracts-only --skip-lint
 
 ```yaml
 x-agent: 
-  riskLevel: medium
-  requiresConfirmation: false
+  risk_level: medium
+  requires_confirmation: false
   idempotent: true
-  sideEffects: 
+  side_effects: 
     - file_write
-  recommendedBeforeUse: 
+  recommended_before_use: 
     - Ensure micro-contracts.config.yaml and guardrails.yaml exist.
     - Verify OpenAPI specs are valid.
 ```
@@ -404,10 +404,10 @@ micro-contracts deps --validate
 
 ```yaml
 x-agent: 
-  riskLevel: low
-  requiresConfirmation: false
+  risk_level: low
+  requires_confirmation: false
   idempotent: true
-  sideEffects: 
+  side_effects: 
 
 ```
 
@@ -451,10 +451,10 @@ micro-contracts guardrails-init -o custom-guardrails.yaml
 
 ```yaml
 x-agent: 
-  riskLevel: low
-  requiresConfirmation: false
+  risk_level: low
+  requires_confirmation: false
   idempotent: false
-  sideEffects: 
+  side_effects: 
     - file_write
 ```
 
@@ -506,10 +506,10 @@ micro-contracts manifest -o custom-manifest.json
 
 ```yaml
 x-agent: 
-  riskLevel: low
-  requiresConfirmation: false
+  risk_level: low
+  requires_confirmation: false
   idempotent: true
-  sideEffects: 
+  side_effects: 
     - file_write
 ```
 

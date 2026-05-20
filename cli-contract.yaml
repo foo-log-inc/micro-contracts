@@ -1,9 +1,9 @@
 # yaml-language-server: $schema=./node_modules/cli-contracts/schemas/cli-contract.schema.json
-cliContracts: 0.1.0
+cli_contracts: 0.1.0
 
 info:
   title: micro-contracts CLI
-  version: 0.14.2
+  version: 0.15.0
   description: >-
     Contract-first OpenAPI toolchain for TypeScript Web/API systems.
     Generates contract packages, server routes, and frontend clients
@@ -14,12 +14,29 @@ info:
     name: foo-ogawa
     url: https://github.com/foo-ogawa/micro-contracts
 
-commandSets:
+artifact_slots:
+  openapi-specs:
+    direction: read
+    description: OpenAPI specification files
+  config:
+    direction: read
+    description: micro-contracts.config.yaml configuration
+  generated-packages:
+    direction: write
+    description: Generated contract packages, server routes, and frontend clients
+  guardrails-config:
+    direction: read
+    description: guardrails.yaml configuration
+  manifest:
+    direction: write
+    description: Generated manifest (.generated-manifest.json)
+
+command_sets:
   micro-contracts:
     summary: Contract-first OpenAPI toolchain for TypeScript.
     executable: micro-contracts
 
-    globalOptions:
+    global_options:
       - name: version
         aliases: [V]
         description: Print version and exit.
@@ -52,19 +69,19 @@ commandSets:
           - name: config
             aliases: [c]
             description: Path to config file (micro-contracts.config.yaml).
-            valueName: path
+            value_name: path
             schema:
               type: string
             file:
               mode: read
               exists: false
-              mediaType: application/yaml
+              media_type: application/yaml
               encoding: utf-8
 
           - name: module
             aliases: [m]
             description: Module names, comma-separated. Generates all modules if omitted.
-            valueName: names
+            value_name: names
             schema:
               type: string
 
@@ -108,7 +125,7 @@ commandSets:
 
           - name: manifest-dir
             description: Directory for manifest output.
-            valueName: path
+            value_name: path
             schema:
               type: string
               default: packages/
@@ -135,12 +152,12 @@ commandSets:
             files:
               - path: packages/contract/{module}/**/*.ts
                 required: true
-                mediaType: text/x-typescript
+                media_type: text/x-typescript
                 encoding: utf-8
                 description: Generated contract packages.
               - path: packages/contract-published/{module}/**/*.ts
                 required: false
-                mediaType: text/x-typescript
+                media_type: text/x-typescript
                 encoding: utf-8
                 description: Generated public contract packages.
 
@@ -150,12 +167,12 @@ commandSets:
               format: text
 
         x-agent:
-          riskLevel: medium
-          requiresConfirmation: false
+          risk_level: medium
+          requires_confirmation: false
           idempotent: true
-          sideEffects:
+          side_effects:
             - file_write
-          recommendedBeforeUse:
+          recommended_before_use:
             - Ensure micro-contracts.config.yaml exists.
             - Verify OpenAPI specs are valid.
 
@@ -179,7 +196,7 @@ commandSets:
             file:
               mode: read
               exists: true
-              mediaType: application/yaml
+              media_type: application/yaml
               encoding: utf-8
 
         options:
@@ -201,10 +218,10 @@ commandSets:
               format: text
 
         x-agent:
-          riskLevel: low
-          requiresConfirmation: false
+          risk_level: low
+          requires_confirmation: false
           idempotent: true
-          sideEffects: []
+          side_effects: []
 
       # ── init ─────────────────────────────────────────
       init:
@@ -232,7 +249,7 @@ commandSets:
           - name: dir
             aliases: [d]
             description: Base directory for server/frontend files.
-            valueName: path
+            value_name: path
             schema:
               type: string
               default: src
@@ -240,19 +257,19 @@ commandSets:
           - name: openapi
             aliases: [i]
             description: OpenAPI spec to process (auto-adds x-micro-contracts-service/method extensions).
-            valueName: path
+            value_name: path
             schema:
               type: string
             file:
               mode: read
               exists: true
-              mediaType: application/yaml
+              media_type: application/yaml
               encoding: utf-8
 
           - name: output
             aliases: [o]
             description: Output path for processed OpenAPI. Defaults to spec/{name}/openapi/{name}.yaml.
-            valueName: path
+            value_name: path
             schema:
               type: string
 
@@ -276,17 +293,17 @@ commandSets:
             files:
               - path: spec/{name}/openapi/{name}.yaml
                 required: false
-                mediaType: application/yaml
+                media_type: application/yaml
                 encoding: utf-8
                 description: OpenAPI spec (created when --openapi provided or --screens used).
               - path: spec/default/templates/*.hbs
                 required: false
-                mediaType: text/x-handlebars-template
+                media_type: text/x-handlebars-template
                 encoding: utf-8
                 description: Starter Handlebars templates.
               - path: micro-contracts.config.yaml
                 required: false
-                mediaType: application/yaml
+                media_type: application/yaml
                 encoding: utf-8
                 description: Config file (created if not already present).
 
@@ -296,10 +313,10 @@ commandSets:
               format: text
 
         x-agent:
-          riskLevel: medium
-          requiresConfirmation: false
+          risk_level: medium
+          requires_confirmation: false
           idempotent: true
-          sideEffects:
+          side_effects:
             - file_write
             - directory_create
 
@@ -321,19 +338,19 @@ commandSets:
         options:
           - name: only
             description: Run only specific checks (comma-separated check names).
-            valueName: checks
+            value_name: checks
             schema:
               type: string
 
           - name: skip
             description: Skip specific checks (comma-separated check names).
-            valueName: checks
+            value_name: checks
             schema:
               type: string
 
           - name: gate
             description: Run checks for specific gates only (comma-separated, 1-5).
-            valueName: gates
+            value_name: gates
             schema:
               type: string
 
@@ -353,32 +370,32 @@ commandSets:
           - name: guardrails
             aliases: [g]
             description: Path to guardrails.yaml.
-            valueName: path
+            value_name: path
             schema:
               type: string
             file:
               mode: read
               exists: false
-              mediaType: application/yaml
+              media_type: application/yaml
               encoding: utf-8
 
           - name: generated-dir
             aliases: [d]
             description: Path to generated files directory.
-            valueName: path
+            value_name: path
             schema:
               type: string
               default: packages/
 
           - name: changed-files
             description: Path to file containing list of changed files (for CI).
-            valueName: path
+            value_name: path
             schema:
               type: string
             file:
               mode: read
               exists: true
-              mediaType: text/plain
+              media_type: text/plain
               encoding: utf-8
 
           - name: list
@@ -408,11 +425,11 @@ commandSets:
               format: text
 
         x-agent:
-          riskLevel: low
-          requiresConfirmation: false
+          risk_level: low
+          requires_confirmation: false
           idempotent: true
-          sideEffects: []
-          recommendedBeforeUse:
+          side_effects: []
+          recommended_before_use:
             - Run generate first so generated files exist.
 
       # ── pipeline ─────────────────────────────────────
@@ -433,13 +450,13 @@ commandSets:
           - name: config
             aliases: [c]
             description: Path to config file (micro-contracts.config.yaml).
-            valueName: path
+            value_name: path
             schema:
               type: string
             file:
               mode: read
               exists: false
-              mediaType: application/yaml
+              media_type: application/yaml
               encoding: utf-8
 
           - name: verbose
@@ -451,7 +468,7 @@ commandSets:
 
           - name: skip
             description: Skip specific checks (comma-separated).
-            valueName: checks
+            value_name: checks
             schema:
               type: string
 
@@ -464,19 +481,19 @@ commandSets:
           - name: guardrails
             aliases: [g]
             description: Path to guardrails.yaml.
-            valueName: path
+            value_name: path
             schema:
               type: string
             file:
               mode: read
               exists: false
-              mediaType: application/yaml
+              media_type: application/yaml
               encoding: utf-8
 
           - name: generated-dir
             aliases: [d]
             description: Path to generated files directory.
-            valueName: path
+            value_name: path
             schema:
               type: string
               default: packages/
@@ -548,12 +565,12 @@ commandSets:
               format: text
 
         x-agent:
-          riskLevel: medium
-          requiresConfirmation: false
+          risk_level: medium
+          requires_confirmation: false
           idempotent: true
-          sideEffects:
+          side_effects:
             - file_write
-          recommendedBeforeUse:
+          recommended_before_use:
             - Ensure micro-contracts.config.yaml and guardrails.yaml exist.
             - Verify OpenAPI specs are valid.
 
@@ -576,19 +593,19 @@ commandSets:
           - name: config
             aliases: [c]
             description: Path to config file.
-            valueName: path
+            value_name: path
             schema:
               type: string
             file:
               mode: read
               exists: false
-              mediaType: application/yaml
+              media_type: application/yaml
               encoding: utf-8
 
           - name: module
             aliases: [m]
             description: Module to analyze.
-            valueName: name
+            value_name: name
             schema:
               type: string
 
@@ -600,13 +617,13 @@ commandSets:
 
           - name: impact
             description: Analyze impact of changing a specific API (e.g., core.User.getUsers).
-            valueName: ref
+            value_name: ref
             schema:
               type: string
 
           - name: who-depends-on
             description: Find modules that depend on a specific API.
-            valueName: ref
+            value_name: ref
             schema:
               type: string
 
@@ -628,10 +645,10 @@ commandSets:
               format: text
 
         x-agent:
-          riskLevel: low
-          requiresConfirmation: false
+          risk_level: low
+          requires_confirmation: false
           idempotent: true
-          sideEffects: []
+          side_effects: []
 
       # ── guardrails-init ──────────────────────────────
       guardrails-init:
@@ -648,7 +665,7 @@ commandSets:
           - name: output
             aliases: [o]
             description: Output path for guardrails.yaml.
-            valueName: path
+            value_name: path
             schema:
               type: string
               default: guardrails.yaml
@@ -661,7 +678,7 @@ commandSets:
             files:
               - path: '{options.output}'
                 required: true
-                mediaType: application/yaml
+                media_type: application/yaml
                 encoding: utf-8
 
           '1':
@@ -670,10 +687,10 @@ commandSets:
               format: text
 
         x-agent:
-          riskLevel: low
-          requiresConfirmation: false
+          risk_level: low
+          requires_confirmation: false
           idempotent: false
-          sideEffects:
+          side_effects:
             - file_write
 
       # ── manifest ─────────────────────────────────────
@@ -693,7 +710,7 @@ commandSets:
           - name: dir
             aliases: [d]
             description: Directory to scan.
-            valueName: path
+            value_name: path
             schema:
               type: string
               default: packages/
@@ -707,7 +724,7 @@ commandSets:
           - name: output
             aliases: [o]
             description: Output manifest path. Defaults to {dir}/.generated-manifest.json.
-            valueName: path
+            value_name: path
             schema:
               type: string
 
@@ -719,7 +736,7 @@ commandSets:
             files:
               - path: '{options.dir}/.generated-manifest.json'
                 required: false
-                mediaType: application/json
+                media_type: application/json
                 encoding: utf-8
                 description: Generated manifest (not created in verify mode).
 
@@ -729,8 +746,8 @@ commandSets:
               format: text
 
         x-agent:
-          riskLevel: low
-          requiresConfirmation: false
+          risk_level: low
+          requires_confirmation: false
           idempotent: true
-          sideEffects:
+          side_effects:
             - file_write
