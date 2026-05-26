@@ -1,6 +1,6 @@
 {
   "name": "micro-contracts",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "Contract-first OpenAPI toolchain that keeps TypeScript UI and microservices aligned via code generation",
   "type": "module",
   "main": "dist/index.js",
@@ -43,11 +43,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/foo-ogawa/micro-contracts.git"
+    "url": "git+https://github.com/foo-log-inc/micro-contracts.git"
   },
-  "homepage": "https://github.com/foo-ogawa/micro-contracts#readme",
+  "homepage": "https://github.com/foo-log-inc/micro-contracts#readme",
   "bugs": {
-    "url": "https://github.com/foo-ogawa/micro-contracts/issues"
+    "url": "https://github.com/foo-log-inc/micro-contracts/issues"
   },
   "dependencies": {
     "chalk": "^5.3.0",

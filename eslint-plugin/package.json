@@ -14,12 +14,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/foo-ogawa/micro-contracts.git",
+    "url": "git+https://github.com/foo-log-inc/micro-contracts.git",
     "directory": "eslint-plugin"
   },
-  "homepage": "https://github.com/foo-ogawa/micro-contracts#readme",
+  "homepage": "https://github.com/foo-log-inc/micro-contracts#readme",
   "bugs": {
-    "url": "https://github.com/foo-ogawa/micro-contracts/issues"
+    "url": "https://github.com/foo-log-inc/micro-contracts/issues"
   },
   "peerDependencies": {
     "eslint": ">=8.0.0",
