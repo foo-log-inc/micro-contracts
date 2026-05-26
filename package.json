@@ -1,6 +1,6 @@
 {
   "name": "micro-contracts",
-  "version": "0.15.2",
+  "version": "0.15.3",
   "description": "Contract-first OpenAPI toolchain that keeps TypeScript UI and microservices aligned via code generation",
   "type": "module",
   "main": "dist/index.js",
@@ -56,7 +56,7 @@
     "handlebars": "^4.7.8",
     "js-yaml": "^4.1.0",
     "yaml": "^2.8.2",
-    "zod": "^3.22.0"
+    "zod": "^4.0.0"
   },
   "peerDependencies": {
     "agent-contracts-runtime": ">=0.30.0"
