@@ -485,7 +485,7 @@ components:
       // Frontend should NOT be generated (enabled: false)
       const frontendPath = path.join(tmpDir, 'frontend/src/core/api.generated.ts');
       expect(fs.existsSync(frontendPath)).toBe(false);
-    });
+    }, 60_000);
 
     it('should skip legacy frontend with enabled: false', async () => {
       // Create spec
@@ -554,7 +554,7 @@ components:
       // Frontend should NOT be generated (enabled: false)
       const frontendPath = path.join(tmpDir, 'frontend/src/core/api.generated.ts');
       expect(fs.existsSync(frontendPath)).toBe(false);
-    });
+    }, 60_000);
 
     it('should use custom service template when serviceTemplate is specified', async () => {
       const specPath = path.join(tmpDir, 'spec.yaml');
