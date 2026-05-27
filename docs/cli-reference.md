@@ -582,13 +582,6 @@ micro-contracts audit-openapi --show-prompt
 
 ```yaml
 x-agent: 
-  risk_level: low
-  requires_confirmation: false
-  idempotent: true
-  side_effects: 
-    - network
-  sideEffectNote: Network calls to LLM provider when adapter is not mock. Filesystem write only when --output is specified.
-  safe_dry_run_option: show-prompt
   expectedDurationMs: 120000
   retryableExitCodes: 
     - 12
@@ -656,13 +649,6 @@ micro-contracts review-published --adapter claude --report-format json
 
 ```yaml
 x-agent: 
-  risk_level: low
-  requires_confirmation: false
-  idempotent: true
-  side_effects: 
-    - network
-  sideEffectNote: Network calls to LLM provider when adapter is not mock. Filesystem write only when --output is specified.
-  safe_dry_run_option: show-prompt
   expectedDurationMs: 120000
   retryableExitCodes: 
     - 12
@@ -730,13 +716,6 @@ micro-contracts propose-overlays --adapter openai --report-format json
 
 ```yaml
 x-agent: 
-  risk_level: low
-  requires_confirmation: false
-  idempotent: true
-  side_effects: 
-    - network
-  sideEffectNote: Network calls to LLM provider when adapter is not mock. Filesystem write only when --output is specified.
-  safe_dry_run_option: show-prompt
   expectedDurationMs: 120000
   retryableExitCodes: 
     - 12
@@ -801,13 +780,6 @@ micro-contracts audit-guardrails --adapter mock --report-format json
 
 ```yaml
 x-agent: 
-  risk_level: low
-  requires_confirmation: false
-  idempotent: true
-  side_effects: 
-    - network
-  sideEffectNote: Network calls to LLM provider when adapter is not mock. Filesystem write only when --output is specified.
-  safe_dry_run_option: show-prompt
   expectedDurationMs: 120000
   retryableExitCodes: 
     - 12
