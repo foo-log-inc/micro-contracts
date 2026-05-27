@@ -285,21 +285,9 @@ async function generateModule(
     }
   }
 
-  // Generate documentation
-  if ((generateAll || options.docsOnly) && config.docs.enabled) {
-    const docsDir = path.join(config.contractOutput, 'docs');
-    const openapiFile = path.join(docsDir, 'openapi.generated.yaml');
-    await generateDocumentation(openapiFile, docsDir);
-    
-    // Also generate for public contract if exists
-    if (hasPublicEndpoints(spec)) {
-      const publicDocsDir = path.join(config.contractPublicOutput, 'docs');
-      const publicOpenapiFile = path.join(publicDocsDir, 'openapi.generated.yaml');
-      if (fs.existsSync(publicOpenapiFile)) {
-        await generateDocumentation(publicOpenapiFile, publicDocsDir);
-      }
-    }
-  }
+  // Documentation (Redoc HTML) generation removed.
+  // Use @redocly/cli directly if needed:
+  //   npx @redocly/cli build-docs openapi.generated.yaml -o api-reference.html
 }
 
 /**
@@ -746,27 +734,6 @@ function generateServiceReExports(moduleName: string): string {
   return lines.join('\n');
 }
 
-/**
- * Generate documentation (Redoc HTML)
- */
-async function generateDocumentation(
-  openapiPath: string,
-  outputDir: string
-): Promise<void> {
-  const { execSync } = await import('child_process');
-  const htmlPath = path.join(outputDir, 'api-reference.html');
-  
-  try {
-    console.log(`  Generating Redoc HTML...`);
-    execSync(`npx @redocly/cli build-docs "${openapiPath}" -o "${htmlPath}"`, {
-      stdio: 'pipe',
-    });
-    console.log(`    Written: ${htmlPath}`);
-  } catch (error) {
-    console.log(`  Warning: Redoc HTML generation failed. Install @redocly/cli if needed.`);
-    console.log(`    Run: npx @redocly/cli build-docs "${openapiPath}" -o "${htmlPath}"`);
-  }
-}
 
 /**
  * Generate error types
