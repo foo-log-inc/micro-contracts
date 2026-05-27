@@ -760,6 +760,7 @@ async function generateDocumentation(
     console.log(`  Generating Redoc HTML...`);
     execSync(`npx @redocly/cli build-docs "${openapiPath}" -o "${htmlPath}"`, {
       stdio: 'pipe',
+      timeout: 15_000,
     });
     console.log(`    Written: ${htmlPath}`);
   } catch (error) {
