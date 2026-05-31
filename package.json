@@ -26,7 +26,8 @@
     "dsl:generate": "npx agent-runtime generate --config dsl/agent-runtime.config.yaml",
     "docs:sync": "npx embedoc build",
     "docs:check": "npx embedoc build && git diff --exit-code README.md docs/",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "test:ci": "vitest run"
   },
   "keywords": [
     "openapi",
