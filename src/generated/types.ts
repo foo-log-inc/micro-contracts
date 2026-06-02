@@ -164,10 +164,10 @@ export interface ReviewPublishedOptions {
 export type ReviewPublishedExitCode = 0 | 1 | 3 | 10 | 11 | 12;
 
 export type ReviewPublishedExitResult =
-  { exitCode: 0; stdout: Record<string, unknown> }
+  { exitCode: 0; stdout: { summary: string; riskLevel: "low" | "medium" | "high" | "critical"; findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[]; recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[]; metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string } } & { publishedEndpoints: { operationId: string; path: string; method: string }[]; leakedInternalTypes: { schemaName: string; referencedBy: string; reason: string }[] } }
   | { exitCode: 1; stderr: unknown }
   | { exitCode: 3; stderr: unknown }
-  | { exitCode: 10; stdout: Record<string, unknown> }
+  | { exitCode: 10; stdout: { summary: string; riskLevel: "low" | "medium" | "high" | "critical"; findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[]; recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[]; metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string } } & { publishedEndpoints: { operationId: string; path: string; method: string }[]; leakedInternalTypes: { schemaName: string; referencedBy: string; reason: string }[] } }
   | { exitCode: 11; stderr: unknown }
   | { exitCode: 12; stderr: unknown };
 
@@ -184,10 +184,10 @@ export interface ProposeOverlaysOptions {
 export type ProposeOverlaysExitCode = 0 | 1 | 3 | 10 | 11 | 12;
 
 export type ProposeOverlaysExitResult =
-  { exitCode: 0; stdout: Record<string, unknown> }
+  { exitCode: 0; stdout: { summary: string; riskLevel: "low" | "medium" | "high" | "critical"; findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[]; recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[]; metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string } } & { overlayCandidates: { endpoint: string; overlayType: "auth" | "tenancy" | "rateLimit" | "auditLog" | "custom"; rationale: string; suggestedConfig?: Record<string, unknown> }[] } }
   | { exitCode: 1; stderr: unknown }
   | { exitCode: 3; stderr: unknown }
-  | { exitCode: 10; stdout: Record<string, unknown> }
+  | { exitCode: 10; stdout: { summary: string; riskLevel: "low" | "medium" | "high" | "critical"; findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[]; recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[]; metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string } } & { overlayCandidates: { endpoint: string; overlayType: "auth" | "tenancy" | "rateLimit" | "auditLog" | "custom"; rationale: string; suggestedConfig?: Record<string, unknown> }[] } }
   | { exitCode: 11; stderr: unknown }
   | { exitCode: 12; stderr: unknown };
 
@@ -204,10 +204,10 @@ export interface AuditGuardrailsOptions {
 export type AuditGuardrailsExitCode = 0 | 1 | 3 | 10 | 11 | 12;
 
 export type AuditGuardrailsExitResult =
-  { exitCode: 0; stdout: Record<string, unknown> }
+  { exitCode: 0; stdout: { summary: string; riskLevel: "low" | "medium" | "high" | "critical"; findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[]; recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[]; metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string } } & { coveredPaths: string[]; uncoveredPaths: string[] } }
   | { exitCode: 1; stderr: unknown }
   | { exitCode: 3; stderr: unknown }
-  | { exitCode: 10; stdout: Record<string, unknown> }
+  | { exitCode: 10; stdout: { summary: string; riskLevel: "low" | "medium" | "high" | "critical"; findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[]; recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[]; metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string } } & { coveredPaths: string[]; uncoveredPaths: string[] } }
   | { exitCode: 11; stderr: unknown }
   | { exitCode: 12; stderr: unknown };
 
@@ -247,8 +247,31 @@ export interface OpenApiAuditResult {
   metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string };
 }
 
-export type PublishedReviewResult = Record<string, unknown>;
+export interface PublishedReviewResult {
+  summary: string;
+  riskLevel: "low" | "medium" | "high" | "critical";
+  findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[];
+  recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[];
+  metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string };
+  publishedEndpoints: { operationId: string; path: string; method: string }[];
+  leakedInternalTypes: { schemaName: string; referencedBy: string; reason: string }[];
+}
 
-export type OverlayProposalResult = Record<string, unknown>;
+export interface OverlayProposalResult {
+  summary: string;
+  riskLevel: "low" | "medium" | "high" | "critical";
+  findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[];
+  recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[];
+  metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string };
+  overlayCandidates: { endpoint: string; overlayType: "auth" | "tenancy" | "rateLimit" | "auditLog" | "custom"; rationale: string; suggestedConfig?: Record<string, unknown> }[];
+}
 
-export type GuardrailsAuditResult = Record<string, unknown>;
+export interface GuardrailsAuditResult {
+  summary: string;
+  riskLevel: "low" | "medium" | "high" | "critical";
+  findings: { id?: string; severity: "info" | "warning" | "error" | "critical"; category: string; target?: string; location?: string; message: string; recommendation?: string; confidence?: number; evidence?: { kind: "file" | "command" | "schema" | "diff" | "stdout" | "stderr" | "text"; target?: string; location?: string; excerpt?: string }[]; details?: Record<string, unknown> }[];
+  recommendedActions?: { kind: "run_command" | "edit_file" | "review" | "confirm" | "block" | "ignore"; title: string; command?: string; target?: string; rationale?: string }[];
+  metadata?: { tool?: string; command?: string; version?: string; generatedAt?: string; adapter?: string; model?: string };
+  coveredPaths: string[];
+  uncoveredPaths: string[];
+}
