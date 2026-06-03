@@ -1,6 +1,7 @@
 audit-openapi-design:
   description: Audit OpenAPI specification design quality and module boundary alignment
   target_agent: openapi-design-reviewer
+  model_class: standard
   allowed_from_agents:
     - openapi-design-reviewer
   workflow: openapi-audit
@@ -28,6 +29,7 @@ audit-openapi-design:
 audit-published-api:
   description: Review published API surface for internal type leakage and compatibility
   target_agent: openapi-design-reviewer
+  model_class: standard
   allowed_from_agents:
     - openapi-design-reviewer
   workflow: published-review
@@ -52,6 +54,7 @@ audit-published-api:
 propose-overlay-candidates:
   description: Propose cross-cutting overlay candidates for the API specification
   target_agent: openapi-design-reviewer
+  model_class: standard
   allowed_from_agents:
     - openapi-design-reviewer
   workflow: overlay-proposal
@@ -75,6 +78,7 @@ propose-overlay-candidates:
 audit-guardrails-coverage:
   description: Audit guardrails.yaml for drift detection and lint rule coverage
   target_agent: openapi-design-reviewer
+  model_class: fast
   allowed_from_agents:
     - openapi-design-reviewer
   workflow: guardrails-audit

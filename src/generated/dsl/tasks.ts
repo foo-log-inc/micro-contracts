@@ -7,6 +7,8 @@
 import type { AgentId } from "./agents.js";
 import type { HandoffTypeId } from "./handoffs.js";
 
+export type ModelClass = "fast" | "standard" | "thinking";
+
 export interface TaskContract {
   readonly id: string;
   readonly description: string;
@@ -19,6 +21,7 @@ export interface TaskContract {
   readonly responsibilities: readonly string[];
   readonly completion_criteria: readonly string[];
   readonly optional: boolean;
+  readonly model_class?: ModelClass;
 }
 
 export const auditOpenapiDesign: TaskContract = {
@@ -53,6 +56,7 @@ export const auditOpenapiDesign: TaskContract = {
   "Output conforms to AgentAuditResult schema"
 ],
   optional: false,
+  model_class: "standard",
 };
 
 export const auditPublishedApi: TaskContract = {
@@ -84,6 +88,7 @@ export const auditPublishedApi: TaskContract = {
   "Output conforms to PublishedReviewResult schema (publishedEndpoints, leakedInternalTypes)"
 ],
   optional: false,
+  model_class: "standard",
 };
 
 export const proposeOverlayCandidates: TaskContract = {
@@ -114,6 +119,7 @@ export const proposeOverlayCandidates: TaskContract = {
   "Output conforms to OverlayProposalResult schema (overlayCandidates)"
 ],
   optional: false,
+  model_class: "standard",
 };
 
 export const auditGuardrailsCoverage: TaskContract = {
@@ -144,6 +150,7 @@ export const auditGuardrailsCoverage: TaskContract = {
   "Output conforms to GuardrailsAuditResult schema (coveredPaths, uncoveredPaths)"
 ],
   optional: false,
+  model_class: "fast",
 };
 
 export const taskRegistry: Record<string, TaskContract> = {
