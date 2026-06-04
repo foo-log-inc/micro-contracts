@@ -998,6 +998,7 @@ export const initExitCodes = [0, 1] as const;
 export const checkExitCodes = [0, 1] as const;
 export const pipelineExitCodes = [0, 1] as const;
 export const depsExitCodes = [0, 1] as const;
+export const insightsExitCodes = [0, 1] as const;
 export const guardrailsInitExitCodes = [0, 1] as const;
 export const manifestExitCodes = [0, 1] as const;
 export const auditOpenapiExitCodes = [0, 1, 3, 10, 11, 12] as const;

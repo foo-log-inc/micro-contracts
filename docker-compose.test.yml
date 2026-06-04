@@ -8,4 +8,5 @@ services:
     volumes:
       - ./src:/app/src:ro
       - ./test:/app/test:ro
+      - ./__tests__:/app/__tests__:ro
     network_mode: none
