@@ -19,6 +19,7 @@ export interface CommandReviewPublishedOptions {
   failOn?: "warning" | "error" | "critical";
   output?: string;
   reportFormat?: ReportFormat;
+  logFile?: string;
 }
 
 export async function commandReviewPublished(opts: CommandReviewPublishedOptions): Promise<void | string> {
@@ -33,6 +34,7 @@ export async function commandReviewPublished(opts: CommandReviewPublishedOptions
 
   const auditOpts: AuditOptions = {
     failOn: opts.failOn,
+    logFile: opts.logFile,
   };
 
   try {

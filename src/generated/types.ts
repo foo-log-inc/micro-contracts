@@ -151,6 +151,7 @@ export interface AuditOpenapiOptions {
   failOn?: "warning" | "error" | "critical";
   output?: string;
   reportFormat?: "json" | "text" | "yaml";
+  logFile?: string;
 }
 
 export type AuditOpenapiExitCode = 0 | 1 | 3 | 10 | 11 | 12;
@@ -171,6 +172,7 @@ export interface ReviewPublishedOptions {
   failOn?: "warning" | "error" | "critical";
   output?: string;
   reportFormat?: "json" | "text" | "yaml";
+  logFile?: string;
 }
 
 export type ReviewPublishedExitCode = 0 | 1 | 3 | 10 | 11 | 12;
@@ -191,6 +193,7 @@ export interface ProposeOverlaysOptions {
   failOn?: "warning" | "error" | "critical";
   output?: string;
   reportFormat?: "json" | "text" | "yaml";
+  logFile?: string;
 }
 
 export type ProposeOverlaysExitCode = 0 | 1 | 3 | 10 | 11 | 12;
@@ -211,6 +214,7 @@ export interface AuditGuardrailsOptions {
   failOn?: "warning" | "error" | "critical";
   output?: string;
   reportFormat?: "json" | "text" | "yaml";
+  logFile?: string;
 }
 
 export type AuditGuardrailsExitCode = 0 | 1 | 3 | 10 | 11 | 12;

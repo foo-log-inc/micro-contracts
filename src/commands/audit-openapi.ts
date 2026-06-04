@@ -19,6 +19,7 @@ export interface CommandAuditOpenapiOptions {
   failOn?: "warning" | "error" | "critical";
   output?: string;
   reportFormat?: ReportFormat;
+  logFile?: string;
 }
 
 export async function commandAuditOpenapi(opts: CommandAuditOpenapiOptions): Promise<void | string> {
@@ -33,6 +34,7 @@ export async function commandAuditOpenapi(opts: CommandAuditOpenapiOptions): Pro
 
   const auditOpts: AuditOptions = {
     failOn: opts.failOn,
+    logFile: opts.logFile,
   };
 
   try {

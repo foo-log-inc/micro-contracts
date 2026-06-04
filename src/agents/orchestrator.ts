@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { AuditConfig, AuditOptions, AuditRunResult, TaskId } from "./types.js";
 
 export const EXIT_RUNTIME_MISSING = 11;
@@ -63,11 +64,14 @@ export async function runAgentTask(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let runTask: (...args: any[]) => Promise<any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let createProgressSink: (...args: any[]) => { write: (chunk: string) => void; close: () => void };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let agentRegistry: any, taskRegistry: any, handoffSchemas: any;
 
   try {
     const runtime = await import(RUNTIME_PKG);
     runTask = runtime.runTask;
+    createProgressSink = runtime.createProgressSink;
   } catch {
     throw Object.assign(
       new Error(
@@ -98,29 +102,38 @@ export async function runAgentTask(
     throw Object.assign(err as Error, { exitCode: EXIT_ADAPTER_ERROR });
   }
 
-  const result = await runTask(adapter, taskId, {
-    user_request: userRequest,
-  }, {
-    maxFollowUps: 3,
-    maxRetries: 1,
-    agentRegistry,
-    taskRegistry,
-    handoffSchemas,
-  });
+  const progressSink = options.logFile
+    ? createProgressSink({ stderr: true, file: resolve(options.logFile), naming: "single" })
+    : createProgressSink({ stderr: true });
 
-  const outcome = result.outcome;
-  return {
-    taskId,
-    data: outcome.status === "success" ? outcome.data : null,
-    raw: (outcome.raw as string) ?? "",
-    prompt: userRequest,
-    status: outcome.status as AuditRunResult["status"],
-    errorMessage:
-      outcome.status === "error" ? outcome.message :
-      outcome.status === "escalation" ? outcome.reason :
-      outcome.status === "validation_error" ? outcome.errors?.message :
-      undefined,
-    followUpsUsed: result.follow_ups_used,
-    retriesUsed: result.retries_used,
-  };
+  try {
+    const result = await runTask(adapter, taskId, {
+      user_request: userRequest,
+    }, {
+      maxFollowUps: 3,
+      maxRetries: 1,
+      progressOutput: progressSink,
+      agentRegistry,
+      taskRegistry,
+      handoffSchemas,
+    });
+
+    const outcome = result.outcome;
+    return {
+      taskId,
+      data: outcome.status === "success" ? outcome.data : null,
+      raw: (outcome.raw as string) ?? "",
+      prompt: userRequest,
+      status: outcome.status as AuditRunResult["status"],
+      errorMessage:
+        outcome.status === "error" ? outcome.message :
+        outcome.status === "escalation" ? outcome.reason :
+        outcome.status === "validation_error" ? outcome.errors?.message :
+        undefined,
+      followUpsUsed: result.follow_ups_used,
+      retriesUsed: result.retries_used,
+    };
+  } finally {
+    progressSink.close();
+  }
 }
