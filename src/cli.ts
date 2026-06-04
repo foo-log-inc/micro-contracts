@@ -772,6 +772,7 @@ const handlers: CommandHandlers = {
       failOn: opts.failOn as 'warning' | 'error' | 'critical' | undefined,
       output: opts.output,
       reportFormat: opts.reportFormat as 'json' | 'text' | 'yaml' | undefined,
+      logFile: opts.logFile,
     });
   },
 
@@ -786,6 +787,7 @@ const handlers: CommandHandlers = {
       failOn: opts.failOn as 'warning' | 'error' | 'critical' | undefined,
       output: opts.output,
       reportFormat: opts.reportFormat as 'json' | 'text' | 'yaml' | undefined,
+      logFile: opts.logFile,
     });
   },
 
@@ -800,6 +802,7 @@ const handlers: CommandHandlers = {
       failOn: opts.failOn as 'warning' | 'error' | 'critical' | undefined,
       output: opts.output,
       reportFormat: opts.reportFormat as 'json' | 'text' | 'yaml' | undefined,
+      logFile: opts.logFile,
     });
   },
 
@@ -828,6 +831,7 @@ const handlers: CommandHandlers = {
       failOn: opts.failOn as 'warning' | 'error' | 'critical' | undefined,
       output: opts.output,
       reportFormat: opts.reportFormat as 'json' | 'text' | 'yaml' | undefined,
+      logFile: opts.logFile,
     });
   },
 };

@@ -19,6 +19,7 @@ export interface CommandProposeOverlaysOptions {
   failOn?: "warning" | "error" | "critical";
   output?: string;
   reportFormat?: ReportFormat;
+  logFile?: string;
 }
 
 export async function commandProposeOverlays(opts: CommandProposeOverlaysOptions): Promise<void | string> {
@@ -33,6 +34,7 @@ export async function commandProposeOverlays(opts: CommandProposeOverlaysOptions
 
   const auditOpts: AuditOptions = {
     failOn: opts.failOn,
+    logFile: opts.logFile,
   };
 
   try {

@@ -14,6 +14,7 @@ export interface AuditConfig {
 
 export interface AuditOptions {
   failOn?: "warning" | "error" | "critical";
+  logFile?: string;
 }
 
 export interface AuditRunResult {

@@ -534,6 +534,12 @@ export const commandDefinitions = {
           ],
           "default": "text"
         }
+      },
+      {
+        "name": "log-file",
+        "schema": {
+          "type": "string"
+        }
       }
     ]
   },
@@ -623,6 +629,12 @@ export const commandDefinitions = {
           ],
           "default": "text"
         }
+      },
+      {
+        "name": "log-file",
+        "schema": {
+          "type": "string"
+        }
       }
     ]
   },
@@ -710,6 +722,12 @@ export const commandDefinitions = {
             "yaml"
           ],
           "default": "json"
+        }
+      },
+      {
+        "name": "log-file",
+        "schema": {
+          "type": "string"
         }
       }
     ]
@@ -804,6 +822,12 @@ export const commandDefinitions = {
             "yaml"
           ],
           "default": "text"
+        }
+      },
+      {
+        "name": "log-file",
+        "schema": {
+          "type": "string"
         }
       }
     ]

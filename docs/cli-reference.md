@@ -598,6 +598,7 @@ micro-contracts audit-openapi --show-prompt
 | `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
 | `--output` | -o | No |  | Write result to a file instead of stdout. |
 | `--report-format` |  | No | `"text"` | Output format for the audit report. |
+| `--log-file` | -l | No |  | Write agent progress log to this file path. |
 
 #### Exit Codes
 
@@ -665,6 +666,7 @@ micro-contracts review-published --adapter claude --report-format json
 | `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
 | `--output` | -o | No |  | Write result to a file instead of stdout. |
 | `--report-format` |  | No | `"text"` | Output format for the review report. |
+| `--log-file` | -l | No |  | Write agent progress log to this file path. |
 
 #### Exit Codes
 
@@ -732,6 +734,7 @@ micro-contracts propose-overlays --adapter openai --report-format json
 | `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
 | `--output` | -o | No |  | Write result to a file instead of stdout. |
 | `--report-format` |  | No | `"json"` | Output format for the proposal report. |
+| `--log-file` | -l | No |  | Write agent progress log to this file path. |
 
 #### Exit Codes
 
@@ -796,6 +799,7 @@ micro-contracts audit-guardrails --adapter mock --report-format json
 | `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
 | `--output` | -o | No |  | Write result to a file instead of stdout. |
 | `--report-format` |  | No | `"text"` | Output format for the audit report. |
+| `--log-file` | -l | No |  | Write agent progress log to this file path. |
 
 #### Exit Codes
 

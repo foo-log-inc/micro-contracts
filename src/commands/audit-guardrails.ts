@@ -19,6 +19,7 @@ export interface CommandAuditGuardrailsOptions {
   failOn?: "warning" | "error" | "critical";
   output?: string;
   reportFormat?: ReportFormat;
+  logFile?: string;
 }
 
 export async function commandAuditGuardrails(opts: CommandAuditGuardrailsOptions): Promise<void | string> {
@@ -33,6 +34,7 @@ export async function commandAuditGuardrails(opts: CommandAuditGuardrailsOptions
 
   const auditOpts: AuditOptions = {
     failOn: opts.failOn,
+    logFile: opts.logFile,
   };
 
   try {
