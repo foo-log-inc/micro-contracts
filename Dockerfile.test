@@ -5,10 +5,13 @@ RUN apk add --no-cache git
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN if [ -n "$GITHUB_TOKEN" ]; then \
+      git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \
+      git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:"; \
       git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \
+    else \
+      git config --global url."https://github.com/".insteadOf "git@github.com:"; \
+      git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"; \
     fi \
-  && git config --global url."https://github.com/".insteadOf "git@github.com:" \
-  && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" \
   && npm ci --allow-git=all
 COPY . .
 RUN npm run build
