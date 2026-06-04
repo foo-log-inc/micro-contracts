@@ -24,16 +24,8 @@ jobs:
         node-version: [20, 22]
     steps:
       - uses: actions/checkout@v4
-      - name: Configure git for private git dependencies
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Build test container
-        run: |
-          docker compose -f docker-compose.test.yml build \
-            --build-arg NODE_VERSION=${{ matrix.node-version }} \
-            --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        run: docker compose -f docker-compose.test.yml build --build-arg NODE_VERSION=${{ matrix.node-version }}
       - name: Run tests
         run: docker compose -f docker-compose.test.yml run --rm test
 
@@ -48,14 +40,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Configure git for private git dependencies
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
       - name: Install root dependencies
-        run: npm ci --allow-git=all
+        run: npm ci
 
       - name: Build CLI
         run: npm run build
