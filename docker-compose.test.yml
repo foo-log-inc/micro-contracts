@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile.test
       args:
         NODE_VERSION: ${NODE_VERSION:-22}
+        GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     volumes:
       - ./src:/app/src:ro
       - ./test:/app/test:ro
