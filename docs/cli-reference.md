@@ -13,6 +13,7 @@ Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contr
   - [check](#micro-contracts-check)
   - [pipeline](#micro-contracts-pipeline)
   - [deps](#micro-contracts-deps)
+  - [insights](#micro-contracts-insights)
   - [guardrails-init](#micro-contracts-guardrails-init)
   - [manifest](#micro-contracts-manifest)
   - [audit-openapi](#micro-contracts-audit-openapi)
@@ -401,6 +402,52 @@ micro-contracts deps --validate
 - **stdout:** format=`text`
 
 **Exit 1:** Analysis failed or validation errors found.
+
+- **stderr:** format=`text`
+
+#### Extensions
+
+```yaml
+x-agent: 
+  risk_level: low
+  requires_confirmation: false
+  idempotent: true
+  side_effects: 
+
+```
+
+---
+
+### insights
+
+Emit ExternalInsight JSON for agent-contracts-analyzer.
+
+Reads x-micro-contracts-depend-on from OpenAPI specs and outputs structured dependency edges and anchor mappings as JSON on stdout. Used by agent-contracts-analyzer CommandProvider integration.
+
+**Usage:**
+
+```
+micro-contracts insights --format json
+```
+```
+micro-contracts insights --format json --project-root .
+```
+
+#### Options
+
+| Option | Aliases | Required | Default | Description |
+|---|---|---|---|---|
+| `--format` |  | No | `"json"` | Output format (json only). |
+| `--project-root` |  | No | `"."` | Project root directory containing micro-contracts.config.yaml. |
+| `--config` | -c | No |  | Path to config file (micro-contracts.config.yaml). |
+
+#### Exit Codes
+
+**Exit 0:** ExternalInsight JSON written to stdout.
+
+- **stdout:** format=`json`
+
+**Exit 1:** Insights generation failed.
 
 - **stderr:** format=`text`
 

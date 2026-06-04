@@ -650,6 +650,61 @@ command_sets:
           idempotent: true
           side_effects: []
 
+      # ── insights ─────────────────────────────────────
+      insights:
+        summary: Emit ExternalInsight JSON for agent-contracts-analyzer.
+        description: >-
+          Reads x-micro-contracts-depend-on from OpenAPI specs and outputs
+          structured dependency edges and anchor mappings as JSON on stdout.
+          Used by agent-contracts-analyzer CommandProvider integration.
+        usage:
+          - micro-contracts insights --format json
+          - micro-contracts insights --format json --project-root .
+
+        options:
+          - name: format
+            description: Output format (json only).
+            value_name: format
+            schema:
+              type: string
+              default: json
+
+          - name: project-root
+            description: Project root directory containing micro-contracts.config.yaml.
+            value_name: path
+            schema:
+              type: string
+              default: .
+
+          - name: config
+            aliases: [c]
+            description: Path to config file (micro-contracts.config.yaml).
+            value_name: path
+            schema:
+              type: string
+            file:
+              mode: read
+              exists: false
+              media_type: application/yaml
+              encoding: utf-8
+
+        exits:
+          '0':
+            description: ExternalInsight JSON written to stdout.
+            stdout:
+              format: json
+
+          '1':
+            description: Insights generation failed.
+            stderr:
+              format: text
+
+        x-agent:
+          risk_level: low
+          requires_confirmation: false
+          idempotent: true
+          side_effects: []
+
       # ── guardrails-init ──────────────────────────────
       guardrails-init:
         path: [guardrails-init]

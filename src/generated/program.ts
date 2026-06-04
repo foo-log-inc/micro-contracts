@@ -10,6 +10,7 @@ export interface CommandHandlers {
   check: (options: { only?: string; skip?: string; gate?: string; verbose?: boolean; fix?: boolean; guardrails?: string; generatedDir?: string; changedFiles?: string; list?: boolean; listGates?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   pipeline: (options: { config?: string; verbose?: boolean; skip?: string; continueOnError?: boolean; guardrails?: string; generatedDir?: string; manifest?: boolean; skipLint?: boolean; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; docsOnly?: boolean; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   deps: (options: { config?: string; module?: string; graph?: boolean; impact?: string; whoDependsOn?: string; validate?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
+  insights: (options: { format?: string; projectRoot?: string; config?: string }, parentOpts: Record<string, unknown>) => Promise<void>;
   guardrailsInit: (options: { output?: string }, parentOpts: Record<string, unknown>) => Promise<void>;
   manifest: (options: { dir?: string; verify?: boolean; output?: string }, parentOpts: Record<string, unknown>) => Promise<void>;
   auditOpenapi: (options: { config?: string; module?: string; adapter?: string; model?: string; failOn?: string; output?: string; reportFormat?: string; showPrompt?: boolean }, parentOpts: Record<string, unknown>) => Promise<void | string>;
@@ -155,6 +156,22 @@ export function createProgram(
         return;
       }
       await handlers.deps(opts, globalOpts);
+    });
+
+  program
+    .command("insights")
+    .description("Emit ExternalInsight JSON for agent-contracts-analyzer.")
+    .option("--format <format>", "Output format (json only).", "json")
+    .option("--project-root <path>", "Project root directory containing micro-contracts.config.yaml.", ".")
+    .option("-c, --config <path>", "Path to config file (micro-contracts.config.yaml).")
+    .action(async (opts, cmd) => {
+      const globalOpts = cmd.optsWithGlobals();
+      if (globalOpts.introspect) {
+        const policy = deriveCommandPolicy("insights", opts);
+        console.log(JSON.stringify(policy, null, 2));
+        return;
+      }
+      await handlers.insights(opts, globalOpts);
     });
 
   program
@@ -320,7 +337,7 @@ export function createProgram(
               type: "cli-contracts/extract",
               extractedAt: new Date().toISOString(),
               specVersion: doc.cli_contracts ?? "0.1.0",
-              commands: ["micro-contracts.generate","micro-contracts.lint","micro-contracts.init","micro-contracts.check","micro-contracts.pipeline","micro-contracts.deps","micro-contracts.guardrails-init","micro-contracts.manifest","micro-contracts.audit-openapi","micro-contracts.review-published","micro-contracts.propose-overlays","micro-contracts.audit-guardrails"],
+              commands: ["micro-contracts.generate","micro-contracts.lint","micro-contracts.init","micro-contracts.check","micro-contracts.pipeline","micro-contracts.deps","micro-contracts.insights","micro-contracts.guardrails-init","micro-contracts.manifest","micro-contracts.audit-openapi","micro-contracts.review-published","micro-contracts.propose-overlays","micro-contracts.audit-guardrails"],
             };
           }
           Object.assign(out, doc);
@@ -338,7 +355,7 @@ export function createProgram(
             yamlLines.push("extractedAt: " + new Date().toISOString());
             yamlLines.push("spec_version: " + (doc.cli_contracts ?? "0.1.0"));
             yamlLines.push("commands:");
-            for (const id of ["micro-contracts.generate","micro-contracts.lint","micro-contracts.init","micro-contracts.check","micro-contracts.pipeline","micro-contracts.deps","micro-contracts.guardrails-init","micro-contracts.manifest","micro-contracts.audit-openapi","micro-contracts.review-published","micro-contracts.propose-overlays","micro-contracts.audit-guardrails"]) {
+            for (const id of ["micro-contracts.generate","micro-contracts.lint","micro-contracts.init","micro-contracts.check","micro-contracts.pipeline","micro-contracts.deps","micro-contracts.insights","micro-contracts.guardrails-init","micro-contracts.manifest","micro-contracts.audit-openapi","micro-contracts.review-published","micro-contracts.propose-overlays","micro-contracts.audit-guardrails"]) {
               yamlLines.push("  - " + id);
             }
           }

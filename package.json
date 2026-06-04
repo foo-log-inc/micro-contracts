@@ -1,10 +1,16 @@
 {
   "name": "micro-contracts",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "Contract-first OpenAPI toolchain that keeps TypeScript UI and microservices aligned via code generation",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    "./insight-provider": {
+      "import": "./dist/external/insight-provider.js",
+      "types": "./dist/external/insight-provider.d.ts"
+    }
+  },
   "bin": {
     "micro-contracts": "dist/micro-contracts.bundle.mjs"
   },
@@ -13,12 +19,15 @@
     "dist/micro-contracts.bundle.mjs.map",
     "dist/index.js",
     "dist/index.d.ts",
+    "dist/external/insight-provider.js",
+    "dist/external/insight-provider.d.ts",
     "docs",
     "cli-contract.yaml",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
+    "prebuild": "node scripts/ensure-agent-contracts-analyzer.mjs",
     "build": "tsc",
     "bundle": "node esbuild.bundle.mjs",
     "bundle:min": "node esbuild.bundle.mjs --minify",
@@ -61,7 +70,8 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.0",
     "agent-contracts": "^0.33.1",
-    "agent-contracts-runtime": "^0.32.10",
+    "agent-contracts-analyzer": "github:foo-log-inc/agent-contracts-analyzer#v0.1.1",
+    "agent-contracts-runtime": "^0.35.7",
     "chalk": "^5.3.0",
     "cli-contracts": "^0.32.0",
     "commander": "^12.1.0",

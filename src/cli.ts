@@ -28,6 +28,7 @@ import { commandAuditOpenapi } from './commands/audit-openapi.js';
 import { commandReviewPublished } from './commands/review-published.js';
 import { commandProposeOverlays } from './commands/propose-overlays.js';
 import { commandAuditGuardrails } from './commands/audit-guardrails.js';
+import { commandInsights } from './commands/insights.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json') as { version: string };
@@ -800,6 +801,20 @@ const handlers: CommandHandlers = {
       output: opts.output,
       reportFormat: opts.reportFormat as 'json' | 'text' | 'yaml' | undefined,
     });
+  },
+
+  // ── insights ─────────────────────────────────────────
+  insights: async (opts) => {
+    try {
+      await commandInsights({
+        format: opts.format,
+        projectRoot: opts.projectRoot,
+        config: opts.config,
+      });
+    } catch (error) {
+      console.error('Insights failed:', error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
   },
 
   // ── audit-guardrails (LLM) ───────────────────────────

@@ -384,6 +384,36 @@ export const commandDefinitions = {
       }
     ]
   },
+  "insights": {
+    "options": [
+      {
+        "name": "format",
+        "schema": {
+          "type": "string",
+          "default": "json"
+        }
+      },
+      {
+        "name": "project-root",
+        "schema": {
+          "type": "string",
+          "default": "."
+        }
+      },
+      {
+        "name": "config",
+        "schema": {
+          "type": "string"
+        },
+        "file": {
+          "mode": "read",
+          "exists": false,
+          "media_type": "application/yaml",
+          "encoding": "utf-8"
+        }
+      }
+    ]
+  },
   "guardrails-init": {
     "options": [
       {

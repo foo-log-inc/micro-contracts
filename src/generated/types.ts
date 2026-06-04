@@ -109,6 +109,18 @@ export type DepsExitResult =
   { exitCode: 0; stdout: unknown }
   | { exitCode: 1; stderr: unknown };
 
+export interface InsightsOptions {
+  format?: string;
+  projectRoot?: string;
+  config?: string;
+}
+
+export type InsightsExitCode = 0 | 1;
+
+export type InsightsExitResult =
+  { exitCode: 0; stdout: unknown }
+  | { exitCode: 1; stderr: unknown };
+
 export interface GuardrailsInitOptions {
   output?: string;
 }

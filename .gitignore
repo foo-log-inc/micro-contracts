@@ -28,6 +28,9 @@ npm-debug.log*
 # Test coverage
 coverage/
 
+# agent-contracts-analyzer clone cache (prebuild)
+.cache/
+
 # Environment
 .env
 .env.local
