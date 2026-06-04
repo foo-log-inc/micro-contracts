@@ -3,7 +3,9 @@ FROM node:${NODE_VERSION}-alpine
 RUN apk add --no-cache git
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
-RUN npm ci --allow-git=all
+RUN git config --global url."https://github.com/".insteadOf "git@github.com:" \
+  && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" \
+  && npm ci --allow-git=all
 COPY . .
 RUN npm run build
 CMD ["npm", "run", "test"]
