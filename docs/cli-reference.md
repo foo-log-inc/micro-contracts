@@ -581,7 +581,7 @@ micro-contracts audit-openapi
 micro-contracts audit-openapi -m core
 ```
 ```
-micro-contracts audit-openapi --adapter cursor --report-format text
+micro-contracts audit-openapi --adapter claude --report-format text
 ```
 ```
 micro-contracts audit-openapi --show-prompt
