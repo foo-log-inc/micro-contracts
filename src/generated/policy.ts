@@ -486,7 +486,6 @@ export const commandDefinitions = {
         "schema": {
           "type": "string",
           "enum": [
-            "cursor",
             "claude",
             "openai",
             "gemini",
@@ -581,7 +580,6 @@ export const commandDefinitions = {
         "schema": {
           "type": "string",
           "enum": [
-            "cursor",
             "claude",
             "openai",
             "gemini",
@@ -675,7 +673,6 @@ export const commandDefinitions = {
         "schema": {
           "type": "string",
           "enum": [
-            "cursor",
             "claude",
             "openai",
             "gemini",
@@ -775,7 +772,6 @@ export const commandDefinitions = {
         "schema": {
           "type": "string",
           "enum": [
-            "cursor",
             "claude",
             "openai",
             "gemini",

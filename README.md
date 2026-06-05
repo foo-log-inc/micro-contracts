@@ -459,7 +459,7 @@ Run LLM-based OpenAPI design quality audit. Evaluates path design, module bounda
 |--------|-------------|
 | `-c, --config <path>` | Path to config file |
 | `-m, --module <name>` | Module name to audit (default: all) |
-| `-a, --adapter <name>` | SDK adapter (`cursor`, `claude`, `openai`, `gemini`, `mock`) |
+| `-a, --adapter <name>` | SDK adapter (`claude`, `openai`, `gemini`, `mock`) |
 | `--model <name>` | LLM model override |
 | `--show-prompt` | Output the constructed prompt without calling LLM |
 | `--fail-on <level>` | Minimum severity for non-zero exit (`warning`, `error`, `critical`) |
@@ -474,7 +474,7 @@ Review published API surface for internal type leakage and backward compatibilit
 |--------|-------------|
 | `-c, --config <path>` | Path to config file |
 | `-m, --module <name>` | Module name to review (default: all) |
-| `-a, --adapter <name>` | SDK adapter (`cursor`, `claude`, `openai`, `gemini`, `mock`) |
+| `-a, --adapter <name>` | SDK adapter (`claude`, `openai`, `gemini`, `mock`) |
 | `--model <name>` | LLM model override |
 | `--show-prompt` | Output the constructed prompt without calling LLM |
 | `--fail-on <level>` | Minimum severity for non-zero exit |
@@ -489,7 +489,7 @@ Propose cross-cutting overlay candidates for authentication, tenancy, rate limit
 |--------|-------------|
 | `-c, --config <path>` | Path to config file |
 | `-m, --module <name>` | Module name to analyze (default: all) |
-| `-a, --adapter <name>` | SDK adapter (`cursor`, `claude`, `openai`, `gemini`, `mock`) |
+| `-a, --adapter <name>` | SDK adapter (`claude`, `openai`, `gemini`, `mock`) |
 | `--model <name>` | LLM model override |
 | `--show-prompt` | Output the constructed prompt without calling LLM |
 | `--fail-on <level>` | Minimum severity for non-zero exit |
@@ -504,7 +504,7 @@ Audit guardrails configuration for drift detection and lint rule coverage. File 
 |--------|-------------|
 | `-c, --config <path>` | Path to config file |
 | `-g, --guardrails <path>` | Path to guardrails.yaml |
-| `-a, --adapter <name>` | SDK adapter (`cursor`, `claude`, `openai`, `gemini`, `mock`) |
+| `-a, --adapter <name>` | SDK adapter (`claude`, `openai`, `gemini`, `mock`) |
 | `--model <name>` | LLM model override |
 | `--show-prompt` | Output the constructed prompt without calling LLM |
 | `--fail-on <level>` | Minimum severity for non-zero exit |

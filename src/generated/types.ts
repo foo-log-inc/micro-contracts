@@ -146,7 +146,7 @@ export type ManifestExitResult =
 export interface AuditOpenapiOptions {
   config?: string;
   module?: string;
-  adapter?: "cursor" | "claude" | "openai" | "gemini" | "mock";
+  adapter?: "claude" | "openai" | "gemini" | "mock";
   model?: string;
   failOn?: "warning" | "error" | "critical";
   output?: string;
@@ -167,7 +167,7 @@ export type AuditOpenapiExitResult =
 export interface ReviewPublishedOptions {
   config?: string;
   module?: string;
-  adapter?: "cursor" | "claude" | "openai" | "gemini" | "mock";
+  adapter?: "claude" | "openai" | "gemini" | "mock";
   model?: string;
   failOn?: "warning" | "error" | "critical";
   output?: string;
@@ -188,7 +188,7 @@ export type ReviewPublishedExitResult =
 export interface ProposeOverlaysOptions {
   config?: string;
   module?: string;
-  adapter?: "cursor" | "claude" | "openai" | "gemini" | "mock";
+  adapter?: "claude" | "openai" | "gemini" | "mock";
   model?: string;
   failOn?: "warning" | "error" | "critical";
   output?: string;
@@ -209,7 +209,7 @@ export type ProposeOverlaysExitResult =
 export interface AuditGuardrailsOptions {
   config?: string;
   guardrails?: string;
-  adapter?: "cursor" | "claude" | "openai" | "gemini" | "mock";
+  adapter?: "claude" | "openai" | "gemini" | "mock";
   model?: string;
   failOn?: "warning" | "error" | "critical";
   output?: string;
