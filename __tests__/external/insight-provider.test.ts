@@ -6,6 +6,7 @@ import { ExternalInsightSchema } from "agent-contracts-analyzer";
 import {
   MicroContractsInsightProvider,
   buildExternalInsight,
+  filterInsight,
 } from "../../src/external/insight-provider.js";
 
 const EXAMPLES_ROOT = path.resolve(import.meta.dirname, "../../examples");
@@ -84,6 +85,61 @@ describe("MicroContractsInsightProvider", () => {
     expect(opAnchor!.symbols?.[0]?.symbolId).toBe(
       "packages/contract/billing/services/BillingServiceApi.ts#createInvoice",
     );
+  });
+
+  it("filters edges by changedFiles to those touching the matching module", async () => {
+    const provider = new MicroContractsInsightProvider();
+    const filtered = await provider.provide({
+      projectRoot: EXAMPLES_ROOT,
+      changedFiles: ["spec/billing/openapi/billing.yaml"],
+    });
+
+    expect(filtered.edges.length).toBeGreaterThan(0);
+    expect(
+      filtered.edges.some(
+        (e) =>
+          e.from === "billing" &&
+          e.to === "core.User.getUsers" &&
+          e.kind === "api_dependency",
+      ),
+    ).toBe(true);
+    for (const edge of filtered.edges) {
+      const touchesBillingModule =
+        edge.from === "billing" || edge.from.startsWith("billing.");
+      const touchesBillingDependency =
+        edge.to === "billing" || edge.to.startsWith("billing.");
+      expect(touchesBillingModule || touchesBillingDependency).toBe(true);
+    }
+    expect(filtered.anchorMapping?.some((a) => a.domainId === "billing")).toBe(
+      true,
+    );
+  });
+
+  it("filters edges by artifactIds", async () => {
+    const provider = new MicroContractsInsightProvider();
+    const fullInsight = buildExternalInsight(EXAMPLES_ROOT);
+    const filtered = await provider.provide({
+      projectRoot: EXAMPLES_ROOT,
+      artifactIds: ["billing.Billing.createInvoice"],
+    });
+
+    expect(filtered.edges.length).toBeLessThan(fullInsight.edges.length);
+    expect(filtered.edges).toHaveLength(1);
+    expect(filtered.edges[0]).toMatchObject({
+      from: "billing.Billing.createInvoice",
+      to: "core.User.getUserById",
+      kind: "api_operation_dependency",
+    });
+    expect(filtered.anchorMapping?.map((a) => a.domainId).sort()).toEqual(
+      ["billing.Billing.createInvoice", "core.User.getUserById"].sort(),
+    );
+  });
+
+  it("returns all edges when no filters are specified", () => {
+    const insight = buildExternalInsight(EXAMPLES_ROOT);
+    const unfiltered = filterInsight(insight, { projectRoot: EXAMPLES_ROOT });
+    expect(unfiltered.edges).toEqual(insight.edges);
+    expect(unfiltered.anchorMapping).toEqual(insight.anchorMapping);
   });
 });
 
