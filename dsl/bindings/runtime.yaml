@@ -1,0 +1,33 @@
+software: micro-contracts
+version: 1
+
+# output-schema-conformance and confidence-threshold are semantic guardrails
+# enforced at runtime (Zod validation and output content checks).
+# No standard binding matcher applies.
+guardrail_impl:
+  no-file-modification:
+    checks:
+      - matcher:
+          type: file_glob
+          pattern: "spec/**/openapi/**/*.yaml"
+        message: >-
+          Modifying OpenAPI specs is forbidden.
+          openapi-design-reviewer operates in read-only analysis mode.
+      - matcher:
+          type: file_glob
+          pattern: "**/*.overlay.yaml"
+        message: >-
+          Modifying overlay files is forbidden.
+          openapi-design-reviewer operates in read-only analysis mode.
+      - matcher:
+          type: file_glob
+          pattern: "micro-contracts.config.yaml"
+        message: >-
+          Modifying micro-contracts config is forbidden.
+          openapi-design-reviewer operates in read-only analysis mode.
+      - matcher:
+          type: file_glob
+          pattern: "**/guardrails.yaml"
+        message: >-
+          Modifying guardrails config is forbidden.
+          openapi-design-reviewer operates in read-only analysis mode.
