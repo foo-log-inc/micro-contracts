@@ -11,3 +11,4 @@ export type { TaskContract } from "./tasks.js";
 export { handoffSchemas, handoffs } from "./handoffs.js";
 export type { HandoffTypeId, HandoffEnvelope } from "./handoffs.js";
 export { workflowRegistry } from "./workflows.js";
+export { resolvedDsl } from "./dsl-data.js";

@@ -1,46 +1,8 @@
-import { resolve } from "node:path";
+import { resolvedDsl } from "../generated/dsl/dsl-data.js";
 import type { AuditConfig, AuditOptions, AuditRunResult, TaskId } from "./types.js";
 
 export const EXIT_RUNTIME_MISSING = 11;
 export const EXIT_ADAPTER_ERROR = 12;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function createAdapter(runtimePkg: string, name: string, config: AuditConfig): Promise<any> {
-  switch (name) {
-    case "mock": {
-      const mod = await import(`${runtimePkg}/adapters/mock`);
-      return new mod.MockAdapter();
-    }
-    case "claude": {
-      const mod = await import(`${runtimePkg}/adapters/claude-agent-sdk`);
-      return new mod.ClaudeAgentSdkAdapter({
-        model: config.model,
-        tools: ["Read", "Glob", "Grep"],
-        permissionMode: "bypassPermissions",
-      });
-    }
-    case "openai": {
-      const mod = await import(`${runtimePkg}/adapters/openai-agents-sdk`);
-      return new mod.OpenAIAgentsSdkAdapter({
-        model: config.model ?? "o3-mini",
-        maxTurns: 1,
-      });
-    }
-    case "gemini": {
-      const mod = await import(`${runtimePkg}/adapters/adk-sdk`);
-      return new mod.AdkSdkAdapter({
-        apiKey: process.env.GEMINI_API_KEY,
-        model: config.model ?? "gemini-2.5-pro",
-        temperature: config.temperature,
-      });
-    }
-    default:
-      throw new Error(
-        `Unsupported adapter: "${name}". ` +
-        "Available: mock, claude, openai, gemini.",
-      );
-  }
-}
 
 export async function runAgentTask(
   userRequest: string,
@@ -48,81 +10,50 @@ export async function runAgentTask(
   auditConfig: AuditConfig,
   options: AuditOptions,
 ): Promise<AuditRunResult> {
-  const RUNTIME_PKG = ["agent-contracts", "runtime"].join("-");
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let runTask: (...args: any[]) => Promise<any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let createProgressSink: (...args: any[]) => { write: (chunk: string) => void; close: () => void };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let agentRegistry: any, taskRegistry: any, handoffSchemas: any;
-
+  let executeTask: (taskId: string, options: any) => Promise<any>;
   try {
-    const runtime = await import(RUNTIME_PKG);
-    runTask = runtime.runTask;
-    createProgressSink = runtime.createProgressSink;
+    const runtime = await import("agent-contracts-runtime");
+    executeTask = runtime.executeTask;
   } catch {
     throw Object.assign(
       new Error(
         "agent-contracts-runtime is not installed. " +
-        "Install it to use this command, or use --show-prompt to inspect the prompt.\n" +
-        "  npm install agent-contracts-runtime",
+          "Install it to use this command, or use --show-prompt to inspect the prompt.\n" +
+          "  npm install agent-contracts-runtime",
       ),
       { exitCode: EXIT_RUNTIME_MISSING },
     );
   }
 
+  let result;
   try {
-    const dsl = await import("../generated/dsl/index.js");
-    agentRegistry = dsl.agentRegistry;
-    taskRegistry = dsl.taskRegistry;
-    handoffSchemas = dsl.handoffSchemas;
-  } catch {
-    agentRegistry = {};
-    taskRegistry = {};
-    handoffSchemas = {};
-  }
-
-  const adapterName = auditConfig.adapter ?? "mock";
-  let adapter;
-  try {
-    adapter = await createAdapter(RUNTIME_PKG, adapterName, auditConfig);
+    result = await executeTask(taskId, {
+      request: userRequest,
+      adapter: auditConfig.adapter ?? "mock",
+      model: auditConfig.model,
+      dsl: resolvedDsl,
+      logFile: options.logFile,
+      maxFollowUps: 3,
+      maxRetries: 1,
+    });
   } catch (err) {
     throw Object.assign(err as Error, { exitCode: EXIT_ADAPTER_ERROR });
   }
 
-  const progressSink = options.logFile
-    ? createProgressSink({ stderr: true, file: resolve(options.logFile), naming: "single" })
-    : createProgressSink({ stderr: true });
-
-  try {
-    const result = await runTask(adapter, taskId, {
-      user_request: userRequest,
-    }, {
-      maxFollowUps: 3,
-      maxRetries: 1,
-      progressOutput: progressSink,
-      agentRegistry,
-      taskRegistry,
-      handoffSchemas,
-    });
-
-    const outcome = result.outcome;
-    return {
-      taskId,
-      data: outcome.status === "success" ? outcome.data : null,
-      raw: (outcome.raw as string) ?? "",
-      prompt: userRequest,
-      status: outcome.status as AuditRunResult["status"],
-      errorMessage:
-        outcome.status === "error" ? outcome.message :
-        outcome.status === "escalation" ? outcome.reason :
-        outcome.status === "validation_error" ? outcome.errors?.message :
-        undefined,
-      followUpsUsed: result.follow_ups_used,
-      retriesUsed: result.retries_used,
-    };
-  } finally {
-    progressSink.close();
-  }
+  const outcome = result.outcome;
+  return {
+    taskId,
+    data: outcome.status === "success" ? (outcome.data ?? null) : null,
+    raw: outcome.raw ?? "",
+    prompt: userRequest,
+    status: outcome.status as AuditRunResult["status"],
+    errorMessage:
+      outcome.status === "error" ? outcome.message :
+      outcome.status === "escalation" ? outcome.reason :
+      outcome.status === "validation_error" ? outcome.errors?.message :
+      undefined,
+    followUpsUsed: result.follow_ups_used,
+    retriesUsed: result.retries_used,
+  };
 }
