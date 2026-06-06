@@ -15,27 +15,7 @@ const externalSdks = [
 
 const resolveRuntimeDynamicImports = {
   name: "resolve-runtime-dynamic-imports",
-  setup(build) {
-    build.onLoad({ filter: /agents[\\/]orchestrator\.ts$/ }, async (args) => {
-      let contents = readFileSync(args.path, "utf8");
-      // Replace obfuscated RUNTIME_PKG with literal package name
-      contents = contents.replace(
-        /const RUNTIME_PKG = \["agent-contracts",\s*"runtime"\]\.join\("-"\);/,
-        'const RUNTIME_PKG = "agent-contracts-runtime";',
-      );
-      // Replace dynamic imports with literal strings
-      contents = contents.replace(
-        /await import\(RUNTIME_PKG\)/g,
-        'await import("agent-contracts-runtime")',
-      );
-      // Replace template-literal adapter imports
-      contents = contents.replace(
-        /await import\(`\$\{runtimePkg\}\/adapters\/([^`]+)`\)/g,
-        'await import("agent-contracts-runtime/adapters/$1")',
-      );
-      return { contents, loader: "ts" };
-    });
-  },
+  setup(_build) {},
 };
 
 const inlineBuildTimeConstants = {
