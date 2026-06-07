@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.15.0
+**Version:** 0.17.10
 
 ## Table of Contents
 
@@ -630,6 +630,7 @@ micro-contracts audit-openapi --show-prompt
 
 ```yaml
 x-agent: 
+  dsl_task: audit-openapi-design
   expectedDurationMs: 120000
   retryableExitCodes: 
     - 12
@@ -698,6 +699,7 @@ micro-contracts review-published --adapter claude --report-format json
 
 ```yaml
 x-agent: 
+  dsl_task: audit-published-api
   expectedDurationMs: 120000
   retryableExitCodes: 
     - 12
@@ -766,6 +768,7 @@ micro-contracts propose-overlays --adapter openai --report-format json
 
 ```yaml
 x-agent: 
+  dsl_task: propose-overlay-candidates
   expectedDurationMs: 120000
   retryableExitCodes: 
     - 12
@@ -831,6 +834,7 @@ micro-contracts audit-guardrails --adapter mock --report-format json
 
 ```yaml
 x-agent: 
+  dsl_task: audit-guardrails-coverage
   expectedDurationMs: 120000
   retryableExitCodes: 
     - 12

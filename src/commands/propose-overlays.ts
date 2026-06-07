@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { buildProposeOverlaysContext } from "../agents/context-builder.js";
 import {
   runAgentTask,
+  TASK_IDS,
   computeExitCode,
   formatResult,
   writeOutput,
@@ -40,7 +41,7 @@ export async function commandProposeOverlays(opts: CommandProposeOverlaysOptions
   try {
     const result = await runAgentTask(
       context,
-      "propose-overlay-candidates",
+      TASK_IDS.proposeOverlays,
       auditConfig,
       auditOpts,
     );

@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { buildAuditOpenapiContext } from "../agents/context-builder.js";
 import {
   runAgentTask,
+  TASK_IDS,
   computeExitCode,
   formatResult,
   writeOutput,
@@ -40,7 +41,7 @@ export async function commandAuditOpenapi(opts: CommandAuditOpenapiOptions): Pro
   try {
     const result = await runAgentTask(
       context,
-      "audit-openapi-design",
+      TASK_IDS.auditOpenapi,
       auditConfig,
       auditOpts,
     );

@@ -3,7 +3,7 @@ cli_contracts: 0.1.0
 
 info:
   title: micro-contracts CLI
-  version: 0.15.0
+  version: 0.17.10
   description: >-
     Contract-first OpenAPI toolchain for TypeScript Web/API systems.
     Generates contract packages, server routes, and frontend clients
@@ -933,6 +933,7 @@ command_sets:
             idempotent: true
 
         x-agent:
+          dsl_task: audit-openapi-design
           expectedDurationMs: 120000
           retryableExitCodes: [12]
 
@@ -1061,6 +1062,7 @@ command_sets:
             idempotent: true
 
         x-agent:
+          dsl_task: audit-published-api
           expectedDurationMs: 120000
           retryableExitCodes: [12]
 
@@ -1190,6 +1192,7 @@ command_sets:
             idempotent: true
 
         x-agent:
+          dsl_task: propose-overlay-candidates
           expectedDurationMs: 120000
           retryableExitCodes: [12]
 
@@ -1323,6 +1326,7 @@ command_sets:
             idempotent: true
 
         x-agent:
+          dsl_task: audit-guardrails-coverage
           expectedDurationMs: 120000
           retryableExitCodes: [12]
 
