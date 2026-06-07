@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { buildAuditGuardrailsContext } from "../agents/context-builder.js";
 import {
   runAgentTask,
+  TASK_IDS,
   computeExitCode,
   formatResult,
   writeOutput,
@@ -40,7 +41,7 @@ export async function commandAuditGuardrails(opts: CommandAuditGuardrailsOptions
   try {
     const result = await runAgentTask(
       context,
-      "audit-guardrails-coverage",
+      TASK_IDS.auditGuardrails,
       auditConfig,
       auditOpts,
     );

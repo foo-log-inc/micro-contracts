@@ -1,10 +1,14 @@
 import type { OpenapiAuditResult } from "../generated/dsl/handoffs.js";
+import { taskRegistry } from "../generated/dsl/tasks.js";
 
-export type TaskId =
-  | "audit-openapi-design"
-  | "audit-published-api"
-  | "propose-overlay-candidates"
-  | "audit-guardrails-coverage";
+export type TaskId = keyof typeof taskRegistry;
+
+export const TASK_IDS = {
+  auditOpenapi: "audit-openapi-design",
+  reviewPublished: "audit-published-api",
+  proposeOverlays: "propose-overlay-candidates",
+  auditGuardrails: "audit-guardrails-coverage",
+} as const satisfies Record<string, TaskId>;
 
 export interface AuditConfig {
   adapter?: string;
