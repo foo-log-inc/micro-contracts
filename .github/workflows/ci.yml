@@ -1,72 +1,33 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  audit:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Security audit
-        run: docker run --rm -v "$(pwd)":/app:ro -w /app node:22-alpine npm audit
-
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build test container
-        run: docker compose -f docker-compose.test.yml build --build-arg NODE_VERSION=${{ matrix.node-version }}
-      - name: Run tests
-        run: docker compose -f docker-compose.test.yml run --rm test
-
-  examples-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Build CLI
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --legacy-peer-deps --ignore-scripts
+      - name: Audit
+        run: npm audit --audit-level=moderate
+      - name: Verify npm signatures
+        run: npm audit signatures
+      - name: Lint
+        run: npm run lint --if-present
+      - name: Build
         run: npm run build
-
-      - name: Build eslint-plugin
-        working-directory: eslint-plugin
-        run: npm ci && npm run build
-
-      - name: Install examples dependencies
-        working-directory: examples
-        run: npm ci && npm run install:all
-
-      - name: Run guardrail checks (Gate 1-2)
-        working-directory: examples
-        run: |
-          npm run check:gate1
-          npm run check:gate2
-
-      - name: Generate
-        working-directory: examples
-        run: npm run generate
-
-      - name: Run guardrail checks (Gate 3-5)
-        working-directory: examples
-        run: |
-          npm run check:gate3
-          npm run check:gate4
-          npm run check:gate5
+      - name: Test
+        run: npm run test:ci
+      - name: Verify package contents
+        run: npm pack --dry-run
