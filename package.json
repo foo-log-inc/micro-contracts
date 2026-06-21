@@ -81,7 +81,7 @@
     "esbuild": "^0.28.0",
     "glob": "^10.3.10",
     "handlebars": "^4.7.8",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.1.2",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vitest": "^4.1.7",
@@ -90,5 +90,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "overrides": {
+    "js-yaml": "^4.1.2"
   }
 }
