@@ -108,6 +108,71 @@ generated:
   }
   
   describe.skipIf(!isBuilt)('CLI integration tests', () => {
+    it('a partial generate does not let a later full run skip', () => {
+      // The input hash means "these inputs have been generated from". Stamping
+      // it after generating a subset would leave the rest permanently missing.
+      createGuardrailsConfig();
+      fs.mkdirSync(path.join(tempDir, 'spec/core/openapi'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'packages'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'spec/core/openapi/core.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Core',
+          '  version: 1.0.0',
+          'paths:',
+          '  /items:',
+          '    get:',
+          '      operationId: getItems',
+          '      x-micro-contracts-service: Item',
+          '      x-micro-contracts-method: getItems',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          'components:',
+          '  schemas: {}',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(path.join(tempDir, 'first.hbs'), 'first');
+      fs.writeFileSync(path.join(tempDir, 'second.hbs'), 'second');
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        [
+          'defaults:',
+          '  contract:',
+          '    output: packages/contract/{module}',
+          '  outputs:',
+          '    first:',
+          '      output: packages/out/first.generated.ts',
+          '      template: first.hbs',
+          '    second:',
+          '      output: packages/out/second.generated.ts',
+          '      template: second.hbs',
+          'modules:',
+          '  core:',
+          '    openapi: spec/core/openapi/core.yaml',
+          '',
+        ].join('\n'),
+      );
+
+      const partial = runCli('generate --output first');
+      expect(partial.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, 'packages/out/first.generated.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'packages/out/second.generated.ts'))).toBe(false);
+
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(tempDir, 'packages/.generated-manifest.json'), 'utf-8'),
+      );
+      expect(manifest.inputHash).toBeUndefined();
+
+      const full = runCli('generate');
+      expect(full.exitCode).toBe(0);
+      expect(full.stdout).not.toContain('No input changes detected');
+      expect(fs.existsSync(path.join(tempDir, 'packages/out/second.generated.ts'))).toBe(true);
+    });
+
     it('deps fails instead of reporting an incomplete graph', () => {
       // A module whose spec is missing would silently drop out of the graph,
       // impact analysis and validation output.

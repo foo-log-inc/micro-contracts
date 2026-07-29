@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.17.17
+**Version:** 0.17.18
 
 ## Table of Contents
 
