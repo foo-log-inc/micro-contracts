@@ -308,7 +308,7 @@ function hasPublicEndpoints(spec: OpenAPISpec): boolean {
   for (const pathItem of Object.values(spec.paths)) {
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[method];
-      if (operation && (operation as unknown as Record<string, unknown>)['x-micro-contracts-published'] === true) {
+      if (operation?.['x-micro-contracts-published'] === true) {
         return true;
       }
     }
@@ -764,7 +764,7 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
     
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[method];
-      if (operation && (operation as unknown as Record<string, unknown>)['x-micro-contracts-published'] === true) {
+      if (operation?.['x-micro-contracts-published'] === true) {
         filteredPathItem[method] = operation;
         hasPublicOperation = true;
         
