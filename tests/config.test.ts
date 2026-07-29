@@ -209,6 +209,73 @@ describe('x-private guardrail', () => {
   }
 });
 
+describe('public surface reachability', () => {
+  function spec(extra: Record<string, unknown>): OpenAPISpec {
+    return {
+      openapi: '3.0.3',
+      info: { title: 'T', version: '1.0.0' },
+      paths: {
+        '/public': {
+          post: {
+            operationId: 'postPublic',
+            'x-micro-contracts-service': 'Public',
+            'x-micro-contracts-method': 'post',
+            'x-micro-contracts-published': true,
+            responses: { '200': { description: 'ok' } },
+            ...extra,
+          },
+        },
+      },
+      components: {
+        schemas: {
+          Secret: { type: 'object', 'x-private': true, properties: { token: { type: 'string' } } },
+        },
+        requestBodies: {
+          SecretBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/Secret' } } } },
+        },
+        parameters: {
+          SecretParam: { name: 'q', in: 'query', schema: { $ref: '#/components/schemas/Secret' } },
+        },
+      },
+    } as unknown as OpenAPISpec;
+  }
+
+  it('detects a private schema behind a $ref request body', () => {
+    const result = lintSpec(spec({ requestBody: { $ref: '#/components/requestBodies/SecretBody' } }));
+
+    expect(result.errors.map(e => e.code)).toContain('PUBLIC_ENDPOINT_PRIVATE_REQUEST');
+  });
+
+  it('detects a private schema behind a non-2xx response', () => {
+    const result = lintSpec(spec({
+      responses: {
+        '200': { description: 'ok' },
+        '500': { description: 'err', content: { 'application/json': { schema: { $ref: '#/components/schemas/Secret' } } } },
+      },
+    }));
+
+    // An error response ships in the published contract like any other.
+    expect(result.errors.map(e => e.code)).toContain('PUBLIC_ENDPOINT_PRIVATE_RESPONSE');
+  });
+
+  it('detects a private schema behind a $ref parameter', () => {
+    const result = lintSpec(spec({ parameters: [{ $ref: '#/components/parameters/SecretParam' }] }));
+
+    expect(result.errors.map(e => e.code)).toContain('PUBLIC_ENDPOINT_PRIVATE_PARAMETER');
+  });
+
+  it('accepts a public endpoint that reaches nothing private', () => {
+    const clean = spec({});
+    (clean.components as Record<string, unknown>).schemas = {
+      Fine: { type: 'object', properties: { id: { type: 'string' } } },
+    };
+    delete (clean.components as Record<string, unknown>).requestBodies;
+    delete (clean.components as Record<string, unknown>).parameters;
+
+    expect(lintSpec(clean).errors).toHaveLength(0);
+  });
+});
+
 describe('lintSpec identifier rules', () => {
   function specWith(extensions: Record<string, string>): OpenAPISpec {
     return {

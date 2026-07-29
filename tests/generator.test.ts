@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import yaml from 'js-yaml';
 import {
   loadOpenAPISpec,
   loadConfig,
@@ -866,6 +867,72 @@ export interface {{interfaceName}} {
 
       await expect(generate(config)).resolves.toBeUndefined();
       expect(fs.existsSync(path.join(tmpDir, 'frontend'))).toBe(false);
+    });
+  });
+
+  describe('published contract', () => {
+    it('keeps only components the public endpoints reach', async () => {
+      const specPath = path.join(tmpDir, 'spec.yaml');
+      fs.writeFileSync(specPath, JSON.stringify({
+        openapi: '3.0.3',
+        info: { title: 'T', version: '1.0.0' },
+        paths: {
+          '/public': {
+            get: {
+              operationId: 'getPublic',
+              'x-micro-contracts-service': 'Public',
+              'x-micro-contracts-method': 'get',
+              'x-micro-contracts-published': true,
+              responses: {
+                '200': {
+                  description: 'ok',
+                  content: { 'application/json': { schema: { $ref: '#/components/schemas/PublicThing' } } },
+                },
+              },
+            },
+          },
+          '/internal': {
+            get: {
+              operationId: 'getInternal',
+              'x-micro-contracts-service': 'Internal',
+              'x-micro-contracts-method': 'get',
+              responses: { '500': { $ref: '#/components/responses/InternalError' } },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            PublicThing: { type: 'object', properties: { id: { type: 'string' } } },
+            InternalDetail: { type: 'object', properties: { stack: { type: 'string' } } },
+          },
+          responses: {
+            InternalError: {
+              description: 'internal',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/InternalDetail' } } },
+            },
+          },
+        },
+      }));
+
+      const config: MultiModuleConfig = {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'contracts/{module}') },
+          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+        },
+        modules: { core: { openapi: specPath } },
+      };
+
+      await generate(config, { contractsOnly: true });
+
+      const published = yaml.load(
+        fs.readFileSync(path.join(tmpDir, 'contracts-published/core/docs/openapi.generated.yaml'), 'utf-8'),
+      ) as { paths: Record<string, unknown>; components?: Record<string, Record<string, unknown>> };
+
+      expect(Object.keys(published.paths)).toEqual(['/public']);
+      expect(Object.keys(published.components?.schemas ?? {})).toEqual(['PublicThing']);
+      // Carried over wholesale, this response referred to a schema the filter
+      // dropped: a $ref nothing could resolve.
+      expect(published.components?.responses).toBeUndefined();
     });
   });
 
