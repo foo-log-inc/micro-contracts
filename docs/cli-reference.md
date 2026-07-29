@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.17.10
+**Version:** 0.17.15
 
 ## Table of Contents
 
@@ -91,13 +91,13 @@ micro-contracts generate --force
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: medium
   requires_confirmation: false
   idempotent: true
-  side_effects: 
+  side_effects:
     - file_write
-  recommended_before_use: 
+  recommended_before_use:
     - Ensure micro-contracts.config.yaml exists.
     - Verify OpenAPI specs are valid.
 ```
@@ -144,11 +144,11 @@ micro-contracts lint spec/core/openapi/core.yaml --strict
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: low
   requires_confirmation: false
   idempotent: true
-  side_effects: 
+  side_effects:
 
 ```
 
@@ -209,11 +209,11 @@ micro-contracts init users --skip-templates
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: medium
   requires_confirmation: false
   idempotent: true
-  side_effects: 
+  side_effects:
     - file_write
     - directory_create
 ```
@@ -277,13 +277,13 @@ micro-contracts check --list-gates
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: low
   requires_confirmation: false
   idempotent: true
-  side_effects: 
+  side_effects:
 
-  recommended_before_use: 
+  recommended_before_use:
     - Run generate first so generated files exist.
 ```
 
@@ -344,13 +344,13 @@ micro-contracts pipeline --contracts-only --skip-lint
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: medium
   requires_confirmation: false
   idempotent: true
-  side_effects: 
+  side_effects:
     - file_write
-  recommended_before_use: 
+  recommended_before_use:
     - Ensure micro-contracts.config.yaml and guardrails.yaml exist.
     - Verify OpenAPI specs are valid.
 ```
@@ -408,11 +408,11 @@ micro-contracts deps --validate
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: low
   requires_confirmation: false
   idempotent: true
-  side_effects: 
+  side_effects:
 
 ```
 
@@ -454,11 +454,11 @@ micro-contracts insights --format json --project-root .
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: low
   requires_confirmation: false
   idempotent: true
-  side_effects: 
+  side_effects:
 
 ```
 
@@ -501,11 +501,11 @@ micro-contracts guardrails-init -o custom-guardrails.yaml
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: low
   requires_confirmation: false
   idempotent: false
-  side_effects: 
+  side_effects:
     - file_write
 ```
 
@@ -556,11 +556,11 @@ micro-contracts manifest -o custom-manifest.json
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   risk_level: low
   requires_confirmation: false
   idempotent: true
-  side_effects: 
+  side_effects:
     - file_write
 ```
 
@@ -629,10 +629,10 @@ micro-contracts audit-openapi --show-prompt
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   dsl_task: audit-openapi-design
   expectedDurationMs: 120000
-  retryableExitCodes: 
+  retryableExitCodes:
     - 12
 ```
 
@@ -698,10 +698,10 @@ micro-contracts review-published --adapter claude --report-format json
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   dsl_task: audit-published-api
   expectedDurationMs: 120000
-  retryableExitCodes: 
+  retryableExitCodes:
     - 12
 ```
 
@@ -767,10 +767,10 @@ micro-contracts propose-overlays --adapter openai --report-format json
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   dsl_task: propose-overlay-candidates
   expectedDurationMs: 120000
-  retryableExitCodes: 
+  retryableExitCodes:
     - 12
 ```
 
@@ -833,10 +833,10 @@ micro-contracts audit-guardrails --adapter mock --report-format json
 #### Extensions
 
 ```yaml
-x-agent: 
+x-agent:
   dsl_task: audit-guardrails-coverage
   expectedDurationMs: 120000
-  retryableExitCodes: 
+  retryableExitCodes:
     - 12
 ```
 
