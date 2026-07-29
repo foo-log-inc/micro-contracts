@@ -224,6 +224,20 @@ export async function runAllChecks(options: CheckOptions = {}): Promise<CheckSum
 /**
  * Format a single check result for streaming output
  */
+/**
+ * The run's verdict. Skipping every check verified nothing, so it is not
+ * success: a mistyped generated directory used to end in "All checks passed".
+ */
+function formatVerdict(summary: { failed: number; passed: number }): string {
+  if (summary.failed > 0) {
+    return '❌ Some checks failed. Fix issues before committing.';
+  }
+  if (summary.passed === 0) {
+    return '⚠️  No checks ran. Nothing was verified.';
+  }
+  return '✅ All checks passed!';
+}
+
 export function formatSingleCheckResult(
   result: CheckResult,
   check: CheckDefinition,
@@ -270,11 +284,7 @@ export function formatCheckSummary(
   }
   lines.push('');
   
-  if (summary.failed > 0) {
-    lines.push('❌ Some checks failed. Fix issues before committing.');
-  } else {
-    lines.push('✅ All checks passed!');
-  }
+  lines.push(formatVerdict(summary));
   lines.push('');
   
   // Show details for failed checks
@@ -411,11 +421,7 @@ export function formatCheckResults(
   }
   lines.push('');
   
-  if (summary.failed > 0) {
-    lines.push('❌ Some checks failed. Fix issues before committing.');
-  } else {
-    lines.push('✅ All checks passed!');
-  }
+  lines.push(formatVerdict(summary));
   lines.push('');
   
   // Show details for failed checks (always shown, not just in verbose mode)
