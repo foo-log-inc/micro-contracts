@@ -20,7 +20,9 @@ import {
   verifyManifest,
   runAllChecks,
   getAvailableChecks,
+  checkUncommittedChanges,
 } from '../src/guardrails/index.js';
+import { execFileSync } from 'child_process';
 
 describe('matchGlob', () => {
   it('should match simple patterns', () => {
@@ -280,6 +282,86 @@ describe('manifest', () => {
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0].reason).toBe('extra');
     expect(result.mismatches[0].file).toBe('extra.ts');
+  });
+});
+
+describe('checkUncommittedChanges', () => {
+  let repo: string;
+
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: repo, encoding: 'utf-8', stdio: 'pipe' });
+
+  beforeEach(() => {
+    repo = fs.mkdtempSync(path.join(os.tmpdir(), 'drift-test-'));
+    fs.mkdirSync(path.join(repo, 'packages'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'packages/types.ts'), 'export interface A { id: string }\n');
+    git('init', '-q', '.');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    git('add', '-A');
+    git('commit', '-qm', 'init');
+  });
+
+  afterEach(() => {
+    fs.rmSync(repo, { recursive: true, force: true });
+  });
+
+  /** The check runs git in the process cwd. */
+  function inRepo<T>(run: () => T): T {
+    const previous = process.cwd();
+    process.chdir(repo);
+    try {
+      return run();
+    } finally {
+      process.chdir(previous);
+    }
+  }
+
+  it('reports a clean generated directory as valid', () => {
+    const result = inRepo(() => checkUncommittedChanges('packages/'));
+
+    expect(result.valid).toBe(true);
+    expect(result.changedFiles).toEqual([]);
+  });
+
+  it('detects an unstaged edit to a generated file', () => {
+    fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// hand edit\n');
+
+    const result = inRepo(() => checkUncommittedChanges('packages/'));
+
+    expect(result.valid).toBe(false);
+    expect(result.changedFiles).toContain('packages/types.ts');
+  });
+
+  it('detects a staged edit to a generated file', () => {
+    // A pre-commit run stages first: comparing the worktree to the index would
+    // report nothing here.
+    fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// hand edit\n');
+    git('add', '-A');
+
+    const result = inRepo(() => checkUncommittedChanges('packages/'));
+
+    expect(result.valid).toBe(false);
+    expect(result.changedFiles).toContain('packages/types.ts');
+  });
+
+  it('detects an untracked generated file', () => {
+    fs.writeFileSync(path.join(repo, 'packages/new.generated.ts'), 'export const x = 1;\n');
+
+    const result = inRepo(() => checkUncommittedChanges('packages/'));
+
+    expect(result.valid).toBe(false);
+    expect(result.changedFiles).toContain('packages/new.generated.ts');
+  });
+
+  it('reports each changed file once', () => {
+    fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// hand edit\n');
+    git('add', '-A');
+    fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// more\n');
+
+    const result = inRepo(() => checkUncommittedChanges('packages/'));
+
+    expect(result.changedFiles.filter(f => f === 'packages/types.ts')).toHaveLength(1);
   });
 });
 
