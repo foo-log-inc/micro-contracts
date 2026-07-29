@@ -112,6 +112,31 @@ export function loadOpenAPISpec(filePath: string): OpenAPISpec {
 }
 
 /**
+ * Config file names, in the order they are looked for.
+ */
+const CONFIG_FILENAMES = [
+  'micro-contracts.config.yaml',
+  'micro-contracts.config.yml',
+  'api-framework.config.yaml',
+  'api-framework.config.yml',
+];
+
+/**
+ * The project's config file, if one is present in the working directory.
+ *
+ * Everything that needs the project's spec list — generation and the guardrail
+ * checks alike — resolves it from here, so no consumer has to guess where the
+ * specs live.
+ */
+export function findConfigFile(): string | null {
+  for (const candidate of CONFIG_FILENAMES) {
+    const configPath = path.resolve(candidate);
+    if (fs.existsSync(configPath)) return configPath;
+  }
+  return null;
+}
+
+/**
  * Load config from file (supports both legacy and multi-module formats)
  */
 export function loadConfig(configPath: string): MultiModuleConfig | GeneratorConfig {

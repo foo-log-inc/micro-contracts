@@ -11,7 +11,9 @@ import { spawn } from 'child_process';
 import type { CheckResult, CheckOptions } from './types.js';
 import { lintSpec, formatLintResults, type LintResult } from '../generator/linter.js';
 import type { OpenAPISpec } from '../types.js';
-import { loadGuardrailsConfig, loadGuardrailsConfigWithPath } from './config.js';
+import { loadGuardrailsConfigWithPath } from './config.js';
+import { findConfigFile, loadConfig } from '../generator/index.js';
+import { isMultiModuleConfig } from '../types.js';
 import { matchWithNegation } from '../glob.js';
 import { glob } from 'glob';
 
@@ -19,15 +21,38 @@ import { glob } from 'glob';
  * Find OpenAPI spec files based on guardrails config or defaults
  */
 export async function findOpenAPISpecs(options: CheckOptions): Promise<string[]> {
-  // Try to load guardrails config to find spec patterns
-  const config = loadGuardrailsConfig(options.guardrailsPath);
-  
-  // Look for YAML files in spec directories - prioritize openapi/ subdirs
+  // The project config lists every module's spec: that is where the specs are,
+  // whatever the layout and whatever the file format. Globbing a fixed
+  // directory found nothing for any project that keeps specs elsewhere, and the
+  // checks then ran against no files at all.
+  const configPath = findConfigFile();
+  if (configPath) {
+    const config = loadConfig(configPath);
+    if (isMultiModuleConfig(config)) {
+      const configDir = path.dirname(configPath);
+      const declared = Object.entries(config.modules).map(([moduleName, moduleConfig]) => ({
+        moduleName,
+        specPath: path.resolve(configDir, moduleConfig.openapi),
+      }));
+
+      const missing = declared.filter(({ specPath }) => !fs.existsSync(specPath));
+      if (missing.length > 0) {
+        throw new Error(
+          `OpenAPI spec not found for ${missing.map(m => `'${m.moduleName}'`).join(', ')}: ` +
+          missing.map(m => path.relative(process.cwd(), m.specPath)).join(', ')
+        );
+      }
+
+      return declared.map(({ specPath }) => path.relative(process.cwd(), specPath));
+    }
+  }
+
+  // No project config: fall back to the conventional layout.
   const defaultPatterns = [
     'spec/**/openapi/*.yaml',
     'spec/**/openapi/*.yml',
   ];
-  
+
   const specFiles: string[] = [];
   
   for (const pattern of defaultPatterns) {
@@ -101,12 +126,23 @@ function expandPlaceholders(command: string, context: {
 }): string {
   let result = command;
 
-  if (context.files) {
+  if (context.files && context.files.length > 0) {
     result = result.replace(/\{files\}/g, context.files.join(' '));
   }
 
   if (context.cwd) {
     result = result.replace(/\{cwd\}/g, context.cwd);
+  }
+
+  // An unexpanded placeholder would be passed to the command as a literal
+  // argument, and a command that shrugs at it reports success having inspected
+  // nothing.
+  const unexpanded = result.match(/\{[a-zA-Z]+\}/);
+  if (unexpanded) {
+    throw new Error(
+      `Cannot expand ${unexpanded[0]} in command: ${command}` +
+      (unexpanded[0] === '{files}' ? ' (no OpenAPI specs found)' : '')
+    );
   }
 
   return result;

@@ -22,6 +22,7 @@ import {
   getAvailableChecks,
   checkUncommittedChanges,
   formatCheckResults,
+  findOpenAPISpecs,
 } from '../src/guardrails/index.js';
 import { execFileSync } from 'child_process';
 
@@ -414,6 +415,110 @@ describe('gate 3 against a missing generated directory', () => {
 
     expect(output).toContain('No checks ran');
     expect(output).not.toContain('All checks passed');
+  });
+});
+
+describe('findOpenAPISpecs', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-discovery-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  /** Awaits inside the chdir: restoring cwd first would move the glob's base. */
+  async function inProject<T>(run: () => T | Promise<T>): Promise<T> {
+    const previous = process.cwd();
+    process.chdir(projectDir);
+    try {
+      return await run();
+    } finally {
+      process.chdir(previous);
+    }
+  }
+
+  function writeConfig(openapi: string): void {
+    fs.writeFileSync(
+      path.join(projectDir, 'micro-contracts.config.yaml'),
+      ['modules:', '  bff:', `    openapi: ${openapi}`, ''].join('\n'),
+    );
+  }
+
+  it('resolves the specs the config declares, whatever the layout or format', async () => {
+    // A JSON spec outside spec/**: globbing a fixed directory found nothing here.
+    fs.mkdirSync(path.join(projectDir, 'contracts/openapi'), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectDir, 'contracts/openapi/bff.openapi.json'),
+      JSON.stringify({ openapi: '3.0.3', info: { title: 'B', version: '1.0.0' }, paths: {} }),
+    );
+    writeConfig('contracts/openapi/bff.openapi.json');
+
+    const specs = await inProject(() => findOpenAPISpecs({}));
+
+    expect(specs).toEqual(['contracts/openapi/bff.openapi.json']);
+  });
+
+  it('fails when a declared spec does not exist', async () => {
+    writeConfig('contracts/openapi/missing.json');
+
+    await expect(inProject(() => findOpenAPISpecs({}))).rejects.toThrow(
+      /OpenAPI spec not found for 'bff'/,
+    );
+  });
+
+  it('falls back to the conventional layout without a project config', async () => {
+    fs.mkdirSync(path.join(projectDir, 'spec/core/openapi'), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectDir, 'spec/core/openapi/core.yaml'),
+      'openapi: 3.0.3\ninfo:\n  title: C\n  version: 1.0.0\npaths: {}\n',
+    );
+
+    const specs = await inProject(() => findOpenAPISpecs({}));
+
+    expect(specs).toEqual(['spec/core/openapi/core.yaml']);
+  });
+});
+
+describe('custom command checks', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'custom-check-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it('fails instead of running a command with an unexpanded {files}', async () => {
+    // No project config and no specs under spec/**: the command used to receive
+    // the literal "{files}" and could report success having inspected nothing.
+    fs.writeFileSync(
+      path.join(projectDir, 'micro-contracts.guardrails.yaml'),
+      [
+        'allowed:',
+        '  - "**"',
+        'checks:',
+        '  spec-lint:',
+        '    command: "node -e \\"process.exit(0)\\" {files}"',
+        '    gate: 2',
+        '',
+      ].join('\n'),
+    );
+
+    const previous = process.cwd();
+    process.chdir(projectDir);
+    try {
+      const summary = await runAllChecks({ only: ['spec-lint'] });
+      const result = summary.results.find(r => r.name === 'spec-lint');
+      expect(result?.status).toBe('fail');
+      expect(result?.message).toMatch(/Cannot expand \{files\}/);
+    } finally {
+      process.chdir(previous);
+    }
   });
 });
 

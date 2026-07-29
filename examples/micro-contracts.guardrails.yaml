@@ -84,7 +84,9 @@ generated:
 #   Note: CodeQL runs as a separate CI job (see .github/workflows/)
 #
 # Placeholders:
-#   {files} - space-separated list of target files (auto-detected)
+#   {files} - the OpenAPI specs declared in micro-contracts.config.yaml
+#             (a check whose {files} cannot be expanded fails: a command run
+#              without files would report success having inspected nothing)
 #   {cwd} - current working directory
 
 checks:

@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'yaml';
 import { createProgram, type CommandHandlers } from './generated/program.js';
-import { generate, loadConfig, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash } from './generator/index.js';
+import { generate, loadConfig, findConfigFile, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash } from './generator/index.js';
 import type { GeneratorConfig, MultiModuleConfig } from './types.js';
 import { isMultiModuleConfig } from './types.js';
 import { getStarterTemplates, getScreenStarterTemplates } from './cli/templates.js';
@@ -29,20 +29,6 @@ import { commandProposeOverlays } from './commands/propose-overlays.js';
 import { commandAuditGuardrails } from './commands/audit-guardrails.js';
 import { commandInsights } from './commands/insights.js';
 import { VERSION } from './version.js';
-
-function findConfigFile(): string | null {
-  const candidates = [
-    'micro-contracts.config.yaml',
-    'micro-contracts.config.yml',
-    'api-framework.config.yaml',
-    'api-framework.config.yml',
-  ];
-  for (const candidate of candidates) {
-    const configPath = path.resolve(candidate);
-    if (fs.existsSync(configPath)) return configPath;
-  }
-  return null;
-}
 
 /**
  * True when the run generates only part of the configured output.
