@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.17.16
+**Version:** 0.17.17
 
 ## Table of Contents
 
@@ -64,9 +64,10 @@ micro-contracts generate --force
 |---|---|---|---|---|
 | `--config` | -c | No |  | Path to config file (micro-contracts.config.yaml). |
 | `--module` | -m | No |  | Module names, comma-separated. Generates all modules if omitted. |
+| `--output` |  | No |  | Output ids to generate, comma-separated. Supports glob patterns (e.g. '*routes*'). Generates all configured outputs if omitted. Fails when a pattern matches no output. |
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
-| `--server-only` |  | No | `false` | Generate server outputs only: outputs whose id contains 'server', plus the built-in server section. Fails when no output matches. |
-| `--frontend-only` |  | No | `false` | Generate frontend outputs only: outputs whose id contains 'frontend' or 'client', plus the built-in frontend section. Fails when no output matches. |
+| `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
+| `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--docs-only` |  | No | `false` | Generate documentation only. |
 | `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
 | `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when guardrails.yaml has a generated section. Use --no-manifest to disable. |
@@ -323,8 +324,8 @@ micro-contracts pipeline --contracts-only --skip-lint
 | `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default. Use --no-manifest to disable. |
 | `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
-| `--server-only` |  | No | `false` | Generate server outputs only: outputs whose id contains 'server', plus the built-in server section. Fails when no output matches. |
-| `--frontend-only` |  | No | `false` | Generate frontend outputs only: outputs whose id contains 'frontend' or 'client', plus the built-in frontend section. Fails when no output matches. |
+| `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
+| `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--docs-only` |  | No | `false` | Generate documentation only. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
 | `--cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |

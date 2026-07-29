@@ -945,13 +945,51 @@ components:
       expect(fs.readFileSync(path.join(tmpDir, 'out/routes.generated.ts'), 'utf-8')).toBe('routes: 1');
     });
 
-    it('fails instead of generating nothing when a flag matches no output', async () => {
+    it('selects outputs by id', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'other.hbs'), 'other');
+      const config = setupOutputs({
+        routes: { output: path.join(tmpDir, 'out/routes.generated.ts'), template: path.join(tmpDir, 'routes.hbs') },
+        other: { output: path.join(tmpDir, 'out/other.generated.ts'), template: path.join(tmpDir, 'other.hbs') },
+      });
+
+      await generate(config, { outputs: 'routes' });
+
+      expect(fs.existsSync(path.join(tmpDir, 'out/routes.generated.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'out/other.generated.ts'))).toBe(false);
+    });
+
+    it('selects outputs by glob pattern', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'other.hbs'), 'other');
+      const config = setupOutputs({
+        'server-routes': { output: path.join(tmpDir, 'out/routes.generated.ts'), template: path.join(tmpDir, 'routes.hbs') },
+        other: { output: path.join(tmpDir, 'out/other.generated.ts'), template: path.join(tmpDir, 'other.hbs') },
+      });
+
+      await generate(config, { outputs: '*routes*' });
+
+      expect(fs.existsSync(path.join(tmpDir, 'out/routes.generated.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'out/other.generated.ts'))).toBe(false);
+    });
+
+    it('fails when --output matches no configured output', async () => {
       const config = setupOutputs({
         routes: { output: path.join(tmpDir, 'out/routes.generated.ts'), template: path.join(tmpDir, 'routes.hbs') },
       });
 
-      // 'routes' contains neither 'server' nor 'frontend'/'client'.
-      await expect(generate(config, { serverOnly: true })).rejects.toThrow(/No outputs matched/);
+      await expect(generate(config, { outputs: 'typo' })).rejects.toThrow(
+        /--output typo matched no output.*Configured outputs: routes/s
+      );
+    });
+
+    it('rejects --server-only against an outputs configuration', async () => {
+      const config = setupOutputs({
+        routes: { output: path.join(tmpDir, 'out/routes.generated.ts'), template: path.join(tmpDir, 'routes.hbs') },
+      });
+
+      // An output is a template rendered to a path, not "a server output".
+      await expect(generate(config, { serverOnly: true })).rejects.toThrow(
+        /--server-only does not apply.*--output/s
+      );
     });
   });
 

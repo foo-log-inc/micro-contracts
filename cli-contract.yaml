@@ -3,7 +3,7 @@ cli_contracts: 0.1.0
 
 info:
   title: micro-contracts CLI
-  version: 0.17.16
+  version: 0.17.17
   description: >-
     Contract-first OpenAPI toolchain for TypeScript Web/API systems.
     Generates contract packages, server routes, and frontend clients
@@ -85,6 +85,15 @@ command_sets:
             schema:
               type: string
 
+          - name: output
+            description: >-
+              Output ids to generate, comma-separated. Supports glob patterns
+              (e.g. '*routes*'). Generates all configured outputs if omitted.
+              Fails when a pattern matches no output.
+            value_name: ids
+            schema:
+              type: string
+
           - name: contracts-only
             description: Generate contract packages only.
             schema:
@@ -93,17 +102,16 @@ command_sets:
 
           - name: server-only
             description: >-
-              Generate server outputs only: outputs whose id contains 'server',
-              plus the built-in server section. Fails when no output matches.
+              Generate the built-in server section only. Not valid with an
+              outputs configuration — select outputs with --output instead.
             schema:
               type: boolean
               default: false
 
           - name: frontend-only
             description: >-
-              Generate frontend outputs only: outputs whose id contains
-              'frontend' or 'client', plus the built-in frontend section.
-              Fails when no output matches.
+              Generate the built-in frontend section only. Not valid with an
+              outputs configuration — select outputs with --output instead.
             schema:
               type: boolean
               default: false
@@ -525,17 +533,16 @@ command_sets:
 
           - name: server-only
             description: >-
-              Generate server outputs only: outputs whose id contains 'server',
-              plus the built-in server section. Fails when no output matches.
+              Generate the built-in server section only. Not valid with an
+              outputs configuration — select outputs with --output instead.
             schema:
               type: boolean
               default: false
 
           - name: frontend-only
             description: >-
-              Generate frontend outputs only: outputs whose id contains
-              'frontend' or 'client', plus the built-in frontend section.
-              Fails when no output matches.
+              Generate the built-in frontend section only. Not valid with an
+              outputs configuration — select outputs with --output instead.
             schema:
               type: boolean
               default: false

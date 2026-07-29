@@ -306,6 +306,10 @@ Create `micro-contracts.config.yaml`. All paths support `{module}` placeholder.
 existing configs. They generate only when declared, and only when no `outputs` entry
 is configured — `outputs` supersedes them for a module. Prefer `outputs`.
 
+An `outputs` entry is a template rendered to a path — nothing about it is
+server-specific or frontend-specific — so `--server-only` / `--frontend-only`
+apply to the built-in sections only. Select outputs with `--output`.
+
 ### modules.\<name\>
 
 | Key | Type | Required | Description |
@@ -374,8 +378,9 @@ Generate code from OpenAPI specifications.
 | `-c, --config <path>` | Path to config file |
 | `-m, --module <names>` | Module names, comma-separated (default: all) |
 | `--contracts-only` | Generate contract packages only |
-| `--server-only` | Generate server outputs only (outputs whose id contains `server`) |
-| `--frontend-only` | Generate frontend outputs only (outputs whose id contains `frontend` or `client`) |
+| `--output <ids>` | Output ids to generate, comma-separated; glob patterns allowed (e.g. `'*routes*'`). Fails when a pattern matches no output |
+| `--server-only` | Generate the built-in `server` section only (not valid with an `outputs` configuration) |
+| `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
 | `--docs-only` | Generate documentation only |
 | `--skip-lint` | Skip linting before generation |
 | `--no-manifest` | Skip manifest generation |
@@ -443,8 +448,9 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--no-manifest` | Skip manifest generation |
 | `--skip-lint` | Skip linting before generation |
 | `--contracts-only` | Generate contract packages only |
-| `--server-only` | Generate server outputs only (outputs whose id contains `server`) |
-| `--frontend-only` | Generate frontend outputs only (outputs whose id contains `frontend` or `client`) |
+| `--output <ids>` | Output ids to generate, comma-separated; glob patterns allowed (e.g. `'*routes*'`). Fails when a pattern matches no output |
+| `--server-only` | Generate the built-in `server` section only (not valid with an `outputs` configuration) |
+| `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
 | `--docs-only` | Generate documentation only |
 | `--force` | Bypass input hash cache and always regenerate |
 | `--no-cache` | Run without reading or writing input hash cache |

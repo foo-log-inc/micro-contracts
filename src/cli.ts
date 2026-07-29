@@ -92,6 +92,7 @@ const handlers: CommandHandlers = {
         docsOnly: opts.docsOnly,
         skipLint: opts.skipLint,
         modules: opts.module,
+        outputs: opts.output,
       });
 
       if (opts.manifest !== false) {
