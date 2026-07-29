@@ -212,6 +212,10 @@ Comparing against `HEAD` rather than the index matters: a pre-commit run stages
 its changes first, and comparing the worktree to the index would report a
 hand-edited generated file as clean.
 
+A configured generated directory that does not exist fails both checks: nothing to
+inspect is not the same as nothing wrong. A run in which every check skipped
+reports `No checks ran` rather than success.
+
 **Manifest verification** — `packages/.generated-manifest.json` stores:
 - SHA-256 hashes of all generated files
 - Generator version used

@@ -21,6 +21,7 @@ import {
   runAllChecks,
   getAvailableChecks,
   checkUncommittedChanges,
+  formatCheckResults,
 } from '../src/guardrails/index.js';
 import { execFileSync } from 'child_process';
 
@@ -362,6 +363,57 @@ describe('checkUncommittedChanges', () => {
     const result = inRepo(() => checkUncommittedChanges('packages/'));
 
     expect(result.changedFiles.filter(f => f === 'packages/types.ts')).toHaveLength(1);
+  });
+});
+
+describe('gate 3 against a missing generated directory', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate3-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('fails drift instead of reading an absent path as unchanged', async () => {
+    const results = await runAllChecks({
+      only: ['drift'],
+      generatedDir: path.join(tmpDir, 'nosuchdir'),
+    });
+
+    const drift = results.results.find(r => r.name === 'drift');
+    expect(drift?.status).toBe('fail');
+    expect(drift?.message).toMatch(/Generated directory not found/);
+  });
+
+  it('fails manifest instead of skipping', async () => {
+    const results = await runAllChecks({
+      only: ['manifest'],
+      generatedDir: path.join(tmpDir, 'nosuchdir'),
+    });
+
+    const manifest = results.results.find(r => r.name === 'manifest');
+    expect(manifest?.status).toBe('fail');
+    expect(manifest?.message).toMatch(/Generated directory not found/);
+  });
+
+  it('does not report success when every check skipped', () => {
+    const output = formatCheckResults({
+      passed: 0,
+      failed: 0,
+      skipped: 2,
+      total: 2,
+      duration: 1,
+      results: [
+        { name: 'a', status: 'skip', duration: 0 },
+        { name: 'b', status: 'skip', duration: 0 },
+      ],
+    });
+
+    expect(output).toContain('No checks ran');
+    expect(output).not.toContain('All checks passed');
   });
 });
 

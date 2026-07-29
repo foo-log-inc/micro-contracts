@@ -302,11 +302,11 @@ export async function runManifestCheck(options: CheckOptions): Promise<CheckResu
   const generatedDir = options.generatedDir || 'packages/';
   
   try {
-    // Check if directory exists
+    // Nothing to verify is not the same as verified.
     if (!fs.existsSync(generatedDir)) {
       return {
         name: 'manifest',
-        status: 'skip',
+        status: 'fail',
         duration: Date.now() - start,
         message: `Generated directory not found: ${generatedDir}`,
       };

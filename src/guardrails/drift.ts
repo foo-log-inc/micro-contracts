@@ -4,6 +4,7 @@
  * Verifies that generated files match the committed state after running generate.
  */
 
+import fs from 'fs';
 import { execSync } from 'child_process';
 import type { DriftResult, CheckResult, CheckOptions } from './types.js';
 
@@ -49,8 +50,19 @@ export function checkUncommittedChanges(generatedDir: string = 'packages/'): Dri
 export async function runDriftCheck(options: CheckOptions): Promise<CheckResult> {
   const start = Date.now();
   const generatedDir = options.generatedDir || 'packages/';
-  
+
   try {
+    // `git diff` reports nothing for a path that does not exist, which would
+    // read as "no drift" while nothing was inspected.
+    if (!fs.existsSync(generatedDir)) {
+      return {
+        name: 'drift',
+        status: 'fail',
+        duration: Date.now() - start,
+        message: `Generated directory not found: ${generatedDir}`,
+      };
+    }
+
     const result = checkUncommittedChanges(generatedDir);
     
     if (result.error) {
