@@ -4,13 +4,14 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import Handlebars from 'handlebars';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import {
   buildTemplateContext,
   loadTemplate,
   processTemplate,
-  getDefaultTemplate,
-  DEFAULT_SERVER_TEMPLATE,
-  DEFAULT_FRONTEND_TEMPLATE,
+  renderTemplate,
 } from '../src/generator/templateProcessor.js';
 import type { OpenAPISpec } from '../src/types.js';
 import type { ExtensionInfo } from '../src/generator/overlayProcessor.js';
@@ -195,19 +196,40 @@ describe('templateProcessor', () => {
     });
   });
 
-  describe('getDefaultTemplate', () => {
-    it('should return server template', () => {
-      const template = getDefaultTemplate('server');
-      expect(template).toBe(DEFAULT_SERVER_TEMPLATE);
-      expect(template).toContain('registerRoutes');
-      expect(template).toContain('FastifyInstance');
+  describe('renderTemplate', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-template-test-'));
     });
 
-    it('should return frontend template', () => {
-      const template = getDefaultTemplate('frontend');
-      expect(template).toBe(DEFAULT_FRONTEND_TEMPLATE);
-      expect(template).toContain('fetchApi');
-      expect(template).toContain('BASE_URL');
+    it('renders the configured template', () => {
+      const templatePath = path.join(tmpDir, 'routes.hbs');
+      fs.writeFileSync(templatePath, 'routes: {{routes.length}}');
+      const context = buildTemplateContext(testSpec, 'core', {});
+
+      const result = renderTemplate(templatePath, context, "output 'routes'");
+
+      expect(result).toBe(`routes: ${context.routes.length}`);
+    });
+
+    it('throws when the configured template does not exist', () => {
+      const missing = path.join(tmpDir, 'typo.hbs');
+      const context = buildTemplateContext(testSpec, 'core', {});
+
+      expect(() => renderTemplate(missing, context, "output 'routes'")).toThrow(
+        /Cannot load template .*typo\.hbs.* for output 'routes'/
+      );
+    });
+
+    it('throws when the template cannot be rendered', () => {
+      const templatePath = path.join(tmpDir, 'broken.hbs');
+      fs.writeFileSync(templatePath, '{{#each routes}}{{/wrongclose}}');
+      const context = buildTemplateContext(testSpec, 'core', {});
+
+      expect(() => renderTemplate(templatePath, context, "output 'routes'")).toThrow(
+        /Cannot (load|render) template .*broken\.hbs.* for output 'routes'/
+      );
     });
   });
 

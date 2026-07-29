@@ -28,11 +28,9 @@ import {
   rebaseRefs,
   type OverlayResult,
 } from './overlayProcessor.js';
-import { 
-  buildTemplateContext, 
-  generateWithTemplate,
-  loadTemplate,
-  resolveTemplatePath,
+import {
+  buildTemplateContext,
+  renderTemplate,
 } from './templateProcessor.js';
 import { validateDependsOn } from './dependencyGenerator.js';
 import { extractDependencies, expandPlaceholders } from '../types.js';
@@ -42,7 +40,7 @@ export { generateSchemas } from './schemaGenerator.js';
 export { generateServiceInterfaces } from './serviceGenerator.js';
 export { lintSpec, formatLintResults } from './linter.js';
 export { processOverlays, generateExtensionInterfaces } from './overlayProcessor.js';
-export { buildTemplateContext, generateWithTemplate } from './templateProcessor.js';
+export { buildTemplateContext, renderTemplate } from './templateProcessor.js';
 export type { ScreenContext, ScreenLink, ScreenAction, ScreenInteraction, TemplateContext } from './templateProcessor.js';
 export { collectInputFiles, computeInputHash } from './inputHash.js';
 
@@ -434,7 +432,8 @@ async function generateFromOutputs(
   console.log(`\nGenerating from outputs configuration...`);
   
   const hasPublic = hasPublicEndpoints(spec);
-  
+  let generated = 0;
+
   for (const output of config.outputs) {
     // Skip disabled outputs
     if (!output.enabled) continue;
@@ -451,14 +450,24 @@ async function generateFromOutputs(
       continue;
     }
     
-    // Filter by generation type
+    // Filter by generation type. Outputs are classified by their id: an output
+    // is a server output when its id contains 'server', a frontend output when
+    // it contains 'frontend' or 'client'.
     const isServerOutput = output.id.includes('server');
     const isFrontendOutput = output.id.includes('frontend') || output.id.includes('client');
-    
-    if (options.serverOnly && !isServerOutput) continue;
-    if (options.frontendOnly && !isFrontendOutput) continue;
+
+    if (options.serverOnly && !isServerOutput) {
+      console.log(`  Skipping ${output.id} (--server-only: id does not contain 'server')`);
+      continue;
+    }
+    if (options.frontendOnly && !isFrontendOutput) {
+      console.log(`  Skipping ${output.id} (--frontend-only: id contains neither 'frontend' nor 'client')`);
+      continue;
+    }
     if (!generateAll && !options.serverOnly && !options.frontendOnly) continue;
-    
+
+    generated++;
+
     // Check if file exists and overwrite is disabled
     if (!output.overwrite && fs.existsSync(output.output)) {
       console.log(`  Skipping ${output.id} (file exists, overwrite=false)`);
@@ -466,50 +475,39 @@ async function generateFromOutputs(
     }
     
     console.log(`  Generating ${output.id}...`);
-    
-    try {
-      // Build template context with output-specific config
-      // Expand {module} placeholders in config values
-      const expandPlaceholder = (val: string | undefined, fallback: string) => 
-        (val?.replace(/{module}/g, config.name) ?? fallback);
-      
-      const templateContext = buildTemplateContext(spec, config.name, {
-        servicesPath: expandPlaceholder(output.config?.servicesPath as string | undefined, `fastify.services.${config.name}`),
-        contractPackage: expandPlaceholder(output.config?.contractPackage as string | undefined, `@project/contract/${config.name}`),
-        extensionInfo: overlayResult?.extensionInfo,
-        appliedOverlays: overlayResult?.appliedOverlays,
-        screen: config.screen,
-      });
-      
-      // Add output-specific config to context
-      const extendedContext = {
-        ...templateContext,
-        outputConfig: output.config || {},
-      };
-      
-      // Resolve and load template
-      const specDir = path.dirname(config.openapi).replace(/\/openapi$/, '').replace(`/${config.name}`, '');
-      const templatePath = resolveTemplatePath({
-        specDir,
-        moduleName: config.name,
-        templateName: path.basename(output.template),
-      }) || output.template;
-      
-      if (!fs.existsSync(templatePath)) {
-        console.warn(`    Warning: Template not found: ${output.template}`);
-        continue;
-      }
-      
-      const template = loadTemplate(templatePath);
-      
-      const content = template(extendedContext);
 
-      // Write output file (only if content changed)
-      writeAndLog(output.output, content);
-      
-    } catch (error) {
-      console.error(`    Error generating ${output.id}:`, error instanceof Error ? error.message : error);
-    }
+    // Build template context with output-specific config
+    // Expand {module} placeholders in config values
+    const expandPlaceholder = (val: string | undefined, fallback: string) =>
+      (val?.replace(/{module}/g, config.name) ?? fallback);
+
+    const templateContext = buildTemplateContext(spec, config.name, {
+      servicesPath: expandPlaceholder(output.config?.servicesPath as string | undefined, `fastify.services.${config.name}`),
+      contractPackage: expandPlaceholder(output.config?.contractPackage as string | undefined, `@project/contract/${config.name}`),
+      extensionInfo: overlayResult?.extensionInfo,
+      appliedOverlays: overlayResult?.appliedOverlays,
+      screen: config.screen,
+    });
+
+    // Add output-specific config to context
+    const extendedContext = {
+      ...templateContext,
+      outputConfig: output.config || {},
+    };
+
+    // Failures propagate: a template that cannot be found, parsed or rendered
+    // leaves the previous generated file in place, so the run must not succeed.
+    const content = renderTemplate(output.template, extendedContext, `output '${output.id}'`);
+
+    // Write output file (only if content changed)
+    writeAndLog(output.output, content);
+  }
+
+  if (generated === 0) {
+    throw new Error(
+      `No outputs matched for module '${config.name}'. Configured outputs: ` +
+      `${config.outputs.map(o => o.id).join(', ') || '(none)'}.`
+    );
   }
 }
 
@@ -608,10 +606,10 @@ async function generateServerRoutes(
     appliedOverlays: overlayResult?.appliedOverlays,
     screen: config.screen,
   });
-  const routesContent = generateWithTemplate(
+  const routesContent = renderTemplate(
     config.server.template,
-    'server',
-    templateContext
+    templateContext,
+    `server routes of module '${config.name}'`
   );
 
   writeAndLog(config.server.output, routesContent, '  ');
@@ -643,10 +641,10 @@ async function generateFrontendClient(
     appliedOverlays: overlayResult?.appliedOverlays,
     screen: config.screen,
   });
-  const clientContent = generateWithTemplate(
+  const clientContent = renderTemplate(
     config.frontend.template,
-    'frontend',
-    templateContext
+    templateContext,
+    `frontend client of module '${config.name}'`
   );
   
   const clientPath = path.join(outputDir, clientFile);

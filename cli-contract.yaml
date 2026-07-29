@@ -3,7 +3,7 @@ cli_contracts: 0.1.0
 
 info:
   title: micro-contracts CLI
-  version: 0.17.15
+  version: 0.17.16
   description: >-
     Contract-first OpenAPI toolchain for TypeScript Web/API systems.
     Generates contract packages, server routes, and frontend clients
@@ -92,13 +92,18 @@ command_sets:
               default: false
 
           - name: server-only
-            description: Generate server routes only.
+            description: >-
+              Generate server outputs only: outputs whose id contains 'server',
+              plus the built-in server section. Fails when no output matches.
             schema:
               type: boolean
               default: false
 
           - name: frontend-only
-            description: Generate frontend clients only.
+            description: >-
+              Generate frontend outputs only: outputs whose id contains
+              'frontend' or 'client', plus the built-in frontend section.
+              Fails when no output matches.
             schema:
               type: boolean
               default: false
@@ -519,13 +524,18 @@ command_sets:
               default: false
 
           - name: server-only
-            description: Generate server routes only.
+            description: >-
+              Generate server outputs only: outputs whose id contains 'server',
+              plus the built-in server section. Fails when no output matches.
             schema:
               type: boolean
               default: false
 
           - name: frontend-only
-            description: Generate frontend clients only.
+            description: >-
+              Generate frontend outputs only: outputs whose id contains
+              'frontend' or 'client', plus the built-in frontend section.
+              Fails when no output matches.
             schema:
               type: boolean
               default: false

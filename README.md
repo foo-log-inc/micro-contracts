@@ -278,11 +278,12 @@ Create `micro-contracts.config.yaml`. All paths support `{module}` placeholder.
 | `contract.serviceTemplate` | string | no | Custom Handlebars template for service interface generation |
 | `contractPublic.output` | string | yes | Output directory for public contract packages |
 | `outputs.<id>.output` | string | yes | Output file path |
-| `outputs.<id>.template` | string | yes | Handlebars template file path |
+| `outputs.<id>.template` | string | yes | Handlebars template file path, used as written (resolved from the working directory) |
 | `outputs.<id>.overwrite` | boolean | no | Overwrite existing files (default: `true`) |
 | `outputs.<id>.condition` | string | no | `hasPublicEndpoints` \| `hasOverlays` \| `always` (default: `always`) |
 | `outputs.<id>.enabled` | boolean | no | Enable/disable this output (default: `true`) |
 | `outputs.<id>.config` | object | no | Template-specific configuration passed to context |
+
 | `overlays.shared` | string[] | no | Overlay files applied to all modules |
 | `overlays.collision` | string | no | `error` \| `warn` \| `last-wins` (default: `error`) |
 | `docs.enabled` | boolean | no | Enable documentation generation (default: `true`) |
@@ -368,8 +369,8 @@ Generate code from OpenAPI specifications.
 | `-c, --config <path>` | Path to config file |
 | `-m, --module <names>` | Module names, comma-separated (default: all) |
 | `--contracts-only` | Generate contract packages only |
-| `--server-only` | Generate server routes only |
-| `--frontend-only` | Generate frontend clients only |
+| `--server-only` | Generate server outputs only (outputs whose id contains `server`) |
+| `--frontend-only` | Generate frontend outputs only (outputs whose id contains `frontend` or `client`) |
 | `--docs-only` | Generate documentation only |
 | `--skip-lint` | Skip linting before generation |
 | `--no-manifest` | Skip manifest generation |
@@ -437,8 +438,8 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--no-manifest` | Skip manifest generation |
 | `--skip-lint` | Skip linting before generation |
 | `--contracts-only` | Generate contract packages only |
-| `--server-only` | Generate server routes only |
-| `--frontend-only` | Generate frontend clients only |
+| `--server-only` | Generate server outputs only (outputs whose id contains `server`) |
+| `--frontend-only` | Generate frontend outputs only (outputs whose id contains `frontend` or `client`) |
 | `--docs-only` | Generate documentation only |
 | `--force` | Bypass input hash cache and always regenerate |
 | `--no-cache` | Run without reading or writing input hash cache |
