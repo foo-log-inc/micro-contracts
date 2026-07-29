@@ -205,7 +205,7 @@ project/
 | Extension | Type | Description |
 |-----------|------|-------------|
 | `x-micro-contracts-published` | boolean | Include in `contract-published` (compatibility SLA) |
-| `x-micro-contracts-non-exportable` | boolean | Mark as non-exportable (fails if used in published endpoints) |
+| `x-micro-contracts-non-exportable` | boolean | Operation- or schema-level. Linting fails when a published endpoint can reach it (`PUBLIC_ENDPOINT_NON_EXPORTABLE`) |
 | `x-micro-contracts-depend-on` | string[] | Explicit dependencies on other modules' published APIs |
 | `x-private` | boolean | Schema-level. A published endpoint that can reach it fails linting (`PUBLIC_ENDPOINT_PRIVATE_RESPONSE`) |
 
@@ -214,7 +214,8 @@ items, `additionalProperties`, `allOf`/`oneOf`/`anyOf`, `$ref` targets) and ever
 part of an operation that reaches a schema: request bodies, parameters and
 responses of any status code, including through `components.requestBodies`,
 `components.parameters` and `components.responses`. `contract-published` contains
-exactly what that same reachability finds, so nothing can ship unchecked.
+exactly what that same reachability finds, so nothing can ship unchecked. The same
+reachability enforces `x-micro-contracts-non-exportable`.
 
 ### Screen Spec Extensions
 
