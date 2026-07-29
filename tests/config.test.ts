@@ -276,6 +276,59 @@ describe('public surface reachability', () => {
   });
 });
 
+describe('non-exportable guardrail', () => {
+  function specWith(schemaExtra: Record<string, unknown>, opExtra: Record<string, unknown> = {}): OpenAPISpec {
+    return {
+      openapi: '3.0.3',
+      info: { title: 'T', version: '1.0.0' },
+      paths: {
+        '/public': {
+          get: {
+            operationId: 'getPublic',
+            'x-micro-contracts-service': 'Public',
+            'x-micro-contracts-method': 'get',
+            'x-micro-contracts-published': true,
+            responses: {
+              '200': {
+                description: 'ok',
+                content: { 'application/json': { schema: { $ref: '#/components/schemas/Thing' } } },
+              },
+            },
+            ...opExtra,
+          },
+        },
+      },
+      components: {
+        schemas: { Thing: { type: 'object', properties: { id: { type: 'string' } }, ...schemaExtra } },
+      },
+    } as unknown as OpenAPISpec;
+  }
+
+  it('rejects a non-exportable schema reachable from a published endpoint', () => {
+    const result = lintSpec(specWith({ 'x-micro-contracts-non-exportable': true }));
+
+    expect(result.errors.map(e => e.code)).toContain('PUBLIC_ENDPOINT_NON_EXPORTABLE');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects an operation that is both published and non-exportable', () => {
+    const result = lintSpec(specWith({}, { 'x-micro-contracts-non-exportable': true }));
+
+    expect(result.errors.map(e => e.code)).toContain('PUBLIC_ENDPOINT_NON_EXPORTABLE');
+  });
+
+  it('accepts a non-exportable schema that no published endpoint reaches', () => {
+    const spec = specWith({});
+    (spec.components!.schemas as Record<string, unknown>).InternalOnly = {
+      type: 'object',
+      'x-micro-contracts-non-exportable': true,
+      properties: { internalId: { type: 'string' } },
+    };
+
+    expect(lintSpec(spec).errors).toHaveLength(0);
+  });
+});
+
 describe('lintSpec identifier rules', () => {
   function specWith(extensions: Record<string, string>): OpenAPISpec {
     return {

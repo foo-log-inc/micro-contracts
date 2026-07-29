@@ -50,6 +50,7 @@ export interface OperationObject {
   'x-micro-contracts-service'?: string;
   'x-micro-contracts-method'?: string;
   'x-micro-contracts-published'?: boolean;  // Include in contract-published (default: false)
+  'x-micro-contracts-non-exportable'?: boolean;  // Must not be reachable from a published endpoint
   'x-micro-contracts-depend-on'?: string[];  // Operation-level dependencies
   // Security extensions
   'x-auth'?: 'required' | 'optional' | 'none';
@@ -183,6 +184,7 @@ export interface SchemaObject {
   allOf?: Array<SchemaObject | ReferenceObject>;
   // Custom extensions
   'x-private'?: boolean;  // Mark as private (not allowed in public endpoints)
+  'x-micro-contracts-non-exportable'?: boolean;  // Must not be reachable from a published endpoint
 }
 
 // =============================================================================

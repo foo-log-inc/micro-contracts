@@ -271,14 +271,39 @@ function checkPublicEndpointForPrivate(
     { code: 'PUBLIC_ENDPOINT_PRIVATE_PARAMETER', label: 'parameter', root: operation.parameters },
   ];
 
+  // An operation cannot be both published and non-exportable.
+  if (operation['x-micro-contracts-non-exportable']) {
+    errors.push({
+      type: 'error',
+      code: 'PUBLIC_ENDPOINT_NON_EXPORTABLE',
+      message: 'Operation is x-micro-contracts-published and x-micro-contracts-non-exportable',
+      path,
+      location,
+    });
+  }
+
   for (const section of sections) {
     if (!section.root) continue;
 
-    for (const schemaRef of findPrivateSchemas(section.root, spec)) {
+    for (const schemaRef of findReachableSchemas(section.root, spec, s => hasPrivateProperties(s, spec))) {
       errors.push({
         type: 'error',
         code: section.code,
         message: `Public endpoint references ${section.label} schema "${schemaRef}" with x-private properties`,
+        path,
+        location,
+      });
+    }
+
+    for (const schemaRef of findReachableSchemas(
+      section.root,
+      spec,
+      s => s['x-micro-contracts-non-exportable'] === true
+    )) {
+      errors.push({
+        type: 'error',
+        code: 'PUBLIC_ENDPOINT_NON_EXPORTABLE',
+        message: `Public endpoint references ${section.label} schema "${schemaRef}" marked x-micro-contracts-non-exportable`,
         path,
         location,
       });
@@ -289,11 +314,17 @@ function checkPublicEndpointForPrivate(
 }
 
 /**
- * Names of private schemas reachable from `root` (part of an operation).
+ * Names of schemas reachable from `root` (part of an operation) that `matches`
+ * accepts. Every rule about "what the public surface pulls in" asks this same
+ * question, over the same reachability, so no rule can see a narrower graph.
  *
  * Inline schemas are reported as "inline schema"; named ones by component name.
  */
-function findPrivateSchemas(root: unknown, spec: OpenAPISpec): string[] {
+function findReachableSchemas(
+  root: unknown,
+  spec: OpenAPISpec,
+  matches: (schema: SchemaObject) => boolean
+): string[] {
   const found: string[] = [];
 
   // Named components reachable from here, including across responses,
@@ -302,14 +333,14 @@ function findPrivateSchemas(root: unknown, spec: OpenAPISpec): string[] {
     const [section, name] = [pointer.slice(0, pointer.indexOf('/')), pointer.slice(pointer.indexOf('/') + 1)];
     if (section !== 'schemas') continue;
     const schema = spec.components?.schemas?.[name];
-    if (schema && hasPrivateProperties(schema, spec)) {
+    if (schema && matches(schema)) {
       found.push(name);
     }
   }
 
   // Inline schemas: reachable but unnamed, so they carry no component pointer.
   for (const schema of collectInlineSchemas(root)) {
-    if (hasPrivateProperties(schema, spec)) {
+    if (matches(schema)) {
       found.push('inline schema');
     }
   }
