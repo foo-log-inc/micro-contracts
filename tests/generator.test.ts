@@ -869,6 +869,92 @@ export interface {{interfaceName}} {
     });
   });
 
+  describe('outputs generation', () => {
+    /** Module with one working output, plus whatever overrides a test needs. */
+    function setupOutputs(outputs: Record<string, Record<string, unknown>>): MultiModuleConfig {
+      const specPath = path.join(tmpDir, 'spec.yaml');
+      fs.writeFileSync(specPath, `
+openapi: 3.0.3
+info:
+  title: Test API
+  version: 1.0.0
+paths:
+  /api/users:
+    get:
+      operationId: getUsers
+      x-micro-contracts-service: User
+      x-micro-contracts-method: getUsers
+      responses:
+        '200':
+          description: Success
+components:
+  schemas: {}
+`);
+      fs.writeFileSync(path.join(tmpDir, 'routes.hbs'), 'routes: {{routes.length}}');
+
+      return {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'contracts/{module}') },
+          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+          outputs: outputs as MultiModuleConfig['defaults'] extends { outputs?: infer O } ? O : never,
+        },
+        modules: { core: { openapi: specPath } },
+      };
+    }
+
+    it('generates an output from its configured template', async () => {
+      const config = setupOutputs({
+        routes: { output: path.join(tmpDir, 'out/routes.generated.ts'), template: path.join(tmpDir, 'routes.hbs') },
+      });
+
+      await generate(config, {});
+
+      expect(fs.readFileSync(path.join(tmpDir, 'out/routes.generated.ts'), 'utf-8')).toBe('routes: 1');
+    });
+
+    it('fails when a template cannot be rendered', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'broken.hbs'), '{{#each routes}}{{/wrongclose}}');
+      const config = setupOutputs({
+        broken: { output: path.join(tmpDir, 'out/broken.generated.ts'), template: path.join(tmpDir, 'broken.hbs') },
+      });
+
+      await expect(generate(config, {})).rejects.toThrow(/broken\.hbs.*for output 'broken'/s);
+      expect(fs.existsSync(path.join(tmpDir, 'out/broken.generated.ts'))).toBe(false);
+    });
+
+    it('fails when a configured template does not exist', async () => {
+      const config = setupOutputs({
+        missing: { output: path.join(tmpDir, 'out/missing.generated.ts'), template: path.join(tmpDir, 'does-not-exist.hbs') },
+      });
+
+      await expect(generate(config, {})).rejects.toThrow(/Cannot load template .*does-not-exist\.hbs/);
+    });
+
+    it('uses the configured template path, not a same-named file under the spec directory', async () => {
+      // A convention lookup by basename would pick up this decoy instead.
+      const decoyDir = path.join(tmpDir, 'core', 'templates');
+      fs.mkdirSync(decoyDir, { recursive: true });
+      fs.writeFileSync(path.join(decoyDir, 'routes.hbs'), 'DECOY');
+
+      const config = setupOutputs({
+        routes: { output: path.join(tmpDir, 'out/routes.generated.ts'), template: path.join(tmpDir, 'routes.hbs') },
+      });
+
+      await generate(config, {});
+
+      expect(fs.readFileSync(path.join(tmpDir, 'out/routes.generated.ts'), 'utf-8')).toBe('routes: 1');
+    });
+
+    it('fails instead of generating nothing when a flag matches no output', async () => {
+      const config = setupOutputs({
+        routes: { output: path.join(tmpDir, 'out/routes.generated.ts'), template: path.join(tmpDir, 'routes.hbs') },
+      });
+
+      // 'routes' contains neither 'server' nor 'frontend'/'client'.
+      await expect(generate(config, { serverOnly: true })).rejects.toThrow(/No outputs matched/);
+    });
+  });
+
   describe('deps/ re-exports', () => {
     it('writes deps files under the configured contract output', async () => {
       const write = (name: string, service: string) => {

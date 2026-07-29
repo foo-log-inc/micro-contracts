@@ -104,8 +104,9 @@ export function processOverlays(
     const overlayPath = path.resolve(basePath, overlayFile);
     
     if (!fs.existsSync(overlayPath)) {
-      console.warn(`Overlay file not found: ${overlayPath}`);
-      continue;
+      // Skipping would generate artifacts without the overlay's injections
+      // (middleware, auth, headers) and still report success.
+      throw new Error(`Overlay file not found: ${overlayFile} (resolved to ${overlayPath})`);
     }
 
     const overlayContent = fs.readFileSync(overlayPath, 'utf-8');
@@ -149,8 +150,11 @@ function applyAction(
   // Parse the target JSONPath pattern
   const parsed = parseTarget(target);
   if (!parsed) {
-    console.warn(`Invalid overlay target: ${target}`);
-    return;
+    // Returning here would apply nothing for this action and still succeed.
+    throw new Error(
+      `Overlay '${overlayFile}' has an unsupported target: ${target}. ` +
+      `Supported form: $.paths[*][*][?(@.x-<marker> contains '<value>')]`
+    );
   }
 
   // Find matching operations

@@ -32,6 +32,7 @@ export interface LintResult {
 export function lintSpec(spec: OpenAPISpec, options: LintOptions = {}): LintResult {
   const errors: LintError[] = [];
   const warnings: LintError[] = [];
+  const eventDefs = spec.components?.['x-event-defs'] ?? {};
   
   // Check each operation
   for (const [path, pathItem] of Object.entries(spec.paths)) {
@@ -163,7 +164,7 @@ export function lintSpec(spec: OpenAPISpec, options: LintOptions = {}): LintResu
 
       // Validate inline x-event on this operation (any method)
       if (operation['x-event'] != null) {
-        validateInlineEvent(operation['x-event'], path, location, errors);
+        validateInlineEvent(operation['x-event'], path, location, errors, eventDefs);
       }
 
       // Validate x-event on links (200 response only, GET operations)
@@ -179,6 +180,7 @@ export function lintSpec(spec: OpenAPISpec, options: LintOptions = {}): LintResu
                   `${path}.responses.200.links.${linkName}`,
                   location,
                   errors,
+                  eventDefs,
                 );
               }
             }
@@ -213,6 +215,7 @@ export function lintSpec(spec: OpenAPISpec, options: LintOptions = {}): LintResu
                   `${path}.x-interactions[${i}]`,
                   location,
                   errors,
+                  eventDefs,
                 );
               }
             }
@@ -390,6 +393,7 @@ function validateInlineEvent(
   path: string,
   location: string,
   errors: LintError[],
+  eventDefs: Record<string, unknown> = {},
 ): void {
   if (typeof raw === 'string') return; // valid string form
   if (typeof raw !== 'object' || raw === null) {
@@ -411,6 +415,22 @@ function validateInlineEvent(
       path,
       location,
     });
+    return;
+  }
+
+  if (typeof obj.$ref === 'string' && obj.$ref.startsWith('#/components/x-event-defs/')) {
+    const defName = obj.$ref.split('/').pop()!;
+    if (!(defName in eventDefs)) {
+      errors.push({
+        type: 'error',
+        code: 'SCREEN_UNKNOWN_EVENT_REF',
+        message:
+          `x-event references '${obj.$ref}' but components.x-event-defs has no '${defName}' ` +
+          `(defined: ${Object.keys(eventDefs).join(', ') || 'none'})`,
+        path,
+        location,
+      });
+    }
   }
 }
 

@@ -540,15 +540,18 @@ describe('Screen Spec - Inline x-event parser', () => {
     expect(simple.interactions).toEqual([]);
   });
 
-  it('falls back gracefully when x-event-defs is missing', () => {
+  it('rejects an x-event $ref with no matching x-event-defs entry', () => {
     const spec = createInlineEventSpec();
     delete (spec.components as any)['x-event-defs'];
-    const ctx = buildTemplateContext(spec, 'test', { screen: true });
 
-    const cal = ctx.screens.find(s => s.screenConst === 'CALENDAR')!;
-    const linkEvent = cal.links.find(l => l.name === 'goToDetail')!.event!;
-    expect(linkEvent.name).toBe('itemTap');
-    expect(linkEvent.type).toBe('user_action');
+    // Inventing the event from the ref name would turn a typo into an event.
+    const result = lintSpec(spec, { screen: true });
+    expect(result.valid).toBe(false);
+    expect(result.errors.map(e => e.code)).toContain('SCREEN_UNKNOWN_EVENT_REF');
+
+    expect(() => buildTemplateContext(spec, 'test', { screen: true })).toThrow(
+      /x-event references '#\/components\/x-event-defs\/itemTap'/
+    );
   });
 });
 

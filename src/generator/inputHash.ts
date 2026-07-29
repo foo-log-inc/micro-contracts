@@ -13,7 +13,6 @@ import crypto from 'crypto';
 import YAML from 'yaml';
 import type { MultiModuleConfig } from '../types.js';
 import { resolveModuleConfig } from '../types.js';
-import { resolveTemplatePath } from './templateProcessor.js';
 
 /**
  * Recursively walk a parsed YAML/JSON structure and collect absolute
@@ -110,16 +109,7 @@ export function collectInputFiles(
     for (const output of resolved.outputs) {
       if (!output.enabled) continue;
 
-      const specDir = path.dirname(resolved.openapi)
-        .replace(/\/openapi$/, '')
-        .replace(`/${moduleName}`, '');
-      const templatePath = resolveTemplatePath({
-        specDir,
-        moduleName,
-        templateName: path.basename(output.template),
-      }) || output.template;
-
-      const absTemplate = path.resolve(templatePath);
+      const absTemplate = path.resolve(output.template);
       if (fs.existsSync(absTemplate)) {
         files.add(absTemplate);
       }

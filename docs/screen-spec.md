@@ -462,6 +462,7 @@ export function useHomePageEvents() {
 | `SCREEN_MISSING_NAME`            | Error   | `x-screen-id` present but `x-screen-name` missing             |
 | `SCREEN_MISSING_OPERATION_ID`    | Error   | Screen operation missing `operationId`                         |
 | `SCREEN_INVALID_X_EVENT`         | Error   | `x-event` is not a string, `{name}` object, or `{$ref}`       |
+| `SCREEN_UNKNOWN_EVENT_REF`       | Error   | `x-event` `$ref` has no matching `components.x-event-defs` entry |
 | `SCREEN_CONFLICTING_EVENT_DEFS`  | Error   | `x-events` and `x-event` coexist on the same operation        |
 | `SCREEN_INVALID_INTERACTIONS`    | Error   | `x-interactions` is not an array                               |
 | `SCREEN_INVALID_INTERACTION`     | Error   | `x-interactions` entry missing `name`                          |

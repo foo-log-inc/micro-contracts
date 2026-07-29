@@ -227,83 +227,6 @@ export function loadTemplate(templatePath: string): Handlebars.TemplateDelegate 
 }
 
 /**
- * Template resolution options
- */
-export interface TemplateResolveOptions {
-  /** Base spec directory (e.g., 'spec/') */
-  specDir: string;
-  /** Module name */
-  moduleName: string;
-  /** Template file name (e.g., 'fastify-routes.hbs') */
-  templateName: string;
-}
-
-/**
- * Resolve template path following priority order:
- * 1. spec/{module}/templates/{templateName}
- * 2. spec/default/templates/{templateName}
- * 
- * Returns null if not found (no built-in fallback)
- */
-export function resolveTemplatePath(options: TemplateResolveOptions): string | null {
-  const { specDir, moduleName, templateName } = options;
-  
-  // Priority 1: Module-specific template
-  const moduleTemplatePath = path.join(specDir, moduleName, 'templates', templateName);
-  if (fs.existsSync(moduleTemplatePath)) {
-    return moduleTemplatePath;
-  }
-  
-  // Priority 2: Default templates
-  const defaultTemplatePath = path.join(specDir, 'default', 'templates', templateName);
-  if (fs.existsSync(defaultTemplatePath)) {
-    return defaultTemplatePath;
-  }
-  
-  // No built-in fallback
-  return null;
-}
-
-/**
- * Load template with automatic resolution
- */
-export function loadTemplateWithResolution(options: TemplateResolveOptions): Handlebars.TemplateDelegate {
-  const templatePath = resolveTemplatePath(options);
-  if (!templatePath) {
-    // Try absolute/relative path as fallback
-    const absolutePath = path.resolve(options.templateName);
-    if (fs.existsSync(absolutePath)) {
-      return loadTemplate(absolutePath);
-    }
-    
-    throw new Error(
-      `Template not found: ${options.templateName}\n` +
-      `Searched in:\n` +
-      `  - ${path.join(options.specDir, options.moduleName, 'templates', options.templateName)}\n` +
-      `  - ${path.join(options.specDir, 'default', 'templates', options.templateName)}\n` +
-      `  - ${absolutePath}\n` +
-      `\nRun 'micro-contracts init' to create starter templates.`
-    );
-  }
-  return loadTemplate(templatePath);
-}
-
-/**
- * Get default template content (built-in - for backward compatibility only)
- * @deprecated Use loadTemplateWithResolution instead
- */
-export function getDefaultTemplate(type: 'server' | 'frontend' | 'services'): string {
-  switch (type) {
-    case 'server':
-      return DEFAULT_SERVER_TEMPLATE;
-    case 'frontend':
-      return DEFAULT_FRONTEND_TEMPLATE;
-    case 'services':
-      return DEFAULT_SERVICES_TEMPLATE;
-  }
-}
-
-/**
  * Build template context from spec and overlay result
  */
 export function buildTemplateContext(
@@ -442,22 +365,35 @@ export function processTemplate(
 }
 
 /**
- * Generate code using template
+ * Render a configured template. The only path from a configured template to
+ * generated content: a template that cannot be found, parsed or rendered is an
+ * error, never a silent substitution.
+ *
+ * `label` names what is being generated, for the error message.
  */
-export function generateWithTemplate(
-  templatePath: string | null,
-  defaultType: 'server' | 'frontend' | 'services',
-  context: TemplateContext
+export function renderTemplate(
+  templatePath: string,
+  context: TemplateContext | Record<string, unknown>,
+  label: string
 ): string {
   let template: Handlebars.TemplateDelegate;
-  
-  if (templatePath && fs.existsSync(templatePath)) {
-    template = loadTemplate(templatePath);
-  } else {
-    template = Handlebars.compile(getDefaultTemplate(defaultType));
+  try {
+    template = loadTemplate(path.resolve(templatePath));
+  } catch (error) {
+    throw new Error(
+      `Cannot load template '${templatePath}' for ${label}: ` +
+      (error instanceof Error ? error.message : String(error))
+    );
   }
-  
-  return processTemplate(template, context);
+
+  try {
+    return template(context);
+  } catch (error) {
+    throw new Error(
+      `Cannot render template '${templatePath}' for ${label}: ` +
+      (error instanceof Error ? error.message : String(error))
+    );
+  }
 }
 
 // =============================================================================
@@ -707,7 +643,13 @@ function resolveInlineEvent(
     }
     const defName = ref.split('/').pop()!;
     const resolved = eventDefs[defName];
-    if (!resolved) return { name: defName, type: defaultType };
+    if (!resolved) {
+      // Using the ref name as the event name would turn a typo into an event.
+      throw new Error(
+        `x-event references '${ref}' but components.x-event-defs has no '${defName}'. ` +
+        `Defined: ${Object.keys(eventDefs).join(', ') || '(none)'}.`
+      );
+    }
     return {
       name: (resolved.name as string) ?? defName,
       type: (resolved.type as string) ?? defaultType,
@@ -976,184 +918,3 @@ Handlebars.registerHelper('ifCond', function(this: unknown, v1, operator, v2, op
     default: return (options as Handlebars.HelperOptions).inverse(this);
   }
 });
-
-// =============================================================================
-// Default Templates
-// =============================================================================
-
-const DEFAULT_SERVER_TEMPLATE = `/**
- * Auto-generated Fastify routes from OpenAPI specification
- * Generated from: {{spec.info.title}} v{{spec.info.version}}
- * DO NOT EDIT MANUALLY
- */
-
-import type { FastifyInstance } from 'fastify';
-import { allSchemas } from '{{contractPackage}}/schemas';
-import * as types from '{{contractPackage}}/schemas';
-
-export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
-  // Register all schemas from contract package
-  for (const schema of allSchemas) {
-    fastify.addSchema(schema);
-  }
-
-  // Service references from {{servicesPath}}
-  const { {{#each services}}{{key}}{{#unless @last}}, {{/unless}}{{/each}} } = {{servicesPath}};
-{{#if extensionInfo.length}}
-
-  // Extension registries
-{{#each extensionInfo}}
-  const {{camelCase marker}}Registry = fastify.{{camelCase marker}}Registry;
-{{/each}}
-{{/if}}
-
-{{#each routes}}
-  // {{summary}}
-  // {{uppercase method}} {{path}}{{#if isPublished}} (published){{/if}}
-  fastify.{{method}}('{{fastifyPath}}', {
-{{#if queryParams.length}}
-    schema: {
-      querystring: { $ref: '{{typeNameBase}}Query#' },
-{{/if}}
-{{#if pathParams.length}}
-{{#unless queryParams.length}}
-    schema: {
-{{/unless}}
-      params: { $ref: '{{typeNameBase}}Params#' },
-{{/if}}
-{{#if requestBody}}
-{{#unless (or queryParams.length pathParams.length)}}
-    schema: {
-{{/unless}}
-      body: { $ref: '{{requestBody.schemaName}}#' },
-{{/if}}
-{{#if responses.length}}
-{{#unless (or queryParams.length pathParams.length requestBody)}}
-    schema: {
-{{/unless}}
-      response: {
-{{#each responses}}
-{{#if schemaName}}
-        {{statusCode}}: { $ref: '{{schemaName}}#' },
-{{/if}}
-{{/each}}
-      },
-{{/if}}
-{{#if (or queryParams.length pathParams.length requestBody responses.length)}}
-    },
-{{/if}}
-{{#if extensions.length}}
-    preHandler: [
-{{#each extensions}}
-      {{registryKey}},
-{{/each}}
-    ],
-{{/if}}
-  }, async (req, reply) => {
-    return {{serviceKey}}.{{serviceMethod}}({{#if pathParams.length}}req.params as types.{{typeNameBase}}Params{{/if}}{{#if queryParams.length}}{{#if pathParams.length}}, {{/if}}req.query as types.{{typeNameBase}}Query{{/if}}{{#if requestBody}}{{#if (or pathParams.length queryParams.length)}}, {{/if}}req.body as types.{{requestBody.schemaName}}{{/if}});
-  });
-
-{{/each}}
-}
-`;
-
-const DEFAULT_FRONTEND_TEMPLATE = `/**
- * Auto-generated API client from OpenAPI specification
- * Generated from: {{spec.info.title}} v{{spec.info.version}}
- * DO NOT EDIT MANUALLY
- */
-
-import type * as types from '{{contractPackage}}/schemas';
-
-const BASE_URL = '';
-
-async function fetchApi<T>(
-  url: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const response = await fetch(BASE_URL + url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(\`API error: \${response.status}\`);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return response.json();
-}
-
-{{#each routes}}
-/**
- * {{summary}}
- * {{uppercase method}} {{path}}
- */
-export async function {{operationId}}(
-{{#if pathParams.length}}
-  params: types.{{typeNameBase}}Params,
-{{/if}}
-{{#if queryParams.length}}
-  query?: Partial<types.{{typeNameBase}}Query>,
-{{/if}}
-{{#if requestBody}}
-  body: types.{{requestBody.schemaName}},
-{{/if}}
-): Promise<{{#with (first responses)}}{{#if schemaName}}types.{{schemaName}}{{else}}void{{/if}}{{/with}}> {
-{{#if pathParams.length}}
-  let url = '{{path}}'.replace(/\\{([^}]+)\\}/g, (_, key) => String((params as Record<string, unknown>)[key]));
-{{else}}
-  let url = '{{path}}';
-{{/if}}
-{{#if queryParams.length}}
-  if (query) {
-    const searchParams = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined) {
-        searchParams.set(key, String(value));
-      }
-    }
-    const qs = searchParams.toString();
-    if (qs) url += '?' + qs;
-  }
-{{/if}}
-  return fetchApi<{{#with (first responses)}}{{#if schemaName}}types.{{schemaName}}{{else}}void{{/if}}{{/with}}>(url, {
-    method: '{{uppercase method}}',
-{{#if requestBody}}
-    body: JSON.stringify(body),
-{{/if}}
-  });
-}
-
-{{/each}}
-`;
-
-const DEFAULT_SERVICES_TEMPLATE = `/**
- * Service interfaces
- * Auto-generated from OpenAPI specification
- * DO NOT EDIT MANUALLY
- */
-
-import type * as types from '../schemas/types.js';
-
-{{#each services}}
-/**
- * {{name}} interface
- */
-export interface {{name}}ServiceApi {
-{{#each methods}}
-  {{this}}(...args: unknown[]): Promise<unknown>;
-{{/each}}
-}
-
-{{/each}}
-`;
-
-export { DEFAULT_SERVER_TEMPLATE, DEFAULT_FRONTEND_TEMPLATE, DEFAULT_SERVICES_TEMPLATE };
-
