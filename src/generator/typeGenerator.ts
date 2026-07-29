@@ -339,6 +339,45 @@ function getOperationTypeName(operation: OperationObject): string {
 }
 
 /**
+ * The type names generated for one operation.
+ *
+ * The single definition of what an operation contributes to types.ts: the
+ * emitter below and the deps/ re-exports both read it, so a re-export cannot
+ * name a type that is never generated.
+ */
+export function operationTypeNames(operation: OperationObject): {
+  base: string;
+  input: string;
+  params?: string;
+  body?: string;
+} {
+  const base = getOperationTypeName(operation);
+
+  const allParams = (operation.parameters || []).filter(
+    (p): p is ParameterObject => !isReference(p) && (p.in === 'query' || p.in === 'path')
+  );
+  const params = allParams.length > 0 ? `${base}Params` : undefined;
+
+  let body: string | undefined;
+  if (operation.requestBody) {
+    if (isReference(operation.requestBody)) {
+      body = getRefName(operation.requestBody.$ref);
+    } else {
+      const content = operation.requestBody.content?.['application/json'];
+      if (content?.schema) {
+        if (isReference(content.schema)) {
+          body = getRefName(content.schema.$ref);
+        } else if (content.schema.properties || normalizeType(content.schema).types.includes('object')) {
+          body = `${base}Body`;
+        }
+      }
+    }
+  }
+
+  return { base, input: `${base}Input`, params, body };
+}
+
+/**
  * Generate parameter types for operations
  */
 function generateOperationTypes(spec: OpenAPISpec): string {
@@ -350,52 +389,33 @@ function generateOperationTypes(spec: OpenAPISpec): string {
       const operation = pathItem[method];
       if (!operation) continue;
       
-      const baseTypeName = getOperationTypeName(operation);
+      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName } =
+        operationTypeNames(operation);
 
-      // Collect all parameters (path + query) into a single Params type
-      const allParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && (p.in === 'query' || p.in === 'path')
-      );
-
-      let paramsTypeName: string | undefined;
-      if (allParams.length > 0) {
-        paramsTypeName = `${baseTypeName}Params`;
-        if (!generatedTypes.has(paramsTypeName)) {
-          generatedTypes.add(paramsTypeName);
-          lines.push(generateParamsType(paramsTypeName, allParams, spec));
-          lines.push('');
-        }
+      if (paramsTypeName && !generatedTypes.has(paramsTypeName)) {
+        const allParams = (operation.parameters || []).filter(
+          (p): p is ParameterObject => !isReference(p) && (p.in === 'query' || p.in === 'path')
+        );
+        generatedTypes.add(paramsTypeName);
+        lines.push(generateParamsType(paramsTypeName, allParams, spec));
+        lines.push('');
       }
 
-      // Get request body type name
-      let bodyTypeName: string | undefined;
-      if (operation.requestBody) {
-        if (isReference(operation.requestBody)) {
-          // Referenced request body - extract name
-          bodyTypeName = getRefName(operation.requestBody.$ref);
-        } else {
-          const content = operation.requestBody.content?.['application/json'];
-          if (content?.schema) {
-            if (isReference(content.schema)) {
-              bodyTypeName = getRefName(content.schema.$ref);
-            } else if (content.schema.properties || normalizeType(content.schema).types.includes('object')) {
-              // Generate inline body type
-              bodyTypeName = `${baseTypeName}Body`;
-              if (!generatedTypes.has(bodyTypeName)) {
-                generatedTypes.add(bodyTypeName);
-                lines.push(generateRequestBodyType(bodyTypeName, content.schema, spec));
-                lines.push('');
-              }
-            }
-          }
-        }
+      // An inline body schema needs its interface emitted; a $ref body names an
+      // existing component schema.
+      const inlineBodySchema = operation.requestBody && !isReference(operation.requestBody)
+        ? operation.requestBody.content?.['application/json']?.schema
+        : undefined;
+      if (bodyTypeName && inlineBodySchema && !isReference(inlineBodySchema) && !generatedTypes.has(bodyTypeName)) {
+        generatedTypes.add(bodyTypeName);
+        lines.push(generateRequestBodyType(bodyTypeName, inlineBodySchema, spec));
+        lines.push('');
       }
 
       // Generate Input type that combines params and body
       // - params are flattened (path + query combined)
       // - body becomes 'data' (not HTTP-specific)
       // - Always generate (empty object for parameterless operations)
-      const inputTypeName = `${baseTypeName}Input`;
       if (!generatedTypes.has(inputTypeName)) {
         generatedTypes.add(inputTypeName);
         lines.push(generateInputType(inputTypeName, paramsTypeName, bodyTypeName));

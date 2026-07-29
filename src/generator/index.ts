@@ -18,7 +18,7 @@ import {
   resolveModuleConfig,
   validateConfigKeys,
 } from '../types.js';
-import { generateTypes } from './typeGenerator.js';
+import { generateTypes, operationTypeNames } from './typeGenerator.js';
 import { generateSchemas } from './schemaGenerator.js';
 import { generateServiceInterfaces } from './serviceGenerator.js';
 import { lintSpec, formatLintResults } from './linter.js';
@@ -554,6 +554,7 @@ async function generateDepsReExports(
     }
 
     const importPrefix = relativeImportPath(depsDir, target.contractPublicOutput);
+    const exported = declaredDependencyTypes(config.name, targetModule, deps, target);
 
     const content = `/**
  * Auto-generated from x-micro-contracts-depend-on - DO NOT EDIT
@@ -562,9 +563,10 @@ async function generateDepsReExports(
  * Dependencies: ${deps.map(d => d.raw).join(', ')}
  */
 
-// Re-exported types from ${targetModule} (contract-published)
-export type * from '${importPrefix}/schemas/types.js';
-export type * from '${importPrefix}/services/index.js';
+// Types reached by the declared dependencies of ${targetModule} (contract-published)
+export type {
+${exported.map(name => `  ${name},`).join('\n')}
+} from '${importPrefix}/schemas/types.js';
 `;
 
     writeAndLog(path.join(depsDir, `${targetModule}.ts`), content, '  ');
@@ -577,6 +579,78 @@ export type * from '${importPrefix}/services/index.js';
 ${Array.from(depsByModule.keys()).map(m => `export * from './${m}.js';`).join('\n')}
 `;
   writeAndLog(path.join(depsDir, 'index.ts'), indexContent, '  ');
+}
+
+/**
+ * Type names a module may use through its declared dependencies.
+ *
+ * Only what the declared operations reach: re-exporting the target's whole
+ * published contract would hand over every type it has, which is not what
+ * declaring `{module}.{service}.{method}` asks for.
+ */
+function declaredDependencyTypes(
+  sourceModule: string,
+  targetModule: string,
+  deps: DependencyRef[],
+  target: ResolvedModuleConfig
+): string[] {
+  const targetSpec = loadOpenAPISpec(path.resolve(target.openapi));
+  const names = new Set<string>();
+
+  for (const dep of deps) {
+    const operation = findOperation(targetSpec, dep.service, dep.method);
+
+    if (!operation) {
+      throw new Error(
+        `Module '${sourceModule}' depends on '${dep.raw}' but module '${targetModule}' ` +
+        `has no operation with x-micro-contracts-service '${dep.service}' ` +
+        `and x-micro-contracts-method '${dep.method}'.`
+      );
+    }
+
+    // deps/ re-exports from contract-published, which only carries published
+    // operations: depending on an unpublished one cannot resolve.
+    if (operation['x-micro-contracts-published'] !== true) {
+      throw new Error(
+        `Module '${sourceModule}' depends on '${dep.raw}' but that operation is not ` +
+        `x-micro-contracts-published, so it is absent from the published contract of '${targetModule}'.`
+      );
+    }
+
+    const typeNames = operationTypeNames(operation);
+    names.add(typeNames.input);
+    if (typeNames.params) names.add(typeNames.params);
+    if (typeNames.body) names.add(typeNames.body);
+
+    // Schemas the operation reaches, named in the published types.
+    for (const pointer of collectReachableComponents(operation, targetSpec)) {
+      if (pointer.startsWith('schemas/')) {
+        names.add(pointer.slice('schemas/'.length));
+      }
+    }
+  }
+
+  return [...names].sort();
+}
+
+/** The operation declaring this service and method, if the spec has one. */
+function findOperation(
+  spec: OpenAPISpec,
+  service: string,
+  method: string
+): OperationObject | undefined {
+  for (const pathItem of Object.values(spec.paths)) {
+    for (const httpMethod of ['get', 'post', 'put', 'patch', 'delete'] as const) {
+      const operation = pathItem[httpMethod];
+      if (
+        operation?.['x-micro-contracts-service'] === service &&
+        operation['x-micro-contracts-method'] === method
+      ) {
+        return operation;
+      }
+    }
+  }
+  return undefined;
 }
 
 /**

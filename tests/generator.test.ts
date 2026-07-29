@@ -1077,6 +1077,7 @@ paths:
       operationId: get${service}
       x-micro-contracts-service: ${service}
       x-micro-contracts-method: getUsers
+      x-micro-contracts-published: true
       responses:
         '200':
           description: Success
@@ -1106,6 +1107,115 @@ components:
       expect(importPath).toBeDefined();
       expect(path.resolve(path.dirname(depsFile), importPath!))
         .toBe(path.resolve(path.join(tmpDir, 'contracts-published/core')));
+    });
+
+    /** core exposes two published operations; billing declares one of them. */
+    function setupCrossModule(declared: string): MultiModuleConfig {
+      const corePath = path.join(tmpDir, 'core.yaml');
+      fs.writeFileSync(corePath, `
+openapi: 3.0.3
+info:
+  title: core
+  version: 1.0.0
+paths:
+  /users:
+    get:
+      operationId: getUsers
+      x-micro-contracts-service: User
+      x-micro-contracts-method: getUsers
+      x-micro-contracts-published: true
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+  /secrets:
+    get:
+      operationId: getSecrets
+      x-micro-contracts-service: Secret
+      x-micro-contracts-method: getSecrets
+      x-micro-contracts-published: true
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Secret'
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+    Secret:
+      type: object
+      properties:
+        token:
+          type: string
+`);
+
+      const billingPath = path.join(tmpDir, 'billing.yaml');
+      fs.writeFileSync(billingPath, `
+openapi: 3.0.3
+info:
+  title: billing
+  version: 1.0.0
+  x-micro-contracts-depend-on:
+    - ${declared}
+paths:
+  /invoices:
+    get:
+      operationId: getInvoices
+      x-micro-contracts-service: Invoice
+      x-micro-contracts-method: getInvoices
+      responses:
+        '200':
+          description: ok
+components:
+  schemas: {}
+`);
+
+      return {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'contracts/{module}') },
+          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+        },
+        modules: {
+          core: { openapi: corePath },
+          billing: { openapi: billingPath },
+        },
+      };
+    }
+
+    it('re-exports only the types the declared dependency reaches', async () => {
+      await generate(setupCrossModule('core.User.getUsers'), { contractsOnly: true });
+
+      const deps = fs.readFileSync(path.join(tmpDir, 'contracts/billing/deps/core.ts'), 'utf-8');
+      expect(deps).toContain('User,');
+      expect(deps).toContain('User_getUsersInput,');
+      // Declaring one operation must not hand over the rest of core.
+      expect(deps).not.toContain('Secret');
+    });
+
+    it('fails when a declared dependency names no operation in the target', async () => {
+      await expect(generate(setupCrossModule('core.User.getMissing'), { contractsOnly: true }))
+        .rejects.toThrow(/no operation with x-micro-contracts-service 'User'/);
+    });
+
+    it('fails when a declared dependency is not published by the target', async () => {
+      const config = setupCrossModule('core.User.getUsers');
+      const corePath = path.join(tmpDir, 'core.yaml');
+      fs.writeFileSync(
+        corePath,
+        fs.readFileSync(corePath, 'utf-8').replace('      x-micro-contracts-published: true\n', ''),
+      );
+
+      await expect(generate(config, { contractsOnly: true }))
+        .rejects.toThrow(/not x-micro-contracts-published/);
     });
   });
 });

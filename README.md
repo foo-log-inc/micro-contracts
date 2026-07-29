@@ -6,7 +6,7 @@
 
 micro-contracts is a contract-first toolchain for TypeScript Web/API development. It tackles common failure modes—**frontend/backend contract drift**, **duplicated "common" rules**, and **accidental breaking changes in public APIs**—by treating **OpenAPI as the Single Source of Truth (SSoT)**.
 
-Contracts alone aren't enough—they must be **enforceable**. micro-contracts includes **[Enforceable Guardrails](docs/development-guardrails.md)** that prevent both humans and AI from bypassing the contract-first workflow: blocking direct edits to generated files, detecting drift, and verifying security declarations match implementations.
+Contracts alone aren't enough—they must be **enforceable**. micro-contracts includes **[Enforceable Guardrails](docs/development-guardrails.md)** that prevent both humans and AI from bypassing the contract-first workflow: generated files may only change by regenerating them (drift and manifest integrity), changes stay inside allowed paths, and the contract itself is linted before anything is generated.
 
 ## Design Philosophy
 
@@ -25,9 +25,9 @@ The core architecture is organized along two axes:
 |---|----------------|---------------|
 | 1 | **Vertical Modules + Horizontal Overlays** | Feature-aligned modules as contract boundaries; cross-cutting concerns (auth, rate-limit) injected via [OpenAPI Overlays](https://www.openapis.org/blog/2024/10/22/announcing-overlay-specification). |
 | 2 | **OpenAPI as SSoT → Multi-artifact generation** | Single spec generates contract packages, server routes, and frontend clients. No manual sync required. |
-| 3 | **Enforceable Guardrails** | Built-in checks prevent bypassing contract-first workflow—blocks direct edits to generated files, detects drift, verifies security declarations. See **[Guardrails](docs/development-guardrails.md)**. |
+| 3 | **Enforceable Guardrails** | Built-in checks prevent bypassing contract-first workflow—allowlist for changed paths, drift detection and manifest integrity for generated artifacts, plus your own commands as gated checks. See **[Guardrails](docs/development-guardrails.md)**. |
 | 4 | **Public Surface Governance** | `contract-published` is extracted (not duplicated) from the master contract. `x-micro-contracts-non-exportable` fails generation if internal data leaks. |
-| 5 | **Explicit Module Dependencies** | `x-micro-contracts-depend-on` declares cross-module dependencies. `deps/` re-exports only declared types; enables impact analysis. |
+| 5 | **Explicit Module Dependencies** | `x-micro-contracts-depend-on` declares cross-module dependencies. `deps/` re-exports only the types the declared operations reach; enables impact analysis. |
 | 6 | **Screen Spec** | Declare frontend screen contracts (ViewModel, navigation, analytics events) in OpenAPI. One YAML drives typed navigation maps and event hooks. See **[Screen Spec](docs/screen-spec.md)**. |
 
 ---
@@ -272,6 +272,12 @@ import type { User } from '@project/contract/billing/deps/core';
 // ❌ Avoid: Direct contract-published import
 import type { User } from '@project/contract-published/core/schemas';
 ```
+
+`deps/<target>.ts` re-exports named types only: those the declared operations
+reach, plus their generated input types. Types the target publishes but no
+declared operation reaches are not exposed. Each declared operation must exist
+in the target module and be `x-micro-contracts-published: true` — otherwise
+generation fails, since `contract-published` would not carry it.
 
 ---
 
