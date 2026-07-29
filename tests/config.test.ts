@@ -152,6 +152,63 @@ describe('resolveModuleConfig', () => {
   });
 });
 
+describe('x-private guardrail', () => {
+  /** Public endpoint whose response reaches PrivateThing through `link`. */
+  function specLinkedBy(link: (ref: { $ref: string }) => Record<string, unknown>): OpenAPISpec {
+    return {
+      openapi: '3.0.3',
+      info: { title: 'T', version: '1.0.0' },
+      paths: {
+        '/public': {
+          get: {
+            operationId: 'getPublic',
+            'x-micro-contracts-service': 'Public',
+            'x-micro-contracts-method': 'get',
+            'x-micro-contracts-published': true,
+            responses: {
+              '200': {
+                description: 'ok',
+                content: { 'application/json': { schema: { $ref: '#/components/schemas/Wrapper' } } },
+              },
+            },
+          },
+        },
+      },
+      components: {
+        schemas: {
+          Wrapper: { type: 'object', ...link({ $ref: '#/components/schemas/PrivateThing' }) },
+          PrivateThing: {
+            type: 'object',
+            'x-private': true,
+            properties: { internalToken: { type: 'string' } },
+          },
+        },
+      },
+    } as unknown as OpenAPISpec;
+  }
+
+  // Every way a schema can reach another one must be seen by the guardrail:
+  // additionalProperties was reachable for the published-contract filter but
+  // invisible to the x-private check, so private data shipped.
+  const links: Array<[string, (ref: { $ref: string }) => Record<string, unknown>]> = [
+    ['properties', ref => ({ properties: { thing: ref } })],
+    ['array items', ref => ({ properties: { things: { type: 'array', items: ref } } })],
+    ['additionalProperties', ref => ({ additionalProperties: ref })],
+    ['allOf', ref => ({ allOf: [ref] })],
+    ['oneOf', ref => ({ properties: { thing: { oneOf: [ref] } } })],
+    ['anyOf', ref => ({ properties: { thing: { anyOf: [ref] } } })],
+  ];
+
+  for (const [label, link] of links) {
+    it(`detects a private schema reached through ${label}`, () => {
+      const result = lintSpec(specLinkedBy(link));
+
+      expect(result.errors.map(e => e.code)).toContain('PUBLIC_ENDPOINT_PRIVATE_RESPONSE');
+      expect(result.valid).toBe(false);
+    });
+  }
+});
+
 describe('lintSpec identifier rules', () => {
   function specWith(extensions: Record<string, string>): OpenAPISpec {
     return {

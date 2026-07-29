@@ -643,7 +643,13 @@ function resolveInlineEvent(
     }
     const defName = ref.split('/').pop()!;
     const resolved = eventDefs[defName];
-    if (!resolved) return { name: defName, type: defaultType };
+    if (!resolved) {
+      // Using the ref name as the event name would turn a typo into an event.
+      throw new Error(
+        `x-event references '${ref}' but components.x-event-defs has no '${defName}'. ` +
+        `Defined: ${Object.keys(eventDefs).join(', ') || '(none)'}.`
+      );
+    }
     return {
       name: (resolved.name as string) ?? defName,
       type: (resolved.type as string) ?? defaultType,

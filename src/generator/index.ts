@@ -33,7 +33,7 @@ import {
   renderTemplate,
 } from './templateProcessor.js';
 import { validateDependsOn } from './dependencyGenerator.js';
-import { extractDependencies, expandPlaceholders } from '../types.js';
+import { extractDependencies, expandPlaceholders, collectReferencedSchemas } from '../types.js';
 
 export { generateTypes } from './typeGenerator.js';
 export { generateSchemas } from './schemaGenerator.js';
@@ -849,26 +849,16 @@ function collectSchemaRefs(obj: unknown, refs: Set<string>): void {
  * Recursively resolve schema references (schemas can reference other schemas)
  */
 function resolveSchemaRefsRecursively(spec: OpenAPISpec, initialRefs: Set<string>): Set<string> {
+  // Uses the shared schema-graph walk, so what lands in the published contract
+  // is exactly what the x-private check sees.
   const allRefs = new Set<string>(initialRefs);
-  const toProcess = [...initialRefs];
-  
-  while (toProcess.length > 0) {
-    const schemaName = toProcess.pop()!;
+
+  for (const schemaName of initialRefs) {
     const schema = spec.components?.schemas?.[schemaName];
-    if (!schema) continue;
-    
-    // Collect refs from this schema
-    const nestedRefs = new Set<string>();
-    collectSchemaRefs(schema, nestedRefs);
-    
-    // Add new refs to process
-    for (const ref of nestedRefs) {
-      if (!allRefs.has(ref)) {
-        allRefs.add(ref);
-        toProcess.push(ref);
-      }
+    if (schema) {
+      collectReferencedSchemas(schema, spec, allRefs);
     }
   }
-  
+
   return allRefs;
 }

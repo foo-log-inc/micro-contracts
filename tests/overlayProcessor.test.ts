@@ -3,6 +3,9 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { 
   processOverlays, 
   generateExtensionInterfaces,
@@ -73,10 +76,6 @@ actions:
 `;
       
       // Write mock overlay to temp location
-      const fs = require('fs');
-      const path = require('path');
-      const os = require('os');
-      
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
       const overlayPath = path.join(tmpDir, 'test.overlay.yaml');
       fs.writeFileSync(overlayPath, mockOverlay);
@@ -117,10 +116,6 @@ actions:
         '400':
           description: Bad Request
 `;
-      
-      const fs = require('fs');
-      const path = require('path');
-      const os = require('os');
       
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
       const overlayPath = path.join(tmpDir, 'test.overlay.yaml');
@@ -174,10 +169,6 @@ actions:
           description: Unauthorized - Version 2
 `;
       
-      const fs = require('fs');
-      const path = require('path');
-      const os = require('os');
-      
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
       const overlay1Path = path.join(tmpDir, 'overlay1.yaml');
       const overlay2Path = path.join(tmpDir, 'overlay2.yaml');
@@ -196,6 +187,38 @@ actions:
       fs.unlinkSync(overlay1Path);
       fs.unlinkSync(overlay2Path);
       fs.rmdirSync(tmpDir);
+    });
+
+    it('fails when a configured overlay file does not exist', () => {
+      // Skipping it would generate artifacts without the overlay's injections
+      // and still report success.
+      const config: OverlayConfig = {
+        collision: 'error',
+        files: ['spec/overlays/typo-missing.overlay.yaml'],
+      };
+
+      expect(() => processOverlays(baseSpec, config)).toThrow(/Overlay file not found/);
+    });
+
+    it('fails on an unsupported overlay target', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
+      const overlayPath = path.join(tmpDir, 'bad-target.overlay.yaml');
+      fs.writeFileSync(overlayPath, `
+overlay: 1.0.0
+info:
+  title: Bad Target
+  version: 1.0.0
+actions:
+  - target: "$.definitely[not]supported"
+    update:
+      responses:
+        '401':
+          description: Unauthorized
+`);
+
+      const config: OverlayConfig = { collision: 'error', files: [overlayPath] };
+
+      expect(() => processOverlays(baseSpec, config)).toThrow(/unsupported target/);
     });
 
     it('should allow identical content on collision (idempotent)', () => {
@@ -225,9 +248,6 @@ actions:
           description: Unauthorized
 `;
       
-      const fs = require('fs');
-      const path = require('path');
-      const os = require('os');
       
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
       const overlay1Path = path.join(tmpDir, 'overlay1.yaml');
@@ -272,9 +292,6 @@ actions:
           description: Internal Server Error
 `;
       
-      const fs = require('fs');
-      const path = require('path');
-      const os = require('os');
       
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
       const overlayPath = path.join(tmpDir, 'test.overlay.yaml');
@@ -329,9 +346,6 @@ actions:
           description: Unauthorized
 `;
       
-      const fs = require('fs');
-      const path = require('path');
-      const os = require('os');
       
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
       const overlayPath = path.join(tmpDir, 'test.overlay.yaml');

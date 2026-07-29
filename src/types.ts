@@ -983,47 +983,80 @@ export function getExtensionValue<T>(
   return (obj[longName] ?? obj[shortName]) as T | undefined;
 }
 
-// Check if a schema contains x-private properties
-export function hasPrivateProperties(
+/**
+ * Walk a schema graph, visiting the schema and every subschema reachable from
+ * it: properties, array items, additionalProperties, allOf/oneOf/anyOf members,
+ * and the targets of $ref.
+ *
+ * The single traversal of the schema graph. Everything that asks a question
+ * about "this schema and everything it pulls in" goes through here, so a branch
+ * can never be reachable for one question and invisible to another — which is
+ * how an x-private schema behind additionalProperties reached the published
+ * contract while passing the x-private check.
+ *
+ * `visit` receives each resolved (non-reference) schema and, when the schema
+ * was reached through a $ref, its component name. Returning false from `visit`
+ * stops the walk.
+ */
+export function walkSchemaGraph(
   schema: SchemaObject | ReferenceObject,
   spec: OpenAPISpec,
+  visit: (schema: SchemaObject, refName?: string) => boolean | void,
   visited = new Set<string>()
 ): boolean {
+  let refName: string | undefined;
+  let resolved: SchemaObject | undefined;
+
   if (isReference(schema)) {
-    const refName = getRefName(schema.$ref);
-    if (visited.has(refName)) return false;
+    refName = getRefName(schema.$ref);
+    if (visited.has(refName)) return true;
     visited.add(refName);
-    
-    const resolved = spec.components?.schemas?.[refName];
-    if (!resolved) return false;
-    return hasPrivateProperties(resolved, spec, visited);
+    resolved = spec.components?.schemas?.[refName];
+    if (!resolved) return true;
+  } else {
+    resolved = schema;
   }
 
-  // Check if schema itself is private
-  if (schema['x-private']) return true;
+  if (visit(resolved, refName) === false) return false;
 
-  // Check properties
-  if (schema.properties) {
-    for (const propSchema of Object.values(schema.properties)) {
-      if (hasPrivateProperties(propSchema, spec, visited)) return true;
+  if (resolved.properties) {
+    for (const propSchema of Object.values(resolved.properties)) {
+      if (!walkSchemaGraph(propSchema, spec, visit, visited)) return false;
     }
   }
 
-  // Check array items
-  if (schema.items) {
-    if (hasPrivateProperties(schema.items, spec, visited)) return true;
+  if (resolved.items) {
+    if (!walkSchemaGraph(resolved.items, spec, visit, visited)) return false;
   }
 
-  // Check allOf/oneOf/anyOf
-  for (const composite of [schema.allOf, schema.oneOf, schema.anyOf]) {
+  if (resolved.additionalProperties && typeof resolved.additionalProperties !== 'boolean') {
+    if (!walkSchemaGraph(resolved.additionalProperties, spec, visit, visited)) return false;
+  }
+
+  for (const composite of [resolved.allOf, resolved.oneOf, resolved.anyOf]) {
     if (composite) {
-      for (const s of composite) {
-        if (hasPrivateProperties(s, spec, visited)) return true;
+      for (const member of composite) {
+        if (!walkSchemaGraph(member, spec, visit, visited)) return false;
       }
     }
   }
 
-  return false;
+  return true;
+}
+
+// Check if a schema contains x-private properties
+export function hasPrivateProperties(
+  schema: SchemaObject | ReferenceObject,
+  spec: OpenAPISpec
+): boolean {
+  let found = false;
+  walkSchemaGraph(schema, spec, (node) => {
+    if (node['x-private']) {
+      found = true;
+      return false;
+    }
+  });
+  return found;
 }
 
 // Collect all schemas referenced by a schema
@@ -1032,39 +1065,8 @@ export function collectReferencedSchemas(
   spec: OpenAPISpec,
   result = new Set<string>()
 ): Set<string> {
-  if (isReference(schema)) {
-    const refName = getRefName(schema.$ref);
-    if (result.has(refName)) return result;
-    result.add(refName);
-    
-    const resolved = spec.components?.schemas?.[refName];
-    if (resolved) {
-      collectReferencedSchemas(resolved, spec, result);
-    }
-    return result;
-  }
-
-  if (schema.properties) {
-    for (const propSchema of Object.values(schema.properties)) {
-      collectReferencedSchemas(propSchema, spec, result);
-    }
-  }
-
-  if (schema.items) {
-    collectReferencedSchemas(schema.items, spec, result);
-  }
-
-  for (const composite of [schema.allOf, schema.oneOf, schema.anyOf]) {
-    if (composite) {
-      for (const s of composite) {
-        collectReferencedSchemas(s, spec, result);
-      }
-    }
-  }
-
-  if (schema.additionalProperties && typeof schema.additionalProperties !== 'boolean') {
-    collectReferencedSchemas(schema.additionalProperties, spec, result);
-  }
-
+  walkSchemaGraph(schema, spec, (_node, refName) => {
+    if (refName) result.add(refName);
+  });
   return result;
 }
