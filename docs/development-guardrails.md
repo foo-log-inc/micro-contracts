@@ -196,7 +196,7 @@ Ensures generated code matches spec and hasn't been tampered.
 
 | Check | Type | Description | Local Command | CI Job |
 |-------|------|-------------|---------------|--------|
-| Drift | built-in | `git diff packages/` must be clean | `micro-contracts check --only drift` | `drift` |
+| Drift | built-in | `packages/**` must match the commit (staged, unstaged and untracked all count) | `micro-contracts check --only drift` | `drift` |
 | Manifest | built-in | SHA-256 hash verification | `micro-contracts check --only manifest` | `manifest` |
 | Package typecheck | custom | Generated packages compile (`tsc`) | `micro-contracts check --only package-typecheck` | `package-typecheck` |
 | Project rules | custom | Project-specific Spectral rules on **generated** spec | `micro-contracts check --only spec-project` | `spec-project` |
@@ -206,8 +206,11 @@ Ensures generated code matches spec and hasn't been tampered.
 
 **Drift check** — After running `generate`, `packages/**` must match committed state:
 ```bash
-git diff --exit-code packages/
+git diff --exit-code HEAD -- packages/ && git ls-files --others --exclude-standard packages/
 ```
+Comparing against `HEAD` rather than the index matters: a pre-commit run stages
+its changes first, and comparing the worktree to the index would report a
+hand-edited generated file as clean.
 
 **Manifest verification** — `packages/.generated-manifest.json` stores:
 - SHA-256 hashes of all generated files

@@ -46,7 +46,6 @@ export {
 
 // Drift
 export {
-  checkDrift,
   checkUncommittedChanges,
   runDriftCheck,
   formatDriftResult,

@@ -8,52 +8,27 @@ import { execSync } from 'child_process';
 import type { DriftResult, CheckResult, CheckOptions } from './types.js';
 
 /**
- * Check for drift in generated files
- */
-export function checkDrift(generatedDir: string = 'packages/'): DriftResult {
-  try {
-    // Run git diff on the generated directory
-    const output = execSync(`git diff --name-only "${generatedDir}"`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    
-    const changedFiles = output.trim().split('\n').filter(Boolean);
-    
-    return {
-      valid: changedFiles.length === 0,
-      changedFiles,
-    };
-  } catch (error) {
-    // Git command failed
-    return {
-      valid: false,
-      changedFiles: [],
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
  * Check for uncommitted changes (including untracked files)
  */
 export function checkUncommittedChanges(generatedDir: string = 'packages/'): DriftResult {
   try {
-    // Check for modified files
-    const modifiedOutput = execSync(`git diff --name-only "${generatedDir}"`, {
+    // Against HEAD, not the index: `git diff <dir>` compares the worktree to the
+    // index, so staging a hand-edited generated file hides it — which is exactly
+    // what a pre-commit run does before invoking this check.
+    const modifiedOutput = execSync(`git diff --name-only HEAD -- "${generatedDir}"`, {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    
+
     // Check for untracked files
     const untrackedOutput = execSync(`git ls-files --others --exclude-standard "${generatedDir}"`, {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    
+
     const modifiedFiles = modifiedOutput.trim().split('\n').filter(Boolean);
     const untrackedFiles = untrackedOutput.trim().split('\n').filter(Boolean);
-    const allChangedFiles = [...modifiedFiles, ...untrackedFiles];
+    const allChangedFiles = [...new Set([...modifiedFiles, ...untrackedFiles])];
     
     return {
       valid: allChangedFiles.length === 0,
