@@ -209,9 +209,12 @@ project/
 | `x-micro-contracts-depend-on` | string[] | Explicit dependencies on other modules' published APIs |
 | `x-private` | boolean | Schema-level. A published endpoint that can reach it fails linting (`PUBLIC_ENDPOINT_PRIVATE_RESPONSE`) |
 
-"Can reach it" covers every way one schema refers to another: properties, array
-items, `additionalProperties`, `allOf`/`oneOf`/`anyOf`, and `$ref` targets — the
-same traversal that decides what `contract-published` contains.
+"Can reach it" covers every way one schema refers to another (properties, array
+items, `additionalProperties`, `allOf`/`oneOf`/`anyOf`, `$ref` targets) and every
+part of an operation that reaches a schema: request bodies, parameters and
+responses of any status code, including through `components.requestBodies`,
+`components.parameters` and `components.responses`. `contract-published` contains
+exactly what that same reachability finds, so nothing can ship unchecked.
 
 ### Screen Spec Extensions
 

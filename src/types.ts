@@ -1059,6 +1059,67 @@ export function hasPrivateProperties(
   return found;
 }
 
+/** Component sections a $ref can point into. */
+export type ComponentSection = 'schemas' | 'responses' | 'parameters' | 'requestBodies';
+
+const COMPONENT_SECTIONS: ComponentSection[] = ['schemas', 'responses', 'parameters', 'requestBodies'];
+
+/**
+ * Every component reachable from `root`, as "<section>/<name>".
+ *
+ * Walks arbitrary spec JSON, following $ref across component sections and
+ * expanding each referenced component in turn: a response pulls in its schema,
+ * a requestBody pulls in its schema, and so on.
+ *
+ * The single answer to "what does this reach". Filtering the published contract
+ * and checking it for private data both consume it, so a component cannot be
+ * copied into the public surface while being invisible to the checks — which is
+ * how a private schema behind an error response and behind a $ref requestBody
+ * reached contract-published.
+ */
+export function collectReachableComponents(
+  root: unknown,
+  spec: OpenAPISpec,
+  reached = new Set<string>()
+): Set<string> {
+  const pending: unknown[] = [root];
+
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (!node || typeof node !== 'object') continue;
+
+    if (Array.isArray(node)) {
+      pending.push(...node);
+      continue;
+    }
+
+    const record = node as Record<string, unknown>;
+
+    if (typeof record.$ref === 'string') {
+      const parsed = parseComponentRef(record.$ref);
+      if (parsed && !reached.has(`${parsed.section}/${parsed.name}`)) {
+        reached.add(`${parsed.section}/${parsed.name}`);
+        const target = (spec.components as Record<string, Record<string, unknown>> | undefined)
+          ?.[parsed.section]?.[parsed.name];
+        if (target) pending.push(target);
+      }
+    }
+
+    pending.push(...Object.values(record));
+  }
+
+  return reached;
+}
+
+/** Parse "#/components/<section>/<name>" into its parts. */
+export function parseComponentRef(ref: string): { section: ComponentSection; name: string } | null {
+  const match = ref.match(/^#\/components\/([^/]+)\/(.+)$/);
+  if (!match) return null;
+  const section = match[1] as ComponentSection;
+  if (!COMPONENT_SECTIONS.includes(section)) return null;
+  return { section, name: match[2] };
+}
+
 // Collect all schemas referenced by a schema
 export function collectReferencedSchemas(
   schema: SchemaObject | ReferenceObject,

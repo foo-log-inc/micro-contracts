@@ -7,6 +7,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import type {
   OpenAPISpec,
+  OperationObject,
   GeneratorConfig,
   MultiModuleConfig,
   ResolvedModuleConfig,
@@ -34,7 +35,7 @@ import {
 } from './templateProcessor.js';
 import { validateDependsOn } from './dependencyGenerator.js';
 import { matchGlob } from '../glob.js';
-import { extractDependencies, expandPlaceholders, collectReferencedSchemas } from '../types.js';
+import { extractDependencies, expandPlaceholders, collectReachableComponents } from '../types.js';
 
 export { generateTypes } from './typeGenerator.js';
 export { generateSchemas } from './schemaGenerator.js';
@@ -751,120 +752,73 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
     ...spec,
     paths: {},
     tags: [],
-    components: {
-      schemas: {},
-      responses: spec.components?.responses,
-      parameters: spec.components?.parameters,
-      requestBodies: spec.components?.requestBodies,
-    },
+    components: {},
   };
-  
-  // Collect all referenced schemas and tags from public endpoints
-  const usedSchemas = new Set<string>();
+
+  const publicOperations: OperationObject[] = [];
   const usedTags = new Set<string>();
-  
+
   // Filter paths to only include x-micro-contracts-published: true
   for (const [pathKey, pathItem] of Object.entries(spec.paths)) {
     const filteredPathItem: typeof pathItem = {};
     let hasPublicOperation = false;
-    
+
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[method];
       if (operation?.['x-micro-contracts-published'] === true) {
         filteredPathItem[method] = operation;
         hasPublicOperation = true;
-        
-        // Collect schema references from this operation
-        collectSchemaRefs(operation, usedSchemas);
-        
-        // Collect tags from this operation
-        if (operation.tags) {
-          for (const tag of operation.tags) {
-            usedTags.add(tag);
-          }
+        publicOperations.push(operation);
+
+        for (const tag of operation.tags ?? []) {
+          usedTags.add(tag);
         }
       }
     }
-    
+
     if (hasPublicOperation) {
       filtered.paths[pathKey] = filteredPathItem;
     }
   }
-  
-  // Recursively resolve schema references
-  const allUsedSchemas = resolveSchemaRefsRecursively(spec, usedSchemas);
-  
-  // Filter schemas to only include used ones
-  if (spec.components?.schemas) {
-    for (const [schemaName, schema] of Object.entries(spec.components.schemas)) {
-      if (allUsedSchemas.has(schemaName)) {
-        filtered.components!.schemas![schemaName] = schema;
-      }
+
+  // Keep exactly the components the public operations reach, in every section.
+  // Copying a section wholesale left components that only private endpoints
+  // used, referring to schemas this filter had dropped: a dangling $ref.
+  const reachable = collectReachableComponents(publicOperations, spec);
+  const sourceComponents = spec.components as Record<string, Record<string, unknown>> | undefined;
+  const targetComponents = filtered.components as Record<string, Record<string, unknown>>;
+
+  // Iterate the spec's own order, not the traversal order, so the published
+  // document keeps the declaration order of its source.
+  for (const [section, entries] of Object.entries(sourceComponents ?? {})) {
+    if (!entries || typeof entries !== 'object') continue;
+
+    for (const [name, component] of Object.entries(entries)) {
+      if (!reachable.has(`${section}/${name}`)) continue;
+      targetComponents[section] = targetComponents[section] ?? {};
+      targetComponents[section][name] = component;
     }
   }
-  
+
   // Filter tags to only include used ones
   if (spec.tags) {
     filtered.tags = spec.tags.filter(tag => usedTags.has(tag.name));
   }
-  
-  // Clean up empty components
-  if (Object.keys(filtered.components?.schemas || {}).length === 0) {
-    delete filtered.components?.schemas;
+
+  // Clean up empty sections
+  for (const [section, entries] of Object.entries(filtered.components ?? {})) {
+    if (entries && typeof entries === 'object' && Object.keys(entries).length === 0) {
+      delete (filtered.components as Record<string, unknown>)[section];
+    }
   }
-  
-  // Clean up empty tags
+  if (Object.keys(filtered.components ?? {}).length === 0) {
+    delete filtered.components;
+  }
+
   if (filtered.tags?.length === 0) {
     delete filtered.tags;
   }
-  
+
   return filtered;
 }
 
-/**
- * Collect $ref references from an operation
- */
-function collectSchemaRefs(obj: unknown, refs: Set<string>): void {
-  if (!obj || typeof obj !== 'object') return;
-  
-  if (Array.isArray(obj)) {
-    for (const item of obj) {
-      collectSchemaRefs(item, refs);
-    }
-    return;
-  }
-  
-  const record = obj as Record<string, unknown>;
-  
-  // Check for $ref
-  if (typeof record['$ref'] === 'string') {
-    const ref = record['$ref'];
-    const match = ref.match(/#\/components\/schemas\/(.+)/);
-    if (match) {
-      refs.add(match[1]);
-    }
-  }
-  
-  // Recurse into nested objects
-  for (const value of Object.values(record)) {
-    collectSchemaRefs(value, refs);
-  }
-}
-
-/**
- * Recursively resolve schema references (schemas can reference other schemas)
- */
-function resolveSchemaRefsRecursively(spec: OpenAPISpec, initialRefs: Set<string>): Set<string> {
-  // Uses the shared schema-graph walk, so what lands in the published contract
-  // is exactly what the x-private check sees.
-  const allRefs = new Set<string>(initialRefs);
-
-  for (const schemaName of initialRefs) {
-    const schema = spec.components?.schemas?.[schemaName];
-    if (schema) {
-      collectReferencedSchemas(schema, spec, allRefs);
-    }
-  }
-
-  return allRefs;
-}

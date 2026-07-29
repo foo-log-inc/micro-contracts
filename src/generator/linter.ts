@@ -11,7 +11,7 @@ import type {
   LintError,
   ResponseObject,
 } from '../types.js';
-import { isReference, getRefName, hasPrivateProperties, collectReferencedSchemas, isTsIdentifier } from '../types.js';
+import { isReference, getRefName, hasPrivateProperties, collectReferencedSchemas, collectReachableComponents, isTsIdentifier } from '../types.js';
 
 export interface LintOptions {
   /** Treat warnings as errors */
@@ -261,52 +261,83 @@ function checkPublicEndpointForPrivate(
 ): LintError[] {
   const errors: LintError[] = [];
   const location = `${method.toUpperCase()} ${path}`;
-  
-  // Check request body
-  if (operation.requestBody && !isReference(operation.requestBody)) {
-    const content = operation.requestBody.content?.['application/json'];
-    if (content?.schema) {
-      if (hasPrivateProperties(content.schema, spec)) {
-        const schemaRef = isReference(content.schema) 
-          ? getRefName(content.schema.$ref) 
-          : 'inline schema';
-        errors.push({
-          type: 'error',
-          code: 'PUBLIC_ENDPOINT_PRIVATE_REQUEST',
-          message: `Public endpoint references request schema "${schemaRef}" with x-private properties`,
-          path,
-          location,
-        });
-      }
+
+  // Every part of the operation that reaches a schema is checked, through
+  // $ref into any component section, and for every status code: whatever the
+  // published contract pulls in must be visible here.
+  const sections: Array<{ code: string; label: string; root: unknown }> = [
+    { code: 'PUBLIC_ENDPOINT_PRIVATE_REQUEST', label: 'request', root: operation.requestBody },
+    { code: 'PUBLIC_ENDPOINT_PRIVATE_RESPONSE', label: 'response', root: operation.responses },
+    { code: 'PUBLIC_ENDPOINT_PRIVATE_PARAMETER', label: 'parameter', root: operation.parameters },
+  ];
+
+  for (const section of sections) {
+    if (!section.root) continue;
+
+    for (const schemaRef of findPrivateSchemas(section.root, spec)) {
+      errors.push({
+        type: 'error',
+        code: section.code,
+        message: `Public endpoint references ${section.label} schema "${schemaRef}" with x-private properties`,
+        path,
+        location,
+      });
     }
   }
-  
-  // Check responses
-  for (const [statusCode, response] of Object.entries(operation.responses)) {
-    if (!statusCode.startsWith('2')) continue; // Only check success responses
-    
-    const resp = isReference(response)
-      ? spec.components?.responses?.[getRefName(response.$ref)]
-      : response;
-    
-    if (resp?.content?.['application/json']?.schema) {
-      const schema = resp.content['application/json'].schema;
-      if (hasPrivateProperties(schema, spec)) {
-        const schemaRef = isReference(schema) 
-          ? getRefName(schema.$ref) 
-          : 'inline schema';
-        errors.push({
-          type: 'error',
-          code: 'PUBLIC_ENDPOINT_PRIVATE_RESPONSE',
-          message: `Public endpoint references response schema "${schemaRef}" with x-private properties`,
-          path,
-          location,
-        });
-      }
-    }
-  }
-  
+
   return errors;
+}
+
+/**
+ * Names of private schemas reachable from `root` (part of an operation).
+ *
+ * Inline schemas are reported as "inline schema"; named ones by component name.
+ */
+function findPrivateSchemas(root: unknown, spec: OpenAPISpec): string[] {
+  const found: string[] = [];
+
+  // Named components reachable from here, including across responses,
+  // requestBodies and parameters.
+  for (const pointer of collectReachableComponents(root, spec)) {
+    const [section, name] = [pointer.slice(0, pointer.indexOf('/')), pointer.slice(pointer.indexOf('/') + 1)];
+    if (section !== 'schemas') continue;
+    const schema = spec.components?.schemas?.[name];
+    if (schema && hasPrivateProperties(schema, spec)) {
+      found.push(name);
+    }
+  }
+
+  // Inline schemas: reachable but unnamed, so they carry no component pointer.
+  for (const schema of collectInlineSchemas(root)) {
+    if (hasPrivateProperties(schema, spec)) {
+      found.push('inline schema');
+    }
+  }
+
+  return [...new Set(found)];
+}
+
+/** Inline (non-$ref) values of `schema` keys anywhere under `root`. */
+function collectInlineSchemas(root: unknown): SchemaObject[] {
+  const schemas: SchemaObject[] = [];
+  const pending: unknown[] = [root];
+
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (Array.isArray(node)) {
+      pending.push(...node);
+      continue;
+    }
+    const record = node as Record<string, unknown>;
+    const schema = record.schema;
+    if (schema && typeof schema === 'object' && !isReference(schema)) {
+      schemas.push(schema as SchemaObject);
+    }
+    pending.push(...Object.values(record));
+  }
+
+  return schemas;
 }
 
 /**
