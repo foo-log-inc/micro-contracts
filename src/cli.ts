@@ -667,8 +667,11 @@ const handlers: CommandHandlers = {
 
         const openapiPath = path.resolve(path.dirname(configPath), moduleConfig.openapi);
         if (!fs.existsSync(openapiPath)) {
-          console.warn(`Warning: OpenAPI spec not found: ${openapiPath}`);
-          continue;
+          // Skipping the module would present a dependency graph, impact
+          // analysis or validation result that silently omits it.
+          // Skipping the module would present a dependency graph, impact
+          // analysis or validation result that silently omits it.
+          throw new Error(`OpenAPI spec not found for module '${moduleName}': ${openapiPath}`);
         }
 
         const spec = loadOpenAPISpec(openapiPath);

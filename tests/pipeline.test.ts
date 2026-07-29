@@ -108,6 +108,25 @@ generated:
   }
   
   describe.skipIf(!isBuilt)('CLI integration tests', () => {
+    it('deps fails instead of reporting an incomplete graph', () => {
+      // A module whose spec is missing would silently drop out of the graph,
+      // impact analysis and validation output.
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        [
+          'modules:',
+          '  core:',
+          '    openapi: spec/core/openapi/does-not-exist.yaml',
+          '',
+        ].join('\n'),
+      );
+
+      const { stdout, exitCode } = runCli('deps --graph');
+
+      expect(exitCode).toBe(1);
+      expect(stdout).toMatch(/OpenAPI spec not found for module 'core'/);
+    });
+
     it('should show help for pipeline command', () => {
       const { stdout, exitCode } = runCli('pipeline --help');
       
