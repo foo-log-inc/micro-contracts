@@ -11,7 +11,7 @@ import type {
   LintError,
   ResponseObject,
 } from '../types.js';
-import { isReference, getRefName, hasPrivateProperties, collectReferencedSchemas } from '../types.js';
+import { isReference, getRefName, hasPrivateProperties, collectReferencedSchemas, isTsIdentifier } from '../types.js';
 
 export interface LintOptions {
   /** Treat warnings as errors */
@@ -41,23 +41,44 @@ export function lintSpec(spec: OpenAPISpec, options: LintOptions = {}): LintResu
       
       const location = `${method.toUpperCase()} ${path}`;
       
-      // In screen mode, skip x-micro-contracts-service/method warnings
+      // Routes, service interfaces and template contexts are all keyed by these
+      // extensions: an operation without them is dropped from every artifact.
+      // In screen mode operations are consumed via ScreenContext instead.
       if (!options.screen) {
-        if (!operation['x-micro-contracts-service']) {
-          warnings.push({
-            type: 'warning',
+        const service = operation['x-micro-contracts-service'];
+        const serviceMethod = operation['x-micro-contracts-method'];
+
+        if (!service) {
+          errors.push({
+            type: 'error',
             code: 'MISSING_X_SERVICE',
-            message: `Missing x-micro-contracts-service extension`,
+            message: `Missing x-micro-contracts-service extension (operation would be dropped from routes and services)`,
+            path,
+            location,
+          });
+        } else if (!isTsIdentifier(service)) {
+          errors.push({
+            type: 'error',
+            code: 'INVALID_X_SERVICE',
+            message: `x-micro-contracts-service '${service}' is not a valid TypeScript identifier (used verbatim in generated type and interface names)`,
             path,
             location,
           });
         }
-        
-        if (!operation['x-micro-contracts-method']) {
-          warnings.push({
-            type: 'warning',
+
+        if (!serviceMethod) {
+          errors.push({
+            type: 'error',
             code: 'MISSING_X_METHOD',
-            message: `Missing x-micro-contracts-method extension`,
+            message: `Missing x-micro-contracts-method extension (operation would be dropped from routes and services)`,
+            path,
+            location,
+          });
+        } else if (!isTsIdentifier(serviceMethod)) {
+          errors.push({
+            type: 'error',
+            code: 'INVALID_X_METHOD',
+            message: `x-micro-contracts-method '${serviceMethod}' is not a valid TypeScript identifier (used verbatim in generated method and type names)`,
             path,
             location,
           });

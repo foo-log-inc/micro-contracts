@@ -120,6 +120,41 @@ describe('OpenAPI 3.1 type array nullable syntax', () => {
     expect(iface).not.toContain('unknown');
   });
 
+  it('quotes property names that are not valid identifiers', () => {
+    const spec = minimalSpec({
+      Setting: {
+        type: 'object',
+        description: 'app settings',
+        properties: {
+          '{any}': { type: 'string', description: 'free-form key' },
+          'kebab-case': { type: 'number' },
+          "it's": { type: 'string' },
+          plain: { type: 'string' },
+        },
+      },
+    });
+    const iface = extractInterface(generateTypes(spec), 'Setting');
+    expect(iface).toContain("'{any}'?: string;");
+    expect(iface).toContain("'kebab-case'?: number;");
+    expect(iface).toContain("'it\\'s'?: string;");
+    expect(iface).toContain('plain?: string;');
+  });
+
+  it('quotes non-identifier property names in inline object types', () => {
+    const spec = minimalSpec({
+      Wrapper: {
+        type: 'object',
+        properties: {
+          nested: {
+            type: 'object',
+            properties: { 'x-header': { type: 'string' } },
+          },
+        },
+      },
+    });
+    expect(generateTypes(spec)).toContain("'x-header'?: string");
+  });
+
   it('generates top-level type alias with nullable type array', () => {
     const spec = minimalSpec({
       NullableString: {

@@ -177,12 +177,9 @@ export async function registerRoutes(fastify: FastifyInstance, services: any) {
         defaults: {
           contract: { output: path.join(tmpDir, 'packages/contract/{module}') },
           contractPublic: { output: path.join(tmpDir, 'packages/contract-published/{module}') },
-          server: { 
-            output: path.join(tmpDir, 'server/src/{module}'),
-            routes: 'routes.generated.ts',
-          },
-          templates: {
-            server: templatePath,
+          server: {
+            output: path.join(tmpDir, 'server/src/{module}/routes.generated.ts'),
+            template: templatePath,
           },
         },
         modules: {
@@ -260,11 +257,9 @@ export function getUsers() { return userServiceApi.getUsers(); }
           contractPublic: { output: path.join(tmpDir, 'packages/contract-published/{module}') },
           frontend: {
             output: path.join(tmpDir, 'frontend/src/{module}'),
+            template: templatePath,
             client: 'api.generated.ts',
             service: 'service.generated.ts',
-          },
-          templates: {
-            frontend: templatePath,
           },
         },
         modules: {
@@ -521,17 +516,14 @@ components:
           contract: { output: path.join(tmpDir, 'packages/contract/{module}') },
           contractPublic: { output: path.join(tmpDir, 'packages/contract-published/{module}') },
           server: {
-            output: path.join(tmpDir, 'server/src/{module}'),
-            routes: 'routes.generated.ts',
+            output: path.join(tmpDir, 'server/src/{module}/routes.generated.ts'),
+            template: serverTemplatePath,
           },
           frontend: {
             output: path.join(tmpDir, 'frontend/src/{module}'),
+            template: frontendTemplatePath,
             client: 'api.generated.ts',
             service: 'service.generated.ts',
-          },
-          templates: {
-            server: serverTemplatePath,
-            frontend: frontendTemplatePath,
           },
         },
         modules: {
@@ -797,6 +789,132 @@ export interface {{interfaceName}} {
       expect(content).toContain('cache=true');
       expect(content).toContain('timeout=5000');
       expect(content).toContain('params=1');
+    });
+  });
+
+  describe('built-in server generation', () => {
+    /** Spec + template + config as reported in issue #48. */
+    function setupServerModule(serverOverrides: Record<string, unknown> = {}): MultiModuleConfig {
+      const specPath = path.join(tmpDir, 'bff.openapi.json');
+      fs.writeFileSync(specPath, JSON.stringify({
+        openapi: '3.0.0',
+        info: { title: 'BFF', version: '1.0.0' },
+        paths: {
+          '/settings': {
+            get: {
+              operationId: 'getSettings',
+              'x-micro-contracts-service': 'Setting',
+              'x-micro-contracts-method': 'list',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+        components: { schemas: {} },
+      }));
+
+      const templatePath = path.join(tmpDir, 'route-manifest.hbs');
+      fs.writeFileSync(templatePath, 'routes: {{routes.length}}\n');
+
+      return {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'contracts/{module}') },
+          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+        },
+        modules: {
+          bff: {
+            openapi: specPath,
+            server: {
+              template: templatePath,
+              output: path.join(tmpDir, 'contracts/bff/server/routes.generated.ts'),
+              ...serverOverrides,
+            },
+          },
+        },
+      };
+    }
+
+    it('honors a module-level server.template and writes output as a file', async () => {
+      const config = setupServerModule();
+
+      await generate(config, { serverOnly: true });
+
+      const routesPath = path.join(tmpDir, 'contracts/bff/server/routes.generated.ts');
+      expect(fs.statSync(routesPath).isFile()).toBe(true);
+      expect(fs.readFileSync(routesPath, 'utf-8')).toContain('routes: 1');
+    });
+
+    it('regenerates over an existing output file', async () => {
+      const config = setupServerModule();
+
+      await generate(config, { serverOnly: true });
+      await generate(config, { serverOnly: true });
+
+      const routesPath = path.join(tmpDir, 'contracts/bff/server/routes.generated.ts');
+      expect(fs.readFileSync(routesPath, 'utf-8')).toContain('routes: 1');
+    });
+
+    it('leaves no directory behind when the template is missing', async () => {
+      const config = setupServerModule({ template: undefined });
+
+      await expect(generate(config, { serverOnly: true })).rejects.toThrow(/Server template is required/);
+
+      expect(fs.existsSync(path.join(tmpDir, 'contracts/bff/server/routes.generated.ts'))).toBe(false);
+    });
+
+    it('does not require a frontend template when only server is declared', async () => {
+      const config = setupServerModule();
+
+      await expect(generate(config)).resolves.toBeUndefined();
+      expect(fs.existsSync(path.join(tmpDir, 'frontend'))).toBe(false);
+    });
+  });
+
+  describe('deps/ re-exports', () => {
+    it('writes deps files under the configured contract output', async () => {
+      const write = (name: string, service: string) => {
+        const specPath = path.join(tmpDir, `${name}.yaml`);
+        fs.writeFileSync(specPath, `
+openapi: 3.0.3
+info:
+  title: ${name}
+  version: 1.0.0
+  x-micro-contracts-depend-on:
+${name === 'billing' ? '    - core.User.getUsers' : '    []'}
+paths:
+  /${name}:
+    get:
+      operationId: get${service}
+      x-micro-contracts-service: ${service}
+      x-micro-contracts-method: getUsers
+      responses:
+        '200':
+          description: Success
+components:
+  schemas: {}
+`);
+        return specPath;
+      };
+
+      const config: MultiModuleConfig = {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'contracts/{module}') },
+          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+        },
+        modules: {
+          core: { openapi: write('core', 'User') },
+          billing: { openapi: write('billing', 'Invoice') },
+        },
+      };
+
+      await generate(config, { contractsOnly: true });
+
+      const depsFile = path.join(tmpDir, 'contracts/billing/deps/core.ts');
+      expect(fs.existsSync(depsFile)).toBe(true);
+      // Import must reach the configured contract-published directory.
+      const importPath = fs.readFileSync(depsFile, 'utf-8').match(/from '(.+)\/schemas\/types\.js'/)?.[1];
+      expect(importPath).toBeDefined();
+      expect(path.resolve(path.dirname(depsFile), importPath!))
+        .toBe(path.resolve(path.join(tmpDir, 'contracts-published/core')));
     });
   });
 });

@@ -336,7 +336,7 @@ generated:
 # Gate 5: Doc Consistency & Static Analysis
 #   - docs-sync: Markdown Sync (embedoc)
 #   - docs-links: Links Valid
-#   - security (built-in): CodeQL static analysis
+#   Note: CodeQL runs as a separate CI job (see .github/workflows/)
 #
 # Placeholders:
 #   {files} - space-separated list of target files (auto-detected)
@@ -571,6 +571,7 @@ jobs:
 ```json
   "scripts": {
     "generate": "node ../dist/cli.js generate",
+    "pipeline": "node ../dist/cli.js pipeline",
     
     "check": "node ../dist/cli.js check",
     "check:all": "node ../dist/cli.js check",
@@ -608,7 +609,6 @@ jobs:
     "server:install": "cd server && npm install",
     "frontend:install": "cd frontend && npm install",
     "server:dev": "cd server && PORT=3001 npm run dev",
-    "frontend:dev": "cd frontend && VITE_API_BASE_URL=http://localhost:3001 npm run dev -- --port 5173",
 ```
 
 📄 Source: [`package.json`](../examples/package.json) (lines 7-46)

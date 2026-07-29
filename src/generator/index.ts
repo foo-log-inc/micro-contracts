@@ -5,15 +5,17 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import type { 
-  OpenAPISpec, 
-  GeneratorConfig, 
-  MultiModuleConfig, 
+import type {
+  OpenAPISpec,
+  GeneratorConfig,
+  MultiModuleConfig,
   ResolvedModuleConfig,
+  DependencyRef,
 } from '../types.js';
-import { 
-  isMultiModuleConfig, 
+import {
+  isMultiModuleConfig,
   resolveModuleConfig,
+  validateConfigKeys,
 } from '../types.js';
 import { generateTypes } from './typeGenerator.js';
 import { generateSchemas } from './schemaGenerator.js';
@@ -32,11 +34,7 @@ import {
   loadTemplate,
   resolveTemplatePath,
 } from './templateProcessor.js';
-import {
-  generateDepsFiles,
-  writeDepsFiles,
-  validateDependsOn,
-} from './dependencyGenerator.js';
+import { validateDependsOn } from './dependencyGenerator.js';
 import { extractDependencies, expandPlaceholders } from '../types.js';
 
 export { generateTypes } from './typeGenerator.js';
@@ -62,6 +60,9 @@ function writeFileIfChanged(filePath: string, newContent: string): boolean {
       return false; // No change, skip writing
     }
   }
+  // Creating the parent directory belongs to the write itself: no caller may
+  // mkdir an output path, or a file path ends up existing as a directory.
+  fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
   fs.writeFileSync(absolutePath, newContent);
   return true;
 }
@@ -113,7 +114,11 @@ export function loadOpenAPISpec(filePath: string): OpenAPISpec {
  */
 export function loadConfig(configPath: string): MultiModuleConfig | GeneratorConfig {
   const content = fs.readFileSync(configPath, 'utf-8');
-  return yaml.load(content) as MultiModuleConfig | GeneratorConfig;
+  const config = yaml.load(content) as MultiModuleConfig | GeneratorConfig;
+  if (isMultiModuleConfig(config)) {
+    validateConfigKeys(config);
+  }
+  return config;
 }
 
 /**
@@ -171,17 +176,24 @@ async function generateMultiModule(
   }
   
   console.log(`Generating for modules: ${targetModules.join(', ')}`);
-  
+
+  // Resolve every declared module, not just the targeted ones: cross-module
+  // deps/ re-exports need the output directories of their dependency targets.
+  const resolvedModules = new Map<string, ResolvedModuleConfig>();
+  for (const moduleName of moduleNames) {
+    resolvedModules.set(
+      moduleName,
+      resolveModuleConfig(moduleName, config.modules[moduleName], config.defaults)
+    );
+  }
+
   // Generate each module
   for (const moduleName of targetModules) {
-    const moduleConfig = config.modules[moduleName];
-    const resolved = resolveModuleConfig(moduleName, moduleConfig, config.defaults);
-    
     console.log(`\n${'='.repeat(60)}`);
     console.log(`Module: ${moduleName}`);
     console.log(`${'='.repeat(60)}`);
-    
-    await generateModule(resolved, options);
+
+    await generateModule(resolvedModules.get(moduleName)!, options, resolvedModules);
   }
   
   console.log('\nGeneration complete!');
@@ -192,7 +204,8 @@ async function generateMultiModule(
  */
 async function generateModule(
   config: ResolvedModuleConfig,
-  options: GenerateOptions
+  options: GenerateOptions,
+  resolvedModules: Map<string, ResolvedModuleConfig>
 ): Promise<void> {
   // Load OpenAPI spec
   const openapiPath = path.resolve(config.openapi);
@@ -265,7 +278,7 @@ async function generateModule(
     
     // Generate deps/ re-exports if module has dependencies
     if (dependencies.allDeps.length > 0) {
-      await generateDepsReExports(config, dependencies);
+      await generateDepsReExports(config, dependencies, resolvedModules);
     }
   }
 
@@ -321,20 +334,7 @@ async function generateContractPackage(
   
   // For public contract, use filtered spec
   const targetSpec = publicOnly ? filterPublicSpec(spec) : spec;
-  
-  // Create directories
-  const dirs = [
-    outputDir,
-    path.join(outputDir, 'services'),
-    path.join(outputDir, 'schemas'),
-    path.join(outputDir, 'errors'),
-    path.join(outputDir, 'docs'),
-  ];
-  
-  for (const dir of dirs) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  
+
   // Note: We no longer delete files before generating to enable change detection.
   // Orphaned files from removed services/schemas should be manually cleaned up.
   
@@ -383,8 +383,6 @@ export { allSchemas } from './validators.js';
   if (overlayResult && overlayResult.extensionInfo.size > 0 && !publicOnly) {
     console.log(`  Generating overlay interfaces...`);
     const overlaysDir = path.join(outputDir, 'overlays');
-    fs.mkdirSync(overlaysDir, { recursive: true });
-    
     const overlayContent = generateExtensionInterfaces(overlayResult.extensionInfo);
     const overlayPath = path.join(overlaysDir, 'index.ts');
     writeAndLog(overlayPath, overlayContent);
@@ -505,13 +503,7 @@ async function generateFromOutputs(
       const template = loadTemplate(templatePath);
       
       const content = template(extendedContext);
-      
-      // Ensure output directory exists
-      const outputDir = path.dirname(output.output);
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
-      
+
       // Write output file (only if content changed)
       writeAndLog(output.output, content);
       
@@ -526,106 +518,70 @@ async function generateFromOutputs(
  */
 async function generateDepsReExports(
   config: ResolvedModuleConfig,
-  dependencies: ReturnType<typeof extractDependencies>
+  dependencies: ReturnType<typeof extractDependencies>,
+  resolvedModules: Map<string, ResolvedModuleConfig>
 ): Promise<void> {
   if (dependencies.allDeps.length === 0) {
     console.log(`\n  No dependencies declared, skipping deps/ generation`);
     return;
   }
-  
-  console.log(`\nGenerating deps/ re-exports...`);
-  
-  // Build contract-published paths map
-  const contractPublicPaths = new Map<string, string>();
-  
-  // Group deps by module
-  const moduleNames = new Set<string>();
-  for (const dep of dependencies.allDeps) {
-    moduleNames.add(dep.module);
-  }
-  
-  for (const moduleName of moduleNames) {
-    // Assume contract-published follows same pattern as config
-    contractPublicPaths.set(moduleName, `@project/contract-published/${moduleName}`);
-  }
-  
-  // Generate deps files directly from already-extracted dependencies
-  const generatedFiles = generateSimpleDepsFiles(config.name, dependencies, contractPublicPaths);
-  
-  for (const file of generatedFiles) {
-    const dir = path.dirname(file.path);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    writeAndLog(file.path, file.content, '  ');
-  }
-}
 
-/**
- * Generate simple deps files without complex type resolution
- */
-function generateSimpleDepsFiles(
-  moduleName: string,
-  dependencies: ReturnType<typeof extractDependencies>,
-  _contractPublicPaths: Map<string, string>
-): Array<{ path: string; content: string }> {
-  const files: Array<{ path: string; content: string }> = [];
-  
+  console.log(`\nGenerating deps/ re-exports...`);
+
+  const depsDir = path.join(config.contractOutput, 'deps');
+
   // Group deps by target module
-  const depsByModule = new Map<string, Array<{ service: string; method: string; raw: string }>>();
-  
+  const depsByModule = new Map<string, DependencyRef[]>();
   for (const dep of dependencies.allDeps) {
     if (!depsByModule.has(dep.module)) {
       depsByModule.set(dep.module, []);
     }
-    depsByModule.get(dep.module)!.push({
-      service: dep.service,
-      method: dep.method,
-      raw: dep.raw,
-    });
+    depsByModule.get(dep.module)!.push(dep);
   }
-  
-  // Generate file for each target module
+
   for (const [targetModule, deps] of depsByModule) {
-    // Use relative path from packages/contract/{module}/deps/ to packages/contract-published/{target}/
-    // From packages/contract/{module}/deps/ to packages/contract-published/{target}/
-    // ../../../contract-published/{target}/
-    const relativePathPrefix = `../../../contract-published/${targetModule}`;
-    
+    const target = resolvedModules.get(targetModule);
+    if (!target) {
+      throw new Error(
+        `Module '${config.name}' depends on '${targetModule}' ` +
+        `(${deps.map(d => d.raw).join(', ')}) but '${targetModule}' is not defined in the config.`
+      );
+    }
+
+    const importPrefix = relativeImportPath(depsDir, target.contractPublicOutput);
+
     const content = `/**
  * Auto-generated from x-micro-contracts-depend-on - DO NOT EDIT
- * Source module: ${moduleName}
+ * Source module: ${config.name}
  * Target module: ${targetModule}
  * Dependencies: ${deps.map(d => d.raw).join(', ')}
  */
 
 // Re-exported types from ${targetModule} (contract-published)
-export type * from '${relativePathPrefix}/schemas/types.js';
-export type * from '${relativePathPrefix}/services/index.js';
+export type * from '${importPrefix}/schemas/types.js';
+export type * from '${importPrefix}/services/index.js';
 `;
-    
-    files.push({
-      path: `packages/contract/${moduleName}/deps/${targetModule}.ts`,
-      content,
-    });
+
+    writeAndLog(path.join(depsDir, `${targetModule}.ts`), content, '  ');
   }
-  
-  // Generate index file
-  if (files.length > 0) {
-    const indexContent = `/**
+
+  const indexContent = `/**
  * Auto-generated deps index - DO NOT EDIT
  */
 
 ${Array.from(depsByModule.keys()).map(m => `export * from './${m}.js';`).join('\n')}
 `;
-    
-    files.push({
-      path: `packages/contract/${moduleName}/deps/index.ts`,
-      content: indexContent,
-    });
-  }
-  
-  return files;
+  writeAndLog(path.join(depsDir, 'index.ts'), indexContent, '  ');
+}
+
+/**
+ * Module specifier for `to`, relative to a file inside `fromDir`.
+ */
+function relativeImportPath(fromDir: string, to: string): string {
+  const relative = path.relative(path.resolve(fromDir), path.resolve(to))
+    .split(path.sep)
+    .join('/');
+  return relative.startsWith('.') ? relative : `./${relative}`;
 }
 
 /**
@@ -637,18 +593,14 @@ async function generateServerRoutes(
   overlayResult: OverlayResult | null = null
 ): Promise<void> {
   if (!config.server) return;
-  
-  const outputDir = path.resolve(config.server.output);
-  const routesFile = config.server.routes;
-  
+
   console.log(`\nGenerating server routes...`);
-  fs.mkdirSync(outputDir, { recursive: true });
-  
+
   // Template is required for server routes generation
   if (!config.server.template) {
     throw new Error('Server template is required. Please specify server.template in your config.');
   }
-  
+
   const templateContext = buildTemplateContext(spec, config.name, {
     servicesPath: config.server.servicesPath,
     contractPackage: `@project/contract/${config.name}`,
@@ -661,9 +613,8 @@ async function generateServerRoutes(
     'server',
     templateContext
   );
-  
-  const routesPath = path.join(outputDir, routesFile);
-  writeAndLog(routesPath, routesContent, '  ');
+
+  writeAndLog(config.server.output, routesContent, '  ');
 }
 
 /**
@@ -675,13 +626,12 @@ async function generateFrontendClient(
   overlayResult: OverlayResult | null = null
 ): Promise<void> {
   if (!config.frontend) return;
-  
+
   const outputDir = path.resolve(config.frontend.output);
   const clientFile = config.frontend.client;
-  
+
   console.log(`\nGenerating frontend client...`);
-  fs.mkdirSync(outputDir, { recursive: true });
-  
+
   // Template is required for frontend client generation
   if (!config.frontend.template) {
     throw new Error('Frontend template is required. Please specify frontend.template in your config.');

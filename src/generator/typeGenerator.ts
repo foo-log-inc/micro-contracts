@@ -11,7 +11,7 @@ import type {
   PathItem,
   OpenAPIType,
 } from '../types.js';
-import { isReference, getRefName } from '../types.js';
+import { isReference, getRefName, isTsIdentifier } from '../types.js';
 
 /**
  * Normalize OpenAPI 3.1 type arrays into a non-null type and a nullable flag.
@@ -188,7 +188,7 @@ function generateInterfaceType(
         lines.push(`  /** ${propSchema.description} */`);
       }
       
-      lines.push(`  ${propName}${optional}: ${tsType};`);
+      lines.push(`  ${formatPropertyKey(propName)}${optional}: ${tsType};`);
     }
   }
 
@@ -269,7 +269,7 @@ function schemaToTypeString(
       const isRequired = required.has(propName);
       const tsType = schemaToTypeString(propSchema, spec);
       const optional = isRequired ? '' : '?';
-      props.push(`${propName}${optional}: ${tsType}`);
+      props.push(`${formatPropertyKey(propName)}${optional}: ${tsType}`);
     }
     return `{ ${props.join('; ')} }${nullSuffix}`;
   }
@@ -470,7 +470,7 @@ function generateRequestBodyType(
       } else if ((propSchema as SchemaObject).description) {
         lines.push(`  /** ${(propSchema as SchemaObject).description} */`);
       }
-      lines.push(`  ${propName}${optional}: ${tsType};`);
+      lines.push(`  ${formatPropertyKey(propName)}${optional}: ${tsType};`);
     }
   }
 
@@ -500,8 +500,7 @@ function generateParamsType(
     if (param.description) {
       lines.push(`  /** ${param.description} */`);
     }
-    // Use OpenAPI parameter name as-is (quoted for names with special chars)
-    lines.push(`  '${param.name}'${optional}: ${tsType};`);
+    lines.push(`  ${formatPropertyKey(param.name)}${optional}: ${tsType};`);
   }
 
   lines.push('}');
@@ -510,5 +509,15 @@ function generateParamsType(
 
 function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * Render an OpenAPI property name as a TypeScript property key.
+ * Schema property names are arbitrary strings, so names that are not
+ * identifiers are emitted as quoted keys.
+ */
+export function formatPropertyKey(name: string): string {
+  if (isTsIdentifier(name)) return name;
+  return `'${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }
 

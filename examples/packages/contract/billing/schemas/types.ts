@@ -78,9 +78,9 @@ export interface PaymentResult {
 // Operation-specific types
 export interface Billing_getInvoicesParams {
   /** Filter by user ID */
-  'userId'?: string;
+  userId?: string;
   /** Filter by invoice status */
-  'status'?: ('draft' | 'pending' | 'paid' | 'overdue');
+  status?: ('draft' | 'pending' | 'paid' | 'overdue');
 }
 
 export type Billing_getInvoicesInput = Billing_getInvoicesParams;
@@ -88,13 +88,13 @@ export type Billing_getInvoicesInput = Billing_getInvoicesParams;
 export type Billing_createInvoiceInput = { data: CreateInvoiceRequest };
 
 export interface Billing_getInvoiceByIdParams {
-  'id': string;
+  id: string;
 }
 
 export type Billing_getInvoiceByIdInput = Billing_getInvoiceByIdParams;
 
 export interface Billing_payInvoiceParams {
-  'id': string;
+  id: string;
 }
 
 export type Billing_payInvoiceInput = Billing_payInvoiceParams & { data: PayInvoiceRequest };

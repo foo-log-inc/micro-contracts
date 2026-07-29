@@ -682,14 +682,15 @@ describe('Screen Spec - Lint rules (legacy)', () => {
     expect(serviceWarnings).toHaveLength(0);
   });
 
-  it('emits x-micro-contracts-service/method warnings for screen spec without screen mode', () => {
+  it('errors on missing x-micro-contracts-service/method without screen mode', () => {
     const spec = createLegacyScreenSpec();
     const result = lintSpec(spec, { screen: false });
 
-    const serviceWarnings = result.warnings.filter(
-      w => w.code === 'MISSING_X_SERVICE' || w.code === 'MISSING_X_METHOD'
-    );
-    expect(serviceWarnings.length).toBeGreaterThan(0);
+    const codes = result.errors.map(e => e.code);
+    expect(codes).toContain('MISSING_X_SERVICE');
+    expect(codes).toContain('MISSING_X_METHOD');
+    expect(result.warnings.map(w => w.code)).not.toContain('MISSING_X_SERVICE');
+    expect(result.valid).toBe(false);
   });
 
   it('errors when x-screen-id present but x-screen-const missing', () => {
