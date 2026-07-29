@@ -44,6 +44,31 @@ function findConfigFile(): string | null {
   return null;
 }
 
+/**
+ * True when the run generates only part of the configured output.
+ *
+ * A partial run must not stamp the manifest with the input hash: the hash says
+ * these inputs have been generated from, and a later full run would skip,
+ * leaving whatever this run did not generate permanently missing.
+ */
+function isPartialGeneration(opts: {
+  module?: string;
+  output?: string;
+  contractsOnly?: boolean;
+  serverOnly?: boolean;
+  frontendOnly?: boolean;
+  docsOnly?: boolean;
+}): boolean {
+  return Boolean(
+    opts.module ||
+    opts.output ||
+    opts.contractsOnly ||
+    opts.serverOnly ||
+    opts.frontendOnly ||
+    opts.docsOnly
+  );
+}
+
 const handlers: CommandHandlers = {
 
   // ── generate ──────────────────────────────────────────
@@ -101,7 +126,8 @@ const handlers: CommandHandlers = {
         if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
           const manifestDir = opts.manifestDir || 'packages/';
           if (fs.existsSync(manifestDir)) {
-            const manifestInputHash = (opts.cache !== false) ? inputHash : undefined;
+            const manifestInputHash =
+              (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
             const { manifest, changed } = await generateManifest(manifestDir, {
               generatorVersion: VERSION,
               inputHash: manifestInputHash,
@@ -512,7 +538,8 @@ const handlers: CommandHandlers = {
                 if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
                   const manifestDir = opts.generatedDir || 'packages/';
                   if (fs.existsSync(manifestDir)) {
-                    const manifestInputHash = (opts.cache !== false) ? inputHash : undefined;
+                    const manifestInputHash =
+                      (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
                     const { manifest, changed } = await generateManifest(manifestDir, {
                       generatorVersion: VERSION,
                       inputHash: manifestInputHash,

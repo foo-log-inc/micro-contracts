@@ -3,7 +3,7 @@ cli_contracts: 0.1.0
 
 info:
   title: micro-contracts CLI
-  version: 0.17.17
+  version: 0.17.18
   description: >-
     Contract-first OpenAPI toolchain for TypeScript Web/API systems.
     Generates contract packages, server routes, and frontend clients

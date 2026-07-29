@@ -388,6 +388,10 @@ Generate code from OpenAPI specifications.
 | `--force` | Bypass input hash cache and always regenerate |
 | `--no-cache` | Run without reading or writing input hash cache |
 
+A run that generates a subset (`--output`, `--module`, or any `--*-only`) does not
+record the input hash, so the next full run regenerates rather than reporting no
+changes.
+
 ### init \<module\>
 
 Initialize a new module structure with starter templates.
@@ -454,6 +458,10 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--docs-only` | Generate documentation only |
 | `--force` | Bypass input hash cache and always regenerate |
 | `--no-cache` | Run without reading or writing input hash cache |
+
+A run that generates a subset (`--output`, `--module`, or any `--*-only`) does not
+record the input hash, so the next full run regenerates rather than reporting no
+changes.
 
 > See **[Enforceable Guardrails](docs/development-guardrails.md)** for gate details and CI configuration.
 
