@@ -98,8 +98,8 @@ export interface HealthStatus {
 
 // Operation-specific types
 export interface User_getUsersParams {
-  'limit'?: number;
-  'offset'?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export type User_getUsersInput = User_getUsersParams;
@@ -107,19 +107,19 @@ export type User_getUsersInput = User_getUsersParams;
 export type User_createUserInput = { data: CreateUserRequest };
 
 export interface User_getUserByIdParams {
-  'id': string;
+  id: string;
 }
 
 export type User_getUserByIdInput = User_getUserByIdParams;
 
 export interface User_updateUserParams {
-  'id': string;
+  id: string;
 }
 
 export type User_updateUserInput = User_updateUserParams & { data: UpdateUserRequest };
 
 export interface User_deleteUserParams {
-  'id': string;
+  id: string;
 }
 
 export type User_deleteUserInput = User_deleteUserParams;
@@ -131,7 +131,7 @@ export type Tenant_createDataInput = { data: CreateTenantDataRequest };
 export type Admin_getStatsInput = Record<string, never>;
 
 export interface Admin_suspendUserParams {
-  'id': string;
+  id: string;
 }
 
 export type Admin_suspendUserInput = Admin_suspendUserParams & { data: SuspendUserRequest };

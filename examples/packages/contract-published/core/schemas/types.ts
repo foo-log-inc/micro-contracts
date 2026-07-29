@@ -70,8 +70,8 @@ export interface HealthStatus {
 
 // Operation-specific types
 export interface User_getUsersParams {
-  'limit'?: number;
-  'offset'?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export type User_getUsersInput = User_getUsersParams;
@@ -79,7 +79,7 @@ export type User_getUsersInput = User_getUsersParams;
 export type User_createUserInput = { data: CreateUserRequest };
 
 export interface User_getUserByIdParams {
-  'id': string;
+  id: string;
 }
 
 export type User_getUserByIdInput = User_getUserByIdParams;
