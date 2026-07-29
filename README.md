@@ -288,6 +288,17 @@ Create `micro-contracts.config.yaml`. All paths support `{module}` placeholder.
 | `docs.enabled` | boolean | no | Enable documentation generation (default: `true`) |
 | `docs.template` | string | no | Documentation template |
 | `sharedModuleName` | string | no | Shared module name for overlays |
+| `server.output` | string | no | Output **file** path for generated routes (default: `server/src/{module}/routes.generated.ts`) |
+| `server.template` | string | yes if `server` is declared | Handlebars template for the routes file |
+| `server.servicesPath` | string | no | Path to the services object in Fastify (default: `fastify.services.{module}`) |
+| `frontend.output` | string | no | Output **directory** for the client files (default: `frontend/src/{module}`) |
+| `frontend.template` | string | yes if `frontend` is declared | Handlebars template for the client file |
+| `frontend.client` | string | no | Client file name (default: `api.generated.ts`) |
+| `frontend.service` | string | no | Service re-exports file name (default: `service.generated.ts`) |
+
+`server` and `frontend` are the built-in equivalents of an `outputs` entry, kept for
+existing configs. They generate only when declared, and only when no `outputs` entry
+is configured — `outputs` supersedes them for a module. Prefer `outputs`.
 
 ### modules.\<name\>
 
@@ -304,6 +315,12 @@ Create `micro-contracts.config.yaml`. All paths support `{module}` placeholder.
 | `dependsOn` | string[] | no | Dependencies (`{module}.{service}.{method}`) |
 | `spectral` | string | no | Module-specific Spectral config path |
 | `docs.enabled` | boolean | no | Override documentation generation |
+| `server.*` | — | no | Override any `defaults.server` field |
+| `server.enabled` | boolean | no | Disable built-in server generation for this module |
+| `frontend.*` | — | no | Override any `defaults.frontend` field |
+| `frontend.enabled` | boolean | no | Disable built-in frontend generation for this module |
+
+Unknown keys are rejected: a mistyped key fails the run instead of being ignored.
 
 ### Example
 
@@ -379,6 +396,14 @@ Lint OpenAPI specification.
 | Option | Description |
 |--------|-------------|
 | `--strict` | Treat warnings as errors |
+
+Every operation requires `x-micro-contracts-service` and `x-micro-contracts-method`,
+and both must be valid TypeScript identifiers: they key route collection and service
+grouping, and are emitted verbatim into generated type names. Operations missing them
+would be dropped from every artifact, so they are errors (`MISSING_X_SERVICE`,
+`MISSING_X_METHOD`, `INVALID_X_SERVICE`, `INVALID_X_METHOD`). In screen spec mode
+(`screen: true`) operations are consumed via `TemplateContext.screens` and these rules
+do not apply.
 
 ### check
 

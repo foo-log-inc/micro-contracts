@@ -2,7 +2,6 @@
 import { build } from "esbuild";
 import { readFileSync, statSync } from "node:fs";
 
-const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const minify = process.argv.includes("--minify");
 
 const externalSdks = [
@@ -13,24 +12,11 @@ const externalSdks = [
   "@google/genai",
 ];
 
-const resolveRuntimeDynamicImports = {
-  name: "resolve-runtime-dynamic-imports",
-  setup(_build) {},
-};
-
-const inlineBuildTimeConstants = {
-  name: "inline-build-time-constants",
+const stripShebang = {
+  name: "strip-shebang",
   setup(build) {
     build.onLoad({ filter: /src[\\/]cli\.ts$/ }, async (args) => {
-      let contents = readFileSync(args.path, "utf8");
-      // Strip shebang
-      contents = contents.replace(/^#!.*\n/, "");
-      // Replace runtime package.json read with build-time constant
-      // Pattern: createRequire + require('../package.json')
-      contents = contents.replace(
-        /const require = createRequire\(import\.meta\.url\);\nconst pkg = require\(['"]\.\.\/package\.json['"]\).*;\n/,
-        `const pkg = { version: ${JSON.stringify(pkg.version)} };\n`,
-      );
+      const contents = readFileSync(args.path, "utf8").replace(/^#!.*\n/, "");
       return { contents, loader: "ts" };
     });
   },
@@ -51,11 +37,14 @@ const result = await build({
   banner: {
     js: [
       "#!/usr/bin/env node",
-      "import { createRequire } from 'module';",
-      "const require = createRequire(import.meta.url);",
+      // Banner declarations are invisible to esbuild's renamer, so they must use
+      // names no bundled module can declare: dependencies import createRequire
+      // themselves and an unaliased import collides ("already been declared").
+      "import { createRequire as __microContractsCreateRequire } from 'module';",
+      "const require = __microContractsCreateRequire(import.meta.url);",
     ].join("\n"),
   },
-  plugins: [resolveRuntimeDynamicImports, inlineBuildTimeConstants],
+  plugins: [stripShebang],
   logLevel: "info",
 });
 

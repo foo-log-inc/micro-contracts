@@ -256,9 +256,6 @@ export interface ModuleDefaults {
   /** Overlay configuration */
   overlays?: OverlayConfig;
 
-  /** Template configuration (legacy) */
-  templates?: TemplateConfig;
-
   /** Flexible output configuration */
   outputs?: Record<string, OutputConfig>;
 
@@ -274,18 +271,6 @@ export interface OverlayConfig {
   shared?: string[];
   /** Collision policy: error | warn | last-wins */
   collision?: 'error' | 'warn' | 'last-wins';
-}
-
-/**
- * Template configuration (legacy)
- */
-export interface TemplateConfig {
-  /** Path to server routes template */
-  server?: string;
-  /** Path to frontend client template */
-  frontend?: string;
-  /** Path to service interface template */
-  services?: string;
 }
 
 /**
@@ -382,9 +367,6 @@ export interface ModuleConfig {
   /** Module-specific overlays */
   overlays?: string[];
 
-  /** Module-specific templates (legacy) */
-  templates?: TemplateConfig;
-
   /** Module-specific output overrides */
   outputs?: Record<string, Partial<OutputConfig> & { enabled?: boolean }>;
 
@@ -399,10 +381,10 @@ export interface ModuleConfig {
  * Server generation config
  */
 export interface ServerConfig {
-  /** Output directory (supports {module} placeholder) */
+  /** Output file path for the generated routes (supports {module} placeholder) */
   output?: string;
-  /** Routes file name */
-  routes?: string;
+  /** Path to the Handlebars template rendering the routes file */
+  template?: string;
   /** Path to services object in Fastify (supports {module} placeholder) */
   servicesPath?: string;
 }
@@ -413,17 +395,12 @@ export interface ServerConfig {
 export interface FrontendConfig {
   /** Output directory (supports {module} placeholder) */
   output?: string;
+  /** Path to the Handlebars template rendering the client file */
+  template?: string;
   /** Client file name */
   client?: string;
   /** Service re-exports file name */
   service?: string;
-  /** Shared client config (for contract-published) */
-  shared?: {
-    /** Output directory */
-    output?: string;
-    /** Client file name (supports {module} placeholder) */
-    client?: string;
-  };
 }
 
 /**
@@ -474,21 +451,18 @@ export interface ResolvedModuleConfig {
   serviceTemplate?: string;
   /** Server config (null if disabled) - legacy */
   server: {
+    /** Output file path for the generated routes */
     output: string;
-    routes: string;
     servicesPath: string;
     template?: string;
   } | null;
   /** Frontend config (null if disabled) - legacy */
   frontend: {
+    /** Output directory holding the client and service re-export files */
     output: string;
     client: string;
     service: string;
     template?: string;
-    shared: {
-      output: string;
-      client: string;
-    } | null;
   } | null;
   /** Docs config */
   docs: {
@@ -583,6 +557,113 @@ export function isMultiModuleConfig(config: unknown): config is MultiModuleConfi
   return typeof config === 'object' && config !== null && 'modules' in config;
 }
 
+// =============================================================================
+// Config Validation
+// =============================================================================
+
+/**
+ * Allowed keys per config object, mirroring the interfaces above.
+ *
+ * A key absent here is rejected, so a key added to an interface without being
+ * added here fails loudly on first use instead of being silently ignored —
+ * which is how `server.template` went unnoticed.
+ *
+ * `'*'` means "any key, each value validated against the given spec"
+ * (used for the `modules` and `outputs` records).
+ */
+type KeySpec = { [key: string]: KeySpec | null };
+
+const SERVER_KEYS: KeySpec = { output: null, template: null, servicesPath: null };
+const FRONTEND_KEYS: KeySpec = { output: null, template: null, client: null, service: null };
+const OUTPUT_KEYS: KeySpec = {
+  output: null, template: null, overwrite: null, condition: null, enabled: null, config: null,
+};
+const CONTRACT_KEYS: KeySpec = { output: null, serviceTemplate: null };
+
+const MODULE_KEYS: KeySpec = {
+  openapi: null,
+  screen: null,
+  contract: CONTRACT_KEYS,
+  contractPublic: { output: null },
+  server: { ...SERVER_KEYS, enabled: null },
+  frontend: { ...FRONTEND_KEYS, enabled: null },
+  docs: { enabled: null, template: null },
+  overlays: null,
+  outputs: { '*': OUTPUT_KEYS },
+  spectral: null,
+  dependsOn: null,
+};
+
+const CONFIG_KEYS: KeySpec = {
+  defaults: {
+    contract: CONTRACT_KEYS,
+    contractPublic: { output: null },
+    server: SERVER_KEYS,
+    frontend: FRONTEND_KEYS,
+    docs: { enabled: null, template: null },
+    overlays: { shared: null, collision: null },
+    outputs: { '*': OUTPUT_KEYS },
+    sharedModuleName: null,
+  },
+  modules: { '*': MODULE_KEYS },
+  spec: {
+    root: null,
+    shared: { openapi: null, templates: null, overlays: null, spectral: null },
+    overlays: null,
+    spectral: null,
+  },
+};
+
+/** Keys removed from the config format, with the replacement to use instead. */
+const REMOVED_KEYS: Record<string, string> = {
+  'defaults.templates': 'use defaults.server.template / defaults.frontend.template / defaults.contract.serviceTemplate',
+  'defaults.server.routes': 'the file name is part of server.output (e.g. server/src/{module}/routes.generated.ts)',
+  'defaults.frontend.shared': 'no longer generated; declare an entry under outputs instead',
+};
+
+function collectUnknownKeys(value: unknown, spec: KeySpec, trail: string, found: string[]): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return;
+
+  const wildcard = spec['*'];
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const keyPath = trail ? `${trail}.${key}` : key;
+
+    if (wildcard !== undefined) {
+      if (wildcard) collectUnknownKeys(child, wildcard, keyPath, found);
+      continue;
+    }
+
+    if (!(key in spec)) {
+      // Report against the shape, not the module name, so `modules.a.templates`
+      // and `defaults.templates` share one migration hint.
+      const shapePath = trail.replace(/^modules\.[^.]+/, 'defaults');
+      const hint = REMOVED_KEYS[shapePath ? `${shapePath}.${key}` : key]
+        ?? REMOVED_KEYS[`defaults.${key}`];
+      found.push(`${keyPath}${hint ? ` (${hint})` : ''}`);
+      continue;
+    }
+
+    const childSpec = spec[key];
+    if (childSpec) collectUnknownKeys(child, childSpec, keyPath, found);
+  }
+}
+
+/**
+ * Reject unknown config keys. A mistyped or removed key must fail loudly:
+ * silently ignoring it looks like the setting was honored.
+ */
+export function validateConfigKeys(config: unknown): void {
+  const unknown: string[] = [];
+  collectUnknownKeys(config, CONFIG_KEYS, '', unknown);
+
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown configuration ${unknown.length === 1 ? 'key' : 'keys'}:\n` +
+      unknown.map(k => `  - ${k}`).join('\n')
+    );
+  }
+}
+
 /**
  * Expand placeholders in a string
  */
@@ -622,15 +703,21 @@ function resolveOutputs(
     
     // Skip if explicitly disabled
     if (moduleOverride?.enabled === false) continue;
-    
-    // Need at least default config
-    if (!defaultConfig && !moduleOverride?.output) continue;
-    
+
     const output = expand(moduleOverride?.output ?? defaultConfig?.output ?? '');
     const template = moduleOverride?.template ?? defaultConfig?.template ?? '';
-    
-    if (!output || !template) continue;
-    
+
+    // An output that resolves to no file or no template generates nothing:
+    // say so instead of skipping it silently.
+    if (!output || !template) {
+      const missing = [!output && 'output', !template && 'template'].filter(Boolean).join(' and ');
+      throw new Error(
+        `outputs.${id} for module '${moduleName}' is missing ${missing}. ` +
+        `Set it under defaults.outputs.${id} or modules.${moduleName}.outputs.${id}, ` +
+        `or disable it with enabled: false.`
+      );
+    }
+
     resolvedOutputs.push({
       id,
       output,
@@ -675,49 +762,43 @@ export function resolveModuleConfig(
   // Service template (module overrides defaults)
   const serviceTemplate = moduleConfig.contract?.serviceTemplate ?? defaults.contract?.serviceTemplate;
   
-  // Server config (legacy)
-  const serverEnabled = moduleConfig.server?.enabled !== false;
+  // Server config (legacy). Only generated when the section is declared:
+  // an undeclared section must not demand a template.
+  const serverEnabled =
+    (moduleConfig.server !== undefined || defaults.server !== undefined) &&
+    moduleConfig.server?.enabled !== false;
   const server = serverEnabled ? {
     output: expand(
-      moduleConfig.server?.output ?? 
-      defaults.server?.output ?? 
-      `server/src/${moduleName}`
+      moduleConfig.server?.output ??
+      defaults.server?.output ??
+      `server/src/${moduleName}/routes.generated.ts`
     ),
-    routes: moduleConfig.server?.routes ?? defaults.server?.routes ?? 'routes.generated.ts',
+    template: moduleConfig.server?.template ?? defaults.server?.template,
     servicesPath: expand(
-      moduleConfig.server?.servicesPath ?? 
-      defaults.server?.servicesPath ?? 
+      moduleConfig.server?.servicesPath ??
+      defaults.server?.servicesPath ??
       `fastify.services.${moduleName}`
     ),
   } : null;
   
-  // Frontend config (legacy)
-  const frontendEnabled = moduleConfig.frontend?.enabled !== false;
+  // Frontend config (legacy). Declared-only, as with server above.
+  const frontendEnabled =
+    (moduleConfig.frontend !== undefined || defaults.frontend !== undefined) &&
+    moduleConfig.frontend?.enabled !== false;
   const frontendDefaults = defaults.frontend;
   const frontendOverride = moduleConfig.frontend;
-  
-  let frontendShared: { output: string; client: string } | null = null;
-  if (frontendEnabled) {
-    const sharedConfig = frontendOverride?.shared ?? frontendDefaults?.shared;
-    if (sharedConfig) {
-      frontendShared = {
-        output: expand(sharedConfig.output ?? 'frontend/src/shared'),
-        client: expand(sharedConfig.client ?? `${moduleName}.api.generated.ts`),
-      };
-    }
-  }
-  
+
   const frontend = frontendEnabled ? {
     output: expand(
-      frontendOverride?.output ?? 
-      frontendDefaults?.output ?? 
+      frontendOverride?.output ??
+      frontendDefaults?.output ??
       `frontend/src/${moduleName}`
     ),
+    template: frontendOverride?.template ?? frontendDefaults?.template,
     client: frontendOverride?.client ?? frontendDefaults?.client ?? 'api.generated.ts',
     service: frontendOverride?.service ?? frontendDefaults?.service ?? 'service.generated.ts',
-    shared: frontendShared,
   } : null;
-  
+
   // Docs config
   const docs = {
     enabled: moduleConfig.docs?.enabled ?? defaults.docs?.enabled ?? true,
@@ -732,22 +813,6 @@ export function resolveModuleConfig(
   
   const overlayCollision = defaults.overlays?.collision || 'error';
 
-  // Templates (module overrides defaults) - legacy
-  const serverWithTemplate = server ? {
-    ...server,
-    template: moduleConfig.templates?.server ?? defaults.templates?.server,
-  } : null;
-  
-  // Also check for services template
-  if (serverWithTemplate && !serverWithTemplate.template) {
-    serverWithTemplate.template = moduleConfig.templates?.services ?? defaults.templates?.services;
-  }
-  
-  const frontendWithTemplate = frontend ? {
-    ...frontend,
-    template: moduleConfig.templates?.frontend ?? defaults.templates?.frontend,
-  } : null;
-  
   // New outputs system
   const outputs = resolveOutputs(moduleName, moduleConfig, defaults);
   
@@ -758,8 +823,8 @@ export function resolveModuleConfig(
     contractOutput,
     contractPublicOutput,
     serviceTemplate,
-    server: serverWithTemplate,
-    frontend: frontendWithTemplate,
+    server,
+    frontend,
     docs,
     overlays,
     overlayCollision,
@@ -837,6 +902,14 @@ export interface LintError {
 // Helper to check if object is a reference
 export function isReference(obj: unknown): obj is ReferenceObject {
   return typeof obj === 'object' && obj !== null && '$ref' in obj;
+}
+
+/**
+ * True when `name` can be emitted verbatim as a TypeScript identifier.
+ * Names that fail this must be quoted (property keys) or rejected (type names).
+ */
+export function isTsIdentifier(name: string): boolean {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name);
 }
 
 // Extract schema name from $ref

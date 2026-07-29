@@ -2,7 +2,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import { createRequire } from 'module';
 import yaml from 'yaml';
 import { createProgram, type CommandHandlers } from './generated/program.js';
 import { generate, loadConfig, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash } from './generator/index.js';
@@ -29,9 +28,7 @@ import { commandReviewPublished } from './commands/review-published.js';
 import { commandProposeOverlays } from './commands/propose-overlays.js';
 import { commandAuditGuardrails } from './commands/audit-guardrails.js';
 import { commandInsights } from './commands/insights.js';
-
-const require = createRequire(import.meta.url);
-const pkg = require('../package.json') as { version: string };
+import { VERSION } from './version.js';
 
 function findConfigFile(): string | null {
   const candidates = [
@@ -76,7 +73,7 @@ const handlers: CommandHandlers = {
       let inputHash: string | undefined;
 
       if (isMultiModuleConfig(config)) {
-        inputHash = computeInputHash(config, configPath, pkg.version);
+        inputHash = computeInputHash(config, configPath, VERSION);
 
         if (useCache) {
           const manifestDir = opts.manifestDir || 'packages/';
@@ -105,7 +102,7 @@ const handlers: CommandHandlers = {
           if (fs.existsSync(manifestDir)) {
             const manifestInputHash = (opts.cache !== false) ? inputHash : undefined;
             const { manifest, changed } = await generateManifest(manifestDir, {
-              generatorVersion: pkg.version,
+              generatorVersion: VERSION,
               inputHash: manifestInputHash,
             });
             const fileCount = Object.keys(manifest.files).length;
@@ -477,7 +474,7 @@ const handlers: CommandHandlers = {
           let inputHash: string | undefined;
 
           if (isMultiModuleConfig(config)) {
-            inputHash = computeInputHash(config, configPath, pkg.version);
+            inputHash = computeInputHash(config, configPath, VERSION);
 
             if (useCache) {
               const manifestDir = opts.generatedDir || 'packages/';
@@ -516,7 +513,7 @@ const handlers: CommandHandlers = {
                   if (fs.existsSync(manifestDir)) {
                     const manifestInputHash = (opts.cache !== false) ? inputHash : undefined;
                     const { manifest, changed } = await generateManifest(manifestDir, {
-                      generatorVersion: pkg.version,
+                      generatorVersion: VERSION,
                       inputHash: manifestInputHash,
                     });
                     if (verbose) {
@@ -742,7 +739,7 @@ const handlers: CommandHandlers = {
       } else {
         console.log(`Generating manifest for: ${baseDir}`);
         const { manifest, changed } = await generateManifest(baseDir, {
-          generatorVersion: pkg.version,
+          generatorVersion: VERSION,
         });
 
         const fileCount = Object.keys(manifest.files).length;
@@ -836,7 +833,7 @@ const handlers: CommandHandlers = {
   },
 };
 
-createProgram(handlers, pkg.version).parse();
+createProgram(handlers, VERSION).parse();
 
 // =============================================================================
 // Helper functions (used by init, deps commands)

@@ -5,7 +5,6 @@
 
 import fs from "fs";
 import path from "path";
-import { createRequire } from "module";
 import type {
   AnchorMapping,
   ExternalEdge,
@@ -24,9 +23,7 @@ import type {
   ResolvedModuleConfig,
 } from "../types.js";
 import { isMultiModuleConfig, resolveModuleConfig } from "../types.js";
-
-const require = createRequire(import.meta.url);
-const pkg = require("../../package.json") as { version: string };
+import { VERSION } from "../version.js";
 
 export const MICRO_CONTRACTS_INSIGHT_SOURCE = "micro-contracts";
 
@@ -343,7 +340,7 @@ export function buildExternalInsight(
 
   return {
     source: MICRO_CONTRACTS_INSIGHT_SOURCE,
-    sourceVersion: pkg.version,
+    sourceVersion: VERSION,
     generatedAt: new Date().toISOString(),
     edges,
     anchorMapping: [...anchorByDomain.values()],
