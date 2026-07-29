@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatorVersion": "0.17.12",
+  "generatorVersion": "0.17.13",
   "files": {
     "contract-published/billing/docs/api-reference.html": {
       "sha256": "5b69e88fc9f60578261a8231132678550a40a70eb52dfcc611f48937f448ca44"
@@ -144,6 +144,6 @@
       "sha256": "d791f51b36215aba3e7cf7c5f69fc4b9fd6d4f2cf515718fdc93589fa05e2608"
     }
   },
-  "inputHash": "31274f92985261e2f88eb925c80e8671912508d1cd3e3d338c0e725ea1ee8d56",
-  "updatedAt": "2026-07-27T01:55:33.557Z"
+  "inputHash": "22d063a65f2409b643246737b301a8025faa918669d50f5e4a8716c864b62d95",
+  "updatedAt": "2026-07-29T00:22:46.757Z"
 }
