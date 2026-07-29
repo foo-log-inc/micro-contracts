@@ -38,8 +38,6 @@ export type { LoadedGuardrailsConfig } from './config.js';
 
 // Allowlist
 export {
-  matchWithNegation,
-  matchGlob,
   getChangedFiles,
   verifyAllowlist,
   runAllowlistCheck,
@@ -101,3 +99,5 @@ export {
 
 export type { CheckSummaryWithGates } from './runner.js';
 
+// Glob matching (shared with output selection)
+export { matchGlob, matchWithNegation } from '../glob.js';

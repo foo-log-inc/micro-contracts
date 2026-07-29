@@ -33,6 +33,7 @@ import {
   renderTemplate,
 } from './templateProcessor.js';
 import { validateDependsOn } from './dependencyGenerator.js';
+import { matchGlob } from '../glob.js';
 import { extractDependencies, expandPlaceholders, collectReferencedSchemas } from '../types.js';
 
 export { generateTypes } from './typeGenerator.js';
@@ -90,6 +91,8 @@ export interface GenerateOptions {
   skipLint?: boolean;
   /** Filter to specific modules (comma-separated or array) */
   modules?: string | string[];
+  /** Filter to specific outputs by id (comma-separated or array, glob patterns allowed) */
+  outputs?: string | string[];
 }
 
 /**
@@ -122,10 +125,11 @@ export function loadConfig(configPath: string): MultiModuleConfig | GeneratorCon
 /**
  * Parse module filter from options
  */
-function parseModuleFilter(modules?: string | string[]): string[] | null {
-  if (!modules) return null;
-  if (Array.isArray(modules)) return modules;
-  return modules.split(',').map(m => m.trim()).filter(Boolean);
+function parseListOption(value?: string | string[]): string[] | null {
+  if (!value) return null;
+  const items = Array.isArray(value) ? value : value.split(',').map(v => v.trim());
+  const filtered = items.filter(Boolean);
+  return filtered.length > 0 ? filtered : null;
 }
 
 /**
@@ -156,7 +160,7 @@ async function generateMultiModule(
   config: MultiModuleConfig,
   options: GenerateOptions
 ): Promise<void> {
-  const moduleFilter = parseModuleFilter(options.modules);
+  const moduleFilter = parseListOption(options.modules);
   const moduleNames = Object.keys(config.modules);
   
   // Filter modules if specified
@@ -426,13 +430,25 @@ async function generateFromOutputs(
   overlayResult: OverlayResult | null,
   options: GenerateOptions
 ): Promise<void> {
-  const generateAll = !options.contractsOnly && !options.serverOnly && 
-                      !options.frontendOnly && !options.docsOnly;
-  
+  // The built-in server/frontend sections and the outputs system are separate
+  // config surfaces: an output is not "a server output" or "a frontend output",
+  // it is a template rendered to a path. Select outputs with --output.
+  if (options.serverOnly || options.frontendOnly) {
+    const flag = options.serverOnly ? '--server-only' : '--frontend-only';
+    throw new Error(
+      `${flag} does not apply to an outputs configuration. ` +
+      `Select outputs with --output <ids> (comma-separated, glob patterns allowed). ` +
+      `Configured outputs: ${config.outputs.map(o => o.id).join(', ')}.`
+    );
+  }
+
+  if (options.contractsOnly || options.docsOnly) return;
+
   console.log(`\nGenerating from outputs configuration...`);
-  
+
+  const patterns = parseListOption(options.outputs);
   const hasPublic = hasPublicEndpoints(spec);
-  let generated = 0;
+  let selected = 0;
 
   for (const output of config.outputs) {
     // Skip disabled outputs
@@ -450,23 +466,12 @@ async function generateFromOutputs(
       continue;
     }
     
-    // Filter by generation type. Outputs are classified by their id: an output
-    // is a server output when its id contains 'server', a frontend output when
-    // it contains 'frontend' or 'client'.
-    const isServerOutput = output.id.includes('server');
-    const isFrontendOutput = output.id.includes('frontend') || output.id.includes('client');
-
-    if (options.serverOnly && !isServerOutput) {
-      console.log(`  Skipping ${output.id} (--server-only: id does not contain 'server')`);
+    if (patterns && !patterns.some(pattern => matchGlob(output.id, pattern))) {
+      console.log(`  Skipping ${output.id} (not selected by --output)`);
       continue;
     }
-    if (options.frontendOnly && !isFrontendOutput) {
-      console.log(`  Skipping ${output.id} (--frontend-only: id contains neither 'frontend' nor 'client')`);
-      continue;
-    }
-    if (!generateAll && !options.serverOnly && !options.frontendOnly) continue;
 
-    generated++;
+    selected++;
 
     // Check if file exists and overwrite is disabled
     if (!output.overwrite && fs.existsSync(output.output)) {
@@ -503,9 +508,10 @@ async function generateFromOutputs(
     writeAndLog(output.output, content);
   }
 
-  if (generated === 0) {
+  if (selected === 0) {
     throw new Error(
-      `No outputs matched for module '${config.name}'. Configured outputs: ` +
+      (patterns ? `--output ${patterns.join(',')} matched no output` : 'No outputs to generate') +
+      ` for module '${config.name}'. Configured outputs: ` +
       `${config.outputs.map(o => o.id).join(', ') || '(none)'}.`
     );
   }

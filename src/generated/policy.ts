@@ -26,6 +26,12 @@ export const commandDefinitions = {
         }
       },
       {
+        "name": "output",
+        "schema": {
+          "type": "string"
+        }
+      },
+      {
         "name": "contracts-only",
         "schema": {
           "type": "boolean",

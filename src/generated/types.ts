@@ -3,6 +3,7 @@
 export interface GenerateOptions {
   config?: string;
   module?: string;
+  output?: string;
   contractsOnly?: boolean;
   serverOnly?: boolean;
   frontendOnly?: boolean;

@@ -4,7 +4,7 @@ import { commandDefinitions, deriveCommandPolicy } from "./policy.js";
 import { CONTRACT_YAML, CONTRACT_JSON_STR } from "./contract.js";
 
 export interface CommandHandlers {
-  generate: (options: { config?: string; module?: string; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; docsOnly?: boolean; skipLint?: boolean; manifest?: boolean; manifestDir?: string; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
+  generate: (options: { config?: string; module?: string; output?: string; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; docsOnly?: boolean; skipLint?: boolean; manifest?: boolean; manifestDir?: string; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   lint: (input: string | undefined, options: { strict?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   init: (name: string | undefined, options: { dir?: string; openapi?: string; output?: string; skipTemplates?: boolean; screens?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   check: (options: { only?: string; skip?: string; gate?: string; verbose?: boolean; fix?: boolean; guardrails?: string; generatedDir?: string; changedFiles?: string; list?: boolean; listGates?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
@@ -36,9 +36,10 @@ export function createProgram(
     .description("Generate code from OpenAPI specifications.")
     .option("-c, --config <path>", "Path to config file (micro-contracts.config.yaml).")
     .option("-m, --module <names>", "Module names, comma-separated. Generates all modules if omitted.")
+    .option("--output <ids>", "Output ids to generate, comma-separated. Supports glob patterns (e.g. '*routes*'). Generates all configured outputs if omitted. Fails when a pattern matches no output.")
     .option("--contracts-only", "Generate contract packages only.", false)
-    .option("--server-only", "Generate server outputs only: outputs whose id contains 'server', plus the built-in server section. Fails when no output matches.", false)
-    .option("--frontend-only", "Generate frontend outputs only: outputs whose id contains 'frontend' or 'client', plus the built-in frontend section. Fails when no output matches.", false)
+    .option("--server-only", "Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
+    .option("--frontend-only", "Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
     .option("--docs-only", "Generate documentation only.", false)
     .option("--skip-lint", "Skip Spectral linting before generation.", false)
     .option("--manifest", "Generate manifest after generation. Enabled by default when guardrails.yaml has a generated section. Use --no-manifest to disable.", true)
@@ -124,8 +125,8 @@ export function createProgram(
     .option("--manifest", "Generate manifest after generation. Enabled by default. Use --no-manifest to disable.", true)
     .option("--skip-lint", "Skip Spectral linting before generation.", false)
     .option("--contracts-only", "Generate contract packages only.", false)
-    .option("--server-only", "Generate server outputs only: outputs whose id contains 'server', plus the built-in server section. Fails when no output matches.", false)
-    .option("--frontend-only", "Generate frontend outputs only: outputs whose id contains 'frontend' or 'client', plus the built-in frontend section. Fails when no output matches.", false)
+    .option("--server-only", "Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
+    .option("--frontend-only", "Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
     .option("--docs-only", "Generate documentation only.", false)
     .option("--force", "Bypass input hash cache and always regenerate.", false)
     .option("--cache", "Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache.", true)

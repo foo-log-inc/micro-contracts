@@ -12,7 +12,7 @@ import type { CheckResult, CheckOptions } from './types.js';
 import { lintSpec, formatLintResults, type LintResult } from '../generator/linter.js';
 import type { OpenAPISpec } from '../types.js';
 import { loadGuardrailsConfig, loadGuardrailsConfigWithPath } from './config.js';
-import { matchWithNegation } from './allowlist.js';
+import { matchWithNegation } from '../glob.js';
 import { glob } from 'glob';
 
 /**
