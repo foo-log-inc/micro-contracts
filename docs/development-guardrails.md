@@ -38,7 +38,7 @@ The following diagram illustrates the overall architecture of the guardrails sys
 | **4** | Code Quality | `server/**`, `frontend/**` | Type errors, lint issues, failing tests |
 | **5** | Doc & Architectural Consistency | `docs/**`, all code | Doc/code mismatch, broken references, architecture drift |
 
-Checks are executed in gate order (G1 → G2 → ... → G5), and within the same gate, checks run in the order they are defined in `guardrails.yaml`.
+Checks are executed in gate order (G1 → G2 → ... → G5), and within the same gate, checks run in the order they are defined in `micro-contracts.guardrails.yaml`.
 
 ---
 
@@ -60,7 +60,7 @@ Options:
   --gate <gates>              Run checks for specific gates only (comma-separated, 1-5)
   -v, --verbose               Enable verbose output (groups by gate)
   --fix                       Auto-fix issues where possible
-  -g, --guardrails <path>     Path to guardrails.yaml
+  -g, --guardrails <path>     Path to micro-contracts.guardrails.yaml
   -d, --generated-dir <path>  Path to generated files directory (default: "packages/")
   --changed-files <path>      Path to file containing list of changed files (for CI)
   --list                      List available checks with gate assignments
@@ -100,7 +100,7 @@ Options:
   -v, --verbose               Enable verbose output
   --skip <checks>             Skip specific checks (comma-separated)
   --continue-on-error         Continue running even if a step fails
-  -g, --guardrails <path>     Path to guardrails.yaml
+  -g, --guardrails <path>     Path to micro-contracts.guardrails.yaml
   -c, --config <path>         Path to config file (micro-contracts.config.yaml)
   -d, --generated-dir <path>  Path to generated files directory (default: "packages/")
   --no-manifest               Skip manifest generation

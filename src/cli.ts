@@ -44,15 +44,13 @@ function isPartialGeneration(opts: {
   contractsOnly?: boolean;
   serverOnly?: boolean;
   frontendOnly?: boolean;
-  docsOnly?: boolean;
 }): boolean {
   return Boolean(
     opts.module ||
     opts.output ||
     opts.contractsOnly ||
     opts.serverOnly ||
-    opts.frontendOnly ||
-    opts.docsOnly
+    opts.frontendOnly
   );
 }
 
@@ -101,7 +99,6 @@ const handlers: CommandHandlers = {
         contractsOnly: opts.contractsOnly,
         serverOnly: opts.serverOnly,
         frontendOnly: opts.frontendOnly,
-        docsOnly: opts.docsOnly,
         skipLint: opts.skipLint,
         modules: opts.module,
         outputs: opts.output,
@@ -138,7 +135,7 @@ const handlers: CommandHandlers = {
   },
 
   // ── lint ───────────────────────────────────────────────
-  lint: async (input) => {
+  lint: async (input, opts) => {
     try {
       const specPath = path.resolve(input!);
       if (!fs.existsSync(specPath)) {
@@ -148,7 +145,7 @@ const handlers: CommandHandlers = {
 
       console.log(`Linting: ${specPath}\n`);
       const spec = loadOpenAPISpec(specPath);
-      const result = lintSpec(spec, { strict: false });
+      const result = lintSpec(spec, { strict: opts.strict });
 
       console.log(formatLintResults(result));
 
@@ -379,7 +376,9 @@ const handlers: CommandHandlers = {
         console.log(formatCheckResults(summary, opts.verbose, summary.checks));
       }
 
-      if (summary.failed > 0) {
+      // A run that verified nothing is not a pass, whatever the reason it had
+      // nothing to run.
+      if (summary.failed > 0 || summary.passed === 0) {
         process.exit(1);
       }
 
@@ -517,8 +516,7 @@ const handlers: CommandHandlers = {
                 contractsOnly: opts.contractsOnly,
                 serverOnly: opts.serverOnly,
                 frontendOnly: opts.frontendOnly,
-                docsOnly: opts.docsOnly,
-              });
+                      });
 
               if (opts.manifest !== false) {
                 const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
@@ -723,7 +721,7 @@ const handlers: CommandHandlers = {
   // ── guardrails-init ───────────────────────────────────
   guardrailsInit: async (opts) => {
     try {
-      const outputPath = opts.output ?? 'guardrails.yaml';
+      const outputPath = opts.output!;
 
       if (fs.existsSync(outputPath)) {
         console.error(`File already exists: ${outputPath}`);
@@ -735,7 +733,9 @@ const handlers: CommandHandlers = {
       console.log(`Created: ${outputPath}`);
       console.log('\nNext steps:');
       console.log('  1. Review and customize the guardrails configuration');
-      console.log('  2. Run: micro-contracts check');
+      console.log('  2. Run: micro-contracts generate');
+      console.log('  3. Commit the generated artifacts (drift compares against the commit)');
+      console.log('  4. Run: micro-contracts check');
 
     } catch (error) {
       console.error('Failed to create guardrails config:', error instanceof Error ? error.message : error);
@@ -1042,15 +1042,13 @@ function generateConfigTemplate(moduleName: string): string {
     'defaults:', '  contract:', '    output: packages/contract/{module}', '',
     '  contractPublic:', '    output: packages/contract-published/{module}', '',
     '  outputs:', '    server-routes:', '      output: server/src/{module}/routes.generated.ts',
-    '      template: fastify-routes.hbs', '      config:',
+    '      template: spec/default/templates/fastify-routes.hbs', '      config:',
     '        servicesPath: fastify.services.{module}', '',
     '    frontend-api:', '      output: frontend/src/{module}/api.generated.ts',
-    '      template: fetch-client.hbs', '',
+    '      template: spec/default/templates/fetch-client.hbs', '',
     '    shared-client:', '      output: frontend/src/shared/{module}.api.generated.ts',
-    '      template: fetch-client.hbs', '      condition: hasPublicEndpoints', '      config:',
+    '      template: spec/default/templates/fetch-client.hbs', '      condition: hasPublicEndpoints', '      config:',
     '        contractPackage: "@project/contract-published/{module}"', '',
-    '  overlays:', '    shared:', '      - spec/_shared/overlays/middleware.overlay.yaml',
-    '    collision: error', '', '  docs:', '    enabled: true', '',
     'modules:', `  ${moduleName}:`, `    openapi: spec/${moduleName}/openapi/${moduleName}.yaml`, '',
   ].join('\n');
 }
@@ -1059,13 +1057,12 @@ function generateScreenConfigTemplate(moduleName: string): string {
   return [
     '# micro-contracts Configuration (Screen Spec)', '',
     'defaults:', '  contract:', '    output: packages/contract/{module}', '',
-    '  docs:', '    enabled: false', '',
     'modules:', `  ${moduleName}:`, `    openapi: spec/${moduleName}/openapi/${moduleName}.yaml`,
     '    screen: true', '    outputs:', '      screen-navigation:',
     `        output: frontend/src/screens/navigation.generated.ts`,
-    '        template: screen-navigation.hbs', '      screen-events:',
+    '        template: spec/default/templates/screen-navigation.hbs', '      screen-events:',
     `        output: frontend/src/screens/events.generated.ts`,
-    '        template: screen-events.hbs', '',
+    '        template: spec/default/templates/screen-events.hbs', '',
   ].join('\n');
 }
 
@@ -1241,12 +1238,56 @@ function outputDependencyGraph(moduleDeps: Map<string, { deps: string[] }>): voi
   console.log('```');
 }
 
-function outputImpactAnalysis(moduleDeps: Map<string, { deps: string[] }>, ref: string): void {
-  console.log(`Impacted by changes to ${ref}:\n`);
-  const impacted: string[] = [];
+/**
+ * Does `ref` name this dependency, or something containing it?
+ *
+ * Matching at dot boundaries only: `core` and `core.User` name parts of
+ * `core.User.getUsers`, while `cor` names nothing. Exact-matching turned a
+ * module name into "no impact", and prefix-matching turned a typo into a hit —
+ * both answers a reader would act on.
+ */
+function dependencyMatches(dep: string, ref: string): boolean {
+  return dep === ref || dep.startsWith(`${ref}.`);
+}
+
+/**
+ * Modules whose declared dependencies match `ref`.
+ *
+ * Fails when `ref` names nothing declared: "nothing depends on this" must not be
+ * the answer to a reference that does not exist.
+ */
+function modulesDependingOn(
+  moduleDeps: Map<string, { deps: string[] }>,
+  ref: string
+): string[] {
+  const known = new Set<string>();
   for (const [moduleName, { deps }] of moduleDeps) {
-    if (deps.includes(ref)) impacted.push(moduleName);
+    known.add(moduleName);
+    for (const dep of deps) {
+      const [module, service, method] = dep.split('.');
+      known.add(module);
+      if (service) known.add(`${module}.${service}`);
+      if (method) known.add(dep);
+    }
   }
+
+  if (!known.has(ref)) {
+    throw new Error(
+      `Unknown module or API reference: '${ref}'. ` +
+      `Known: ${[...known].sort().join(', ')}`
+    );
+  }
+
+  const dependent: string[] = [];
+  for (const [moduleName, { deps }] of moduleDeps) {
+    if (deps.some(dep => dependencyMatches(dep, ref))) dependent.push(moduleName);
+  }
+  return dependent;
+}
+
+function outputImpactAnalysis(moduleDeps: Map<string, { deps: string[] }>, ref: string): void {
+  const impacted = modulesDependingOn(moduleDeps, ref);
+  console.log(`Impacted by changes to ${ref}:\n`);
   if (impacted.length === 0) {
     console.log('  No modules depend on this API.');
   } else {
@@ -1255,11 +1296,8 @@ function outputImpactAnalysis(moduleDeps: Map<string, { deps: string[] }>, ref: 
 }
 
 function outputWhoDependsOn(moduleDeps: Map<string, { deps: string[] }>, ref: string): void {
+  const dependent = modulesDependingOn(moduleDeps, ref);
   console.log(`Modules that depend on ${ref}:\n`);
-  const dependent: string[] = [];
-  for (const [moduleName, { deps }] of moduleDeps) {
-    if (deps.some(d => d.startsWith(ref))) dependent.push(moduleName);
-  }
   if (dependent.length === 0) {
     console.log('  None found.');
   } else {

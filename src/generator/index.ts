@@ -86,8 +86,6 @@ export interface GenerateOptions {
   serverOnly?: boolean;
   /** Generate frontend clients only */
   frontendOnly?: boolean;
-  /** Generate documentation only */
-  docsOnly?: boolean;
   /** Skip linting */
   skipLint?: boolean;
   /** Filter to specific modules (comma-separated or array) */
@@ -276,8 +274,8 @@ async function generateModule(
     // Note: Transformed spec is written to packages/contract/*/docs/openapi.generated.yaml
   }
 
-  const generateAll = !options.contractsOnly && !options.serverOnly && 
-                      !options.frontendOnly && !options.docsOnly;
+  const generateAll = !options.contractsOnly && !options.serverOnly &&
+                      !options.frontendOnly;
 
   // Validate and generate dependencies
   const dependencies = extractDependencies(spec);
@@ -468,7 +466,7 @@ async function generateFromOutputs(
     );
   }
 
-  if (options.contractsOnly || options.docsOnly) return;
+  if (options.contractsOnly) return;
 
   console.log(`\nGenerating from outputs configuration...`);
 

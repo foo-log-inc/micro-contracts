@@ -53,13 +53,6 @@ export const commandDefinitions = {
         }
       },
       {
-        "name": "docs-only",
-        "schema": {
-          "type": "boolean",
-          "default": false
-        }
-      },
-      {
         "name": "skip-lint",
         "schema": {
           "type": "boolean",
@@ -320,13 +313,6 @@ export const commandDefinitions = {
         }
       },
       {
-        "name": "docs-only",
-        "schema": {
-          "type": "boolean",
-          "default": false
-        }
-      },
-      {
         "name": "force",
         "schema": {
           "type": "boolean",
@@ -426,7 +412,7 @@ export const commandDefinitions = {
         "name": "output",
         "schema": {
           "type": "string",
-          "default": "guardrails.yaml"
+          "default": "micro-contracts.guardrails.yaml"
         }
       }
     ]

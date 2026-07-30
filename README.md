@@ -137,10 +137,10 @@ modules:
     outputs:
       screen-navigation:
         output: frontend/src/screens/navigation.generated.ts
-        template: screen-navigation.hbs
+        template: spec/default/templates/screen-navigation.hbs
       screen-events:
         output: frontend/src/screens/events.generated.ts
-        template: screen-events.hbs
+        template: spec/default/templates/screen-events.hbs
 ```
 
 Initialize a screen module with starter files:
@@ -301,9 +301,6 @@ Create `micro-contracts.config.yaml`. All paths support `{module}` placeholder.
 
 | `overlays.shared` | string[] | no | Overlay files applied to all modules |
 | `overlays.collision` | string | no | `error` \| `warn` \| `last-wins` (default: `error`) |
-| `docs.enabled` | boolean | no | Enable documentation generation (default: `true`) |
-| `docs.template` | string | no | Documentation template |
-| `sharedModuleName` | string | no | Shared module name for overlays |
 | `server.output` | string | no | Output **file** path for generated routes (default: `server/src/{module}/routes.generated.ts`) |
 | `server.template` | string | yes if `server` is declared | Handlebars template for the routes file |
 | `server.servicesPath` | string | no | Path to the services object in Fastify (default: `fastify.services.{module}`) |
@@ -333,8 +330,6 @@ apply to the built-in sections only. Select outputs with `--output`.
 | `outputs.<id>.*` | — | no | Override any output config field |
 | `overlays` | string[] | no | Module-specific overlay files |
 | `dependsOn` | string[] | no | Dependencies (`{module}.{service}.{method}`) |
-| `spectral` | string | no | Module-specific Spectral config path |
-| `docs.enabled` | boolean | no | Override documentation generation |
 | `server.*` | — | no | Override any `defaults.server` field |
 | `server.enabled` | boolean | no | Disable built-in server generation for this module |
 | `frontend.*` | — | no | Override any `defaults.frontend` field |
@@ -391,7 +386,6 @@ Generate code from OpenAPI specifications.
 | `--output <ids>` | Output ids to generate, comma-separated; glob patterns allowed (e.g. `'*routes*'`). Fails when a pattern matches no output |
 | `--server-only` | Generate the built-in `server` section only (not valid with an `outputs` configuration) |
 | `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
-| `--docs-only` | Generate documentation only |
 | `--skip-lint` | Skip linting before generation |
 | `--no-manifest` | Skip manifest generation |
 | `--manifest-dir <path>` | Directory for manifest (default: `packages/`) |
@@ -441,7 +435,7 @@ Run guardrail checks.
 | `--gate <gates>` | Run checks for specific gates only (1-5) |
 | `-v, --verbose` | Enable verbose output |
 | `--fix` | Auto-fix issues where possible |
-| `-g, --guardrails <path>` | Path to `guardrails.yaml` |
+| `-g, --guardrails <path>` | Path to `micro-contracts.guardrails.yaml` |
 | `-d, --generated-dir <path>` | Path to generated files directory (default: `packages/`) |
 | `--changed-files <path>` | Path to file containing changed files (for CI) |
 | `--list` | List available checks |
@@ -457,7 +451,7 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `-v, --verbose` | Enable verbose output |
 | `--skip <checks>` | Skip specific checks (comma-separated) |
 | `--continue-on-error` | Continue running even if a step fails |
-| `-g, --guardrails <path>` | Path to `guardrails.yaml` |
+| `-g, --guardrails <path>` | Path to `micro-contracts.guardrails.yaml` |
 | `-d, --generated-dir <path>` | Path to generated files directory (default: `packages/`) |
 | `--no-manifest` | Skip manifest generation |
 | `--skip-lint` | Skip linting before generation |
@@ -465,7 +459,6 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--output <ids>` | Output ids to generate, comma-separated; glob patterns allowed (e.g. `'*routes*'`). Fails when a pattern matches no output |
 | `--server-only` | Generate the built-in `server` section only (not valid with an `outputs` configuration) |
 | `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
-| `--docs-only` | Generate documentation only |
 | `--force` | Bypass input hash cache and always regenerate |
 | `--no-cache` | Run without reading or writing input hash cache |
 
@@ -490,11 +483,11 @@ Analyze module dependencies.
 
 ### guardrails-init
 
-Create a `guardrails.yaml` configuration file.
+Create a `micro-contracts.guardrails.yaml` configuration file.
 
 | Option | Description |
 |--------|-------------|
-| `-o, --output <path>` | Output path (default: `guardrails.yaml`) |
+| `-o, --output <path>` | Output path (default: `micro-contracts.guardrails.yaml`) |
 
 ### manifest
 
@@ -558,7 +551,7 @@ Audit guardrails configuration for drift detection and lint rule coverage. File 
 | Option | Description |
 |--------|-------------|
 | `-c, --config <path>` | Path to config file |
-| `-g, --guardrails <path>` | Path to guardrails.yaml |
+| `-g, --guardrails <path>` | Path to micro-contracts.guardrails.yaml |
 | `-a, --adapter <name>` | SDK adapter (`claude`, `openai`, `gemini`, `mock`) |
 | `--model <name>` | LLM model override |
 | `--show-prompt` | Output the constructed prompt without calling LLM |

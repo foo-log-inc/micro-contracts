@@ -7,7 +7,6 @@ export interface GenerateOptions {
   contractsOnly?: boolean;
   serverOnly?: boolean;
   frontendOnly?: boolean;
-  docsOnly?: boolean;
   skipLint?: boolean;
   manifest?: boolean;
   manifestDir?: string;
@@ -84,7 +83,6 @@ export interface PipelineOptions {
   contractsOnly?: boolean;
   serverOnly?: boolean;
   frontendOnly?: boolean;
-  docsOnly?: boolean;
   force?: boolean;
   cache?: boolean;
 }

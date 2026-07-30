@@ -4,11 +4,11 @@ import { commandDefinitions, deriveCommandPolicy } from "./policy.js";
 import { CONTRACT_YAML, CONTRACT_JSON_STR } from "./contract.js";
 
 export interface CommandHandlers {
-  generate: (options: { config?: string; module?: string; output?: string; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; docsOnly?: boolean; skipLint?: boolean; manifest?: boolean; manifestDir?: string; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
+  generate: (options: { config?: string; module?: string; output?: string; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; skipLint?: boolean; manifest?: boolean; manifestDir?: string; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   lint: (input: string | undefined, options: { strict?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   init: (name: string | undefined, options: { dir?: string; openapi?: string; output?: string; skipTemplates?: boolean; screens?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   check: (options: { only?: string; skip?: string; gate?: string; verbose?: boolean; fix?: boolean; guardrails?: string; generatedDir?: string; changedFiles?: string; list?: boolean; listGates?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
-  pipeline: (options: { config?: string; verbose?: boolean; skip?: string; continueOnError?: boolean; guardrails?: string; generatedDir?: string; manifest?: boolean; skipLint?: boolean; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; docsOnly?: boolean; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
+  pipeline: (options: { config?: string; verbose?: boolean; skip?: string; continueOnError?: boolean; guardrails?: string; generatedDir?: string; manifest?: boolean; skipLint?: boolean; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   deps: (options: { config?: string; module?: string; graph?: boolean; impact?: string; whoDependsOn?: string; validate?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   insights: (options: { format?: string; projectRoot?: string; config?: string }, parentOpts: Record<string, unknown>) => Promise<void>;
   guardrailsInit: (options: { output?: string }, parentOpts: Record<string, unknown>) => Promise<void>;
@@ -40,9 +40,8 @@ export function createProgram(
     .option("--contracts-only", "Generate contract packages only.", false)
     .option("--server-only", "Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
     .option("--frontend-only", "Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
-    .option("--docs-only", "Generate documentation only.", false)
     .option("--skip-lint", "Skip Spectral linting before generation.", false)
-    .option("--manifest", "Generate manifest after generation. Enabled by default when guardrails.yaml has a generated section. Use --no-manifest to disable.", true)
+    .option("--manifest", "Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable.", true)
     .option("--manifest-dir <path>", "Directory for manifest output.", "packages/")
     .option("--force", "Bypass input hash cache and always regenerate.", false)
     .option("--cache", "Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache.", true)
@@ -98,7 +97,7 @@ export function createProgram(
     .option("--gate <gates>", "Run checks for specific gates only (comma-separated, 1-5).")
     .option("-v, --verbose", "Enable verbose output.", false)
     .option("--fix", "Auto-fix issues where possible.", false)
-    .option("-g, --guardrails <path>", "Path to guardrails.yaml.")
+    .option("-g, --guardrails <path>", "Path to micro-contracts.guardrails.yaml.")
     .option("-d, --generated-dir <path>", "Path to generated files directory.", "packages/")
     .option("--changed-files <path>", "Path to file containing list of changed files (for CI).")
     .option("--list", "List available checks and exit.", false)
@@ -120,14 +119,13 @@ export function createProgram(
     .option("-v, --verbose", "Enable verbose output (show detailed logs).", false)
     .option("--skip <checks>", "Skip specific checks (comma-separated).")
     .option("--continue-on-error", "Continue running even if a step fails.", false)
-    .option("-g, --guardrails <path>", "Path to guardrails.yaml.")
+    .option("-g, --guardrails <path>", "Path to micro-contracts.guardrails.yaml.")
     .option("-d, --generated-dir <path>", "Path to generated files directory.", "packages/")
     .option("--manifest", "Generate manifest after generation. Enabled by default. Use --no-manifest to disable.", true)
     .option("--skip-lint", "Skip Spectral linting before generation.", false)
     .option("--contracts-only", "Generate contract packages only.", false)
     .option("--server-only", "Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
     .option("--frontend-only", "Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
-    .option("--docs-only", "Generate documentation only.", false)
     .option("--force", "Bypass input hash cache and always regenerate.", false)
     .option("--cache", "Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache.", true)
     .action(async (opts, cmd) => {
@@ -177,8 +175,8 @@ export function createProgram(
 
   program
     .command("guardrails-init")
-    .description("Create a guardrails.yaml configuration file.")
-    .option("-o, --output <path>", "Output path for guardrails.yaml.", "guardrails.yaml")
+    .description("Create a micro-contracts.guardrails.yaml configuration file.")
+    .option("-o, --output <path>", "Output path for the guardrails configuration.", "micro-contracts.guardrails.yaml")
     .action(async (opts, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       if (globalOpts.introspect) {
@@ -290,7 +288,7 @@ export function createProgram(
     .command("audit-guardrails")
     .description("Audit guardrails configuration for drift and lint coverage.")
     .option("-c, --config <path>", "Path to config file (micro-contracts.config.yaml).")
-    .option("-g, --guardrails <path>", "Path to guardrails.yaml.")
+    .option("-g, --guardrails <path>", "Path to micro-contracts.guardrails.yaml.")
     .option("-a, --adapter <name>", "SDK adapter to use for LLM execution.")
     .option("--model <name>", "LLM model override.")
     .option("--fail-on <level>", "Minimum severity that causes a non-zero exit.", "error")

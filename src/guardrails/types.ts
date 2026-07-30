@@ -38,13 +38,7 @@ export interface GuardrailsConfig {
  * Configuration for guardrail check commands
  */
 export interface ChecksConfig {
-  /** Lint check configuration */
-  lint?: CheckCommandConfig;
-  /** TypeScript type check configuration */
-  typecheck?: CheckCommandConfig;
-  /** Documentation check configuration */
-  docs?: CheckCommandConfig;
-  /** Additional custom checks */
+  /** Checks by name; every one runs its own command */
   [key: string]: CheckCommandConfig | undefined;
 }
 

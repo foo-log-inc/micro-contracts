@@ -522,6 +522,9 @@ export function formatLintResults(result: LintResult): string {
   
   if (result.valid) {
     lines.push('✅ Lint passed');
+  } else if (result.errors.length === 0) {
+    // Only reachable under --strict, where warnings decide the outcome.
+    lines.push(`❌ Lint failed with ${result.warnings.length} warning(s) (strict)`);
   } else {
     lines.push(`❌ Lint failed with ${result.errors.length} error(s)`);
   }

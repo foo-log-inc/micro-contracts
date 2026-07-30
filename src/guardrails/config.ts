@@ -140,7 +140,9 @@ allowed:
   - spec/**/openapi/*.yaml
   - spec/**/templates/*.hbs
   
-  # Service implementations (human-written)
+  # Service implementations (human-written). \`init\` scaffolds these under
+  # src/<module>/ by default, and under server/src/ when run with --dir.
+  - src/**/*.ts
   - server/src/**/services/**/*.ts
   - server/src/**/container.ts
   - server/src/server.ts
@@ -151,6 +153,7 @@ allowed:
   
   # Configuration
   - micro-contracts.config.yaml
+  - micro-contracts.guardrails.yaml
   - package.json
   - tsconfig.json
   

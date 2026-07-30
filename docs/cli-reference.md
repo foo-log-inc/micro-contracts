@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.18.10
+**Version:** 0.18.11
 
 ## Table of Contents
 
@@ -68,9 +68,8 @@ micro-contracts generate --force
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
-| `--docs-only` |  | No | `false` | Generate documentation only. |
 | `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
-| `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when guardrails.yaml has a generated section. Use --no-manifest to disable. |
+| `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable. |
 | `--manifest-dir` |  | No | `"packages/"` | Directory for manifest output. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
 | `--cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
@@ -257,7 +256,7 @@ micro-contracts check --list-gates
 | `--gate` |  | No |  | Run checks for specific gates only (comma-separated, 1-5). |
 | `--verbose` | -v | No | `false` | Enable verbose output. |
 | `--fix` |  | No | `false` | Auto-fix issues where possible. |
-| `--guardrails` | -g | No |  | Path to guardrails.yaml. |
+| `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
 | `--generated-dir` | -d | No | `"packages/"` | Path to generated files directory. |
 | `--changed-files` |  | No |  | Path to file containing list of changed files (for CI). |
 | `--list` |  | No | `false` | List available checks and exit. |
@@ -319,14 +318,13 @@ micro-contracts pipeline --contracts-only --skip-lint
 | `--verbose` | -v | No | `false` | Enable verbose output (show detailed logs). |
 | `--skip` |  | No |  | Skip specific checks (comma-separated). |
 | `--continue-on-error` |  | No | `false` | Continue running even if a step fails. |
-| `--guardrails` | -g | No |  | Path to guardrails.yaml. |
+| `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
 | `--generated-dir` | -d | No | `"packages/"` | Path to generated files directory. |
 | `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default. Use --no-manifest to disable. |
 | `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
-| `--docs-only` |  | No | `false` | Generate documentation only. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
 | `--cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
 
@@ -352,7 +350,7 @@ x-agent:
   side_effects:
     - file_write
   recommended_before_use:
-    - Ensure micro-contracts.config.yaml and guardrails.yaml exist.
+    - Ensure micro-contracts.config.yaml and micro-contracts.guardrails.yaml exist.
     - Verify OpenAPI specs are valid.
 ```
 
@@ -467,9 +465,9 @@ x-agent:
 
 ### guardrails-init
 
-Create a guardrails.yaml configuration file.
+Create a micro-contracts.guardrails.yaml configuration file.
 
-Generates a starter guardrails.yaml with default check configuration. Fails if the target file already exists.
+Generates a starter micro-contracts.guardrails.yaml with default check configuration. Fails if the target file already exists.
 
 **Usage:**
 
@@ -477,18 +475,18 @@ Generates a starter guardrails.yaml with default check configuration. Fails if t
 micro-contracts guardrails-init
 ```
 ```
-micro-contracts guardrails-init -o custom-guardrails.yaml
+micro-contracts guardrails-init -o custom-micro-contracts.guardrails.yaml
 ```
 
 #### Options
 
 | Option | Aliases | Required | Default | Description |
 |---|---|---|---|---|
-| `--output` | -o | No | `"guardrails.yaml"` | Output path for guardrails.yaml. |
+| `--output` | -o | No | `"micro-contracts.guardrails.yaml"` | Output path for the guardrails configuration. |
 
 #### Exit Codes
 
-**Exit 0:** guardrails.yaml created successfully.
+**Exit 0:** Guardrails configuration created successfully.
 
 - **stdout:** format=`text`
 
@@ -781,7 +779,7 @@ x-agent:
 
 Audit guardrails configuration for drift and lint coverage.
 
-Checks that guardrails.yaml configuration covers all generated output directories for drift detection and that OpenAPI lint rules are properly configured. Note: file permission and editing checks have been moved to artifact-contracts. Requires agent-contracts-runtime.
+Checks that micro-contracts.guardrails.yaml configuration covers all generated output directories for drift detection and that OpenAPI lint rules are properly configured. Note: file permission and editing checks have been moved to artifact-contracts. Requires agent-contracts-runtime.
 
 **Usage:**
 
@@ -797,7 +795,7 @@ micro-contracts audit-guardrails --adapter mock --report-format json
 | Option | Aliases | Required | Default | Description |
 |---|---|---|---|---|
 | `--config` | -c | No |  | Path to config file (micro-contracts.config.yaml). |
-| `--guardrails` | -g | No |  | Path to guardrails.yaml. |
+| `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
 | `--adapter` | -a | No |  | SDK adapter to use for LLM execution. |
 | `--model` |  | No |  | LLM model override. |
 | `--fail-on` |  | No | `"error"` | Minimum severity that causes a non-zero exit. |
@@ -815,7 +813,7 @@ micro-contracts audit-guardrails --adapter mock --report-format json
 
 - **stderr:** format=`text`
 
-**Exit 3:** Input validation failed (guardrails.yaml not found).
+**Exit 3:** Input validation failed (micro-contracts.guardrails.yaml not found).
 
 - **stderr:** format=`text`
 

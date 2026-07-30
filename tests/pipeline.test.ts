@@ -2,11 +2,16 @@
  * Tests for pipeline command
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execSync, ExecSyncOptionsWithStringEncoding } from 'child_process';
+
+// Each test spawns the CLI several times, generating as it goes.
+// Real work, not a hang: the default 30s trips on a loaded machine.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 180_000 });
+
 
 // Path to the CLI
 const CLI_PATH = path.resolve(__dirname, '../dist/cli.js');
@@ -50,7 +55,8 @@ describe('pipeline command', () => {
     } catch (error: unknown) {
       const execError = error as { status?: number; stdout?: string; stderr?: string };
       return {
-        stdout: execError.stdout || execError.stderr || '',
+        // Both: a failing run often prints progress before the error.
+        stdout: `${execError.stdout ?? ''}${execError.stderr ?? ''}`,
         exitCode: execError.status || 1,
       };
     }
@@ -191,6 +197,193 @@ generated:
       expect(stdout).toContain('No checks ran');
       expect(stdout).not.toContain('Pipeline completed successfully');
       expect(exitCode).toBe(1);
+    });
+
+    it('runs the documented quick start end to end', () => {
+      // init scaffolds a config, and the rules generate enforces have tightened
+      // repeatedly; without this the two drift apart silently — a scaffolded
+      // project referencing an overlay init never wrote, or a template path that
+      // no longer resolves, only shows up when someone follows the README.
+      fs.writeFileSync(
+        path.join(tempDir, 'my-spec.json'),
+        JSON.stringify({
+          openapi: '3.0.0',
+          info: { title: 'T', version: '1.0.0' },
+          paths: {
+            '/a': {
+              get: {
+                operationId: 'getA',
+                'x-micro-contracts-service': 'A',
+                'x-micro-contracts-method': 'get',
+                responses: { '200': { description: 'ok' } },
+              },
+            },
+          },
+        }),
+      );
+
+      const init = runCli('init core --openapi my-spec.json');
+      expect(init.exitCode).toBe(0);
+
+      const generate = runCli('generate');
+      expect(generate.stdout).toContain('Generation complete');
+      expect(generate.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, 'packages/contract/core/schemas/types.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'server/src/core/routes.generated.ts'))).toBe(true);
+    });
+
+    it('answers impact by module and by operation, and rejects unknown refs', () => {
+      // "No modules depend on this API" is a conclusion someone acts on, so an
+      // input that matches nothing declared must not produce it.
+      const specs: Array<[string, string, string, string]> = [
+        ['core', '', 'User', 'getUsers'],
+        ['billing', '\n  x-micro-contracts-depend-on:\n    - core.User.getUsers', 'Invoice', 'getInvoices'],
+      ];
+      for (const [name, dependsOn, service, method] of specs) {
+        fs.mkdirSync(path.join(tempDir, `spec/${name}/openapi`), { recursive: true });
+        fs.writeFileSync(
+          path.join(tempDir, `spec/${name}/openapi/${name}.yaml`),
+          [
+            'openapi: 3.0.3',
+            'info:',
+            `  title: ${name}`,
+            `  version: 1.0.0${dependsOn}`,
+            'paths:',
+            `  /${name}:`,
+            '    get:',
+            `      operationId: get_${name}`,
+            `      x-micro-contracts-service: ${service}`,
+            `      x-micro-contracts-method: ${method}`,
+            '      responses:',
+            "        '200':",
+            '          description: ok',
+            'components:',
+            '  schemas: {}',
+            '',
+          ].join('\n'),
+        );
+      }
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        [
+          'modules:',
+          '  core:',
+          '    openapi: spec/core/openapi/core.yaml',
+          '  billing:',
+          '    openapi: spec/billing/openapi/billing.yaml',
+          '',
+        ].join('\n'),
+      );
+
+      expect(runCli('deps --impact core').stdout).toContain('- billing');
+      expect(runCli('deps --impact core.User.getUsers').stdout).toContain('- billing');
+      expect(runCli('deps --who-depends-on core').stdout).toContain('- billing');
+
+      const unknownRef = runCli('deps --impact nosuch.Thing.method');
+      expect(unknownRef.exitCode).toBe(1);
+      expect(unknownRef.stdout).toMatch(/Unknown module or API reference/);
+
+      const typo = runCli('deps --who-depends-on cor');
+      expect(typo.exitCode).toBe(1);
+      expect(typo.stdout).toMatch(/Unknown module or API reference/);
+    });
+
+    it('runs the documented setup through a passing check', () => {
+      // Two scaffolders and three gates, none of which had ever been run
+      // against each other's output.
+      fs.writeFileSync(
+        path.join(tempDir, 'my-spec.json'),
+        JSON.stringify({
+          openapi: '3.0.0',
+          info: { title: 'T', version: '1.0.0' },
+          paths: {
+            '/a': {
+              get: {
+                operationId: 'getA',
+                'x-micro-contracts-service': 'A',
+                'x-micro-contracts-method': 'get',
+                responses: { '200': { description: 'ok' } },
+              },
+            },
+          },
+        }),
+      );
+
+      expect(runCli('init core --openapi my-spec.json').exitCode).toBe(0);
+      expect(runCli('guardrails-init').exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, 'micro-contracts.guardrails.yaml'))).toBe(true);
+      expect(runCli('generate').exitCode).toBe(0);
+
+      // drift compares against the commit, which is why the guidance says to
+      // commit before checking.
+      const git = (...args: string[]) =>
+        execSync(`git ${args.join(' ')}`, { cwd: tempDir, encoding: 'utf-8', stdio: 'pipe' });
+      git('add', '-A');
+      git('commit', '-qm', 'scaffold');
+
+      expect(runCli('check').exitCode).toBe(0);
+
+      // Editing what init scaffolded must be allowed: the two scaffolders have
+      // to agree on the layout. Committing first makes the allowlist see only
+      // this edit, so the assertion is about the policy, not about an empty
+      // changed-file list.
+      fs.appendFileSync(path.join(tempDir, 'src/core/container.ts'), '// edit\n');
+
+      const edited = runCli('check --only allowlist');
+      expect(edited.stdout).not.toMatch(/not-in-allowlist|\(protected\)/);
+      expect(edited.exitCode).toBe(0);
+
+      // A hand-edited generated file must still be caught.
+      fs.appendFileSync(path.join(tempDir, 'packages/contract/core/index.ts'), '// tampered\n');
+      expect(runCli('check --only drift').exitCode).toBe(1);
+    });
+
+    it('runs the screen-spec quick start end to end', () => {
+      // A second scaffolded config, edited by the same fixes as the first.
+      expect(runCli('init home --screens').exitCode).toBe(0);
+
+      const generate = runCli('generate');
+      expect(generate.stdout).toContain('Generation complete');
+      expect(generate.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, 'frontend/src/screens/navigation.generated.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'frontend/src/screens/events.generated.ts'))).toBe(true);
+    });
+
+    it('honors lint --strict', () => {
+      // The flag was declared and implemented, but the handler passed
+      // strict: false unconditionally.
+      fs.writeFileSync(
+        path.join(tempDir, 'warned.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: T',
+          '  version: 1.0.0',
+          'paths:',
+          '  /home:',
+          '    get:',
+          '      operationId: getHome',
+          '      x-micro-contracts-service: Home',
+          '      x-micro-contracts-method: get',
+          '      x-events:',
+          '        - name: home_view',
+          '          type: screen_view',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          'components:',
+          '  schemas: {}',
+          '',
+        ].join('\n'),
+      );
+
+      expect(runCli('lint warned.yaml').exitCode).toBe(0);
+
+      const strict = runCli('lint warned.yaml --strict');
+      expect(strict.exitCode).toBe(1);
+      expect(strict.stdout).toMatch(/warning\(s\) \(strict\)/);
     });
 
     it('deps fails instead of reporting an incomplete graph', () => {

@@ -106,10 +106,10 @@ modules:
         enabled: false      # Not needed for screen modules
       screen-navigation:
         output: frontend/src/screens/navigation.generated.ts
-        template: screen-navigation.hbs
+        template: spec/default/templates/screen-navigation.hbs
       screen-events:
         output: frontend/src/screens/events.generated.ts
-        template: screen-events.hbs
+        template: spec/default/templates/screen-events.hbs
 ```
 
 Effects of `screen: true`:
@@ -497,7 +497,7 @@ Add to config:
 outputs:
   screen-view-props:
     output: frontend/src/screens/view-props.generated.ts
-    template: screen-view-props.hbs
+    template: spec/default/templates/screen-view-props.hbs
 ```
 
 ### Available Template Context

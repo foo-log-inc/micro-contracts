@@ -139,7 +139,20 @@ export function getAvailableChecks(options: CheckOptions = {}): CheckDefinition[
  */
 function filterChecks(allChecks: CheckDefinition[], options: CheckOptions): CheckDefinition[] {
   let filtered = [...allChecks];
-  
+
+  // A name that matches no check silently changes what runs: --only leaves
+  // nothing to verify, --skip skips nothing while the caller believes it did.
+  const known = new Set(allChecks.map(c => c.name));
+  for (const [flag, names] of [['--only', options.only], ['--skip', options.skip]] as const) {
+    for (const name of names ?? []) {
+      if (!known.has(name)) {
+        throw new Error(
+          `Unknown check in ${flag}: '${name}'. Available: ${[...known].sort().join(', ')}`
+        );
+      }
+    }
+  }
+
   // Filter by --gate (highest priority)
   if (options.gates && options.gates.length > 0) {
     filtered = filtered.filter(c => c.gate !== undefined && options.gates!.includes(c.gate));
