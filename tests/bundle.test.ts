@@ -7,11 +7,16 @@
  * (or a syntax error masked by minification) fail here instead of on install.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execFileSync } from 'child_process';
+
+// Each test builds the bundle with esbuild before running it.
+// Real work, not a hang: the default 30s trips on a loaded machine.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 180_000 });
+
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const BUNDLE = path.join(REPO_ROOT, 'dist/micro-contracts.bundle.mjs');

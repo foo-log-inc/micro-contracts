@@ -2,11 +2,16 @@
  * Tests for pipeline command
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execSync, ExecSyncOptionsWithStringEncoding } from 'child_process';
+
+// Each test spawns the CLI several times, generating as it goes.
+// Real work, not a hang: the default 30s trips on a loaded machine.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 180_000 });
+
 
 // Path to the CLI
 const CLI_PATH = path.resolve(__dirname, '../dist/cli.js');
