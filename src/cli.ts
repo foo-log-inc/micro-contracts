@@ -1234,12 +1234,56 @@ function outputDependencyGraph(moduleDeps: Map<string, { deps: string[] }>): voi
   console.log('```');
 }
 
-function outputImpactAnalysis(moduleDeps: Map<string, { deps: string[] }>, ref: string): void {
-  console.log(`Impacted by changes to ${ref}:\n`);
-  const impacted: string[] = [];
+/**
+ * Does `ref` name this dependency, or something containing it?
+ *
+ * Matching at dot boundaries only: `core` and `core.User` name parts of
+ * `core.User.getUsers`, while `cor` names nothing. Exact-matching turned a
+ * module name into "no impact", and prefix-matching turned a typo into a hit —
+ * both answers a reader would act on.
+ */
+function dependencyMatches(dep: string, ref: string): boolean {
+  return dep === ref || dep.startsWith(`${ref}.`);
+}
+
+/**
+ * Modules whose declared dependencies match `ref`.
+ *
+ * Fails when `ref` names nothing declared: "nothing depends on this" must not be
+ * the answer to a reference that does not exist.
+ */
+function modulesDependingOn(
+  moduleDeps: Map<string, { deps: string[] }>,
+  ref: string
+): string[] {
+  const known = new Set<string>();
   for (const [moduleName, { deps }] of moduleDeps) {
-    if (deps.includes(ref)) impacted.push(moduleName);
+    known.add(moduleName);
+    for (const dep of deps) {
+      const [module, service, method] = dep.split('.');
+      known.add(module);
+      if (service) known.add(`${module}.${service}`);
+      if (method) known.add(dep);
+    }
   }
+
+  if (!known.has(ref)) {
+    throw new Error(
+      `Unknown module or API reference: '${ref}'. ` +
+      `Known: ${[...known].sort().join(', ')}`
+    );
+  }
+
+  const dependent: string[] = [];
+  for (const [moduleName, { deps }] of moduleDeps) {
+    if (deps.some(dep => dependencyMatches(dep, ref))) dependent.push(moduleName);
+  }
+  return dependent;
+}
+
+function outputImpactAnalysis(moduleDeps: Map<string, { deps: string[] }>, ref: string): void {
+  const impacted = modulesDependingOn(moduleDeps, ref);
+  console.log(`Impacted by changes to ${ref}:\n`);
   if (impacted.length === 0) {
     console.log('  No modules depend on this API.');
   } else {
@@ -1248,11 +1292,8 @@ function outputImpactAnalysis(moduleDeps: Map<string, { deps: string[] }>, ref: 
 }
 
 function outputWhoDependsOn(moduleDeps: Map<string, { deps: string[] }>, ref: string): void {
+  const dependent = modulesDependingOn(moduleDeps, ref);
   console.log(`Modules that depend on ${ref}:\n`);
-  const dependent: string[] = [];
-  for (const [moduleName, { deps }] of moduleDeps) {
-    if (deps.some(d => d.startsWith(ref))) dependent.push(moduleName);
-  }
   if (dependent.length === 0) {
     console.log('  None found.');
   } else {

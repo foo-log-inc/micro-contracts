@@ -50,7 +50,8 @@ describe('pipeline command', () => {
     } catch (error: unknown) {
       const execError = error as { status?: number; stdout?: string; stderr?: string };
       return {
-        stdout: execError.stdout || execError.stderr || '',
+        // Both: a failing run often prints progress before the error.
+        stdout: `${execError.stdout ?? ''}${execError.stderr ?? ''}`,
         exitCode: execError.status || 1,
       };
     }
@@ -225,6 +226,62 @@ generated:
 
       expect(fs.existsSync(path.join(tempDir, 'packages/contract/core/schemas/types.ts'))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, 'server/src/core/routes.generated.ts'))).toBe(true);
+    });
+
+    it('answers impact by module and by operation, and rejects unknown refs', () => {
+      // "No modules depend on this API" is a conclusion someone acts on, so an
+      // input that matches nothing declared must not produce it.
+      const specs: Array<[string, string, string, string]> = [
+        ['core', '', 'User', 'getUsers'],
+        ['billing', '\n  x-micro-contracts-depend-on:\n    - core.User.getUsers', 'Invoice', 'getInvoices'],
+      ];
+      for (const [name, dependsOn, service, method] of specs) {
+        fs.mkdirSync(path.join(tempDir, `spec/${name}/openapi`), { recursive: true });
+        fs.writeFileSync(
+          path.join(tempDir, `spec/${name}/openapi/${name}.yaml`),
+          [
+            'openapi: 3.0.3',
+            'info:',
+            `  title: ${name}`,
+            `  version: 1.0.0${dependsOn}`,
+            'paths:',
+            `  /${name}:`,
+            '    get:',
+            `      operationId: get_${name}`,
+            `      x-micro-contracts-service: ${service}`,
+            `      x-micro-contracts-method: ${method}`,
+            '      responses:',
+            "        '200':",
+            '          description: ok',
+            'components:',
+            '  schemas: {}',
+            '',
+          ].join('\n'),
+        );
+      }
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        [
+          'modules:',
+          '  core:',
+          '    openapi: spec/core/openapi/core.yaml',
+          '  billing:',
+          '    openapi: spec/billing/openapi/billing.yaml',
+          '',
+        ].join('\n'),
+      );
+
+      expect(runCli('deps --impact core').stdout).toContain('- billing');
+      expect(runCli('deps --impact core.User.getUsers').stdout).toContain('- billing');
+      expect(runCli('deps --who-depends-on core').stdout).toContain('- billing');
+
+      const unknownRef = runCli('deps --impact nosuch.Thing.method');
+      expect(unknownRef.exitCode).toBe(1);
+      expect(unknownRef.stdout).toMatch(/Unknown module or API reference/);
+
+      const typo = runCli('deps --who-depends-on cor');
+      expect(typo.exitCode).toBe(1);
+      expect(typo.stdout).toMatch(/Unknown module or API reference/);
     });
 
     it('honors lint --strict', () => {
