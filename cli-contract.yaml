@@ -116,12 +116,6 @@ command_sets:
               type: boolean
               default: false
 
-          - name: docs-only
-            description: Generate documentation only.
-            schema:
-              type: boolean
-              default: false
-
           - name: skip-lint
             description: Skip Spectral linting before generation.
             schema:
@@ -543,12 +537,6 @@ command_sets:
             description: >-
               Generate the built-in frontend section only. Not valid with an
               outputs configuration — select outputs with --output instead.
-            schema:
-              type: boolean
-              default: false
-
-          - name: docs-only
-            description: Generate documentation only.
             schema:
               type: boolean
               default: false

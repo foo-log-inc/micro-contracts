@@ -24,8 +24,6 @@ describe('validateConfigKeys', () => {
         frontend: { output: 'frontend/{module}', template: 'f.hbs', client: 'api.ts', service: 'svc.ts' },
         outputs: { routes: { output: 'a.ts', template: 'b.hbs', config: { servicesPath: 'x' } } },
         overlays: { shared: ['o.yaml'], collision: 'error' },
-        docs: { enabled: true },
-        sharedModuleName: 'shared',
       },
       modules: {
         bff: {
@@ -35,10 +33,8 @@ describe('validateConfigKeys', () => {
           outputs: { routes: { enabled: false } },
           overlays: ['x.yaml'],
           dependsOn: ['core.User.getUsers'],
-          spectral: 'spectral.yaml',
         },
       },
-      spec: { root: 'spec', shared: { openapi: 'a', templates: 'b', overlays: 'c', spectral: 'd' } },
     })).not.toThrow();
   });
 
@@ -77,6 +73,29 @@ describe('validateConfigKeys', () => {
     expect(() => validateConfigKeys({
       modules: { bff: { openapi: 'a.yaml', server: { routes: 'routes.generated.ts' } } },
     })).toThrow(/server\.routes \(the file name is part of server\.output/);
+  });
+
+  it('rejects settings that no longer do anything', () => {
+    // Accepting a key that nothing consumes is how "configured but ignored" got
+    // into #48 in the first place.
+    expect(() => validateConfigKeys({
+      defaults: { docs: { enabled: false } },
+      modules: {},
+    })).toThrow(/defaults\.docs \(documentation generation was removed/);
+
+    expect(() => validateConfigKeys({
+      modules: { bff: { openapi: 'a.yaml', spectral: 'spectral.yaml' } },
+    })).toThrow(/spectral/);
+
+    expect(() => validateConfigKeys({
+      defaults: { sharedModuleName: 'shared' },
+      modules: {},
+    })).toThrow(/sharedModuleName \(never had an effect/);
+
+    expect(() => validateConfigKeys({
+      spec: { root: 'spec' },
+      modules: {},
+    })).toThrow(/spec \(never had an effect/);
   });
 
   it('does not constrain keys of freeform template config', () => {

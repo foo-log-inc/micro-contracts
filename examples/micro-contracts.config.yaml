@@ -31,9 +31,6 @@ defaults:
       config:
         contractPackage: "@project/contract/{module}"
 
-  docs:
-    enabled: true
-
   # Shared overlays (applied to all modules)
   overlays:
     shared:

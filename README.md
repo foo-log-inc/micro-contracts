@@ -301,9 +301,6 @@ Create `micro-contracts.config.yaml`. All paths support `{module}` placeholder.
 
 | `overlays.shared` | string[] | no | Overlay files applied to all modules |
 | `overlays.collision` | string | no | `error` \| `warn` \| `last-wins` (default: `error`) |
-| `docs.enabled` | boolean | no | Enable documentation generation (default: `true`) |
-| `docs.template` | string | no | Documentation template |
-| `sharedModuleName` | string | no | Shared module name for overlays |
 | `server.output` | string | no | Output **file** path for generated routes (default: `server/src/{module}/routes.generated.ts`) |
 | `server.template` | string | yes if `server` is declared | Handlebars template for the routes file |
 | `server.servicesPath` | string | no | Path to the services object in Fastify (default: `fastify.services.{module}`) |
@@ -333,8 +330,6 @@ apply to the built-in sections only. Select outputs with `--output`.
 | `outputs.<id>.*` | — | no | Override any output config field |
 | `overlays` | string[] | no | Module-specific overlay files |
 | `dependsOn` | string[] | no | Dependencies (`{module}.{service}.{method}`) |
-| `spectral` | string | no | Module-specific Spectral config path |
-| `docs.enabled` | boolean | no | Override documentation generation |
 | `server.*` | — | no | Override any `defaults.server` field |
 | `server.enabled` | boolean | no | Disable built-in server generation for this module |
 | `frontend.*` | — | no | Override any `defaults.frontend` field |
@@ -391,7 +386,6 @@ Generate code from OpenAPI specifications.
 | `--output <ids>` | Output ids to generate, comma-separated; glob patterns allowed (e.g. `'*routes*'`). Fails when a pattern matches no output |
 | `--server-only` | Generate the built-in `server` section only (not valid with an `outputs` configuration) |
 | `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
-| `--docs-only` | Generate documentation only |
 | `--skip-lint` | Skip linting before generation |
 | `--no-manifest` | Skip manifest generation |
 | `--manifest-dir <path>` | Directory for manifest (default: `packages/`) |
@@ -465,7 +459,6 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--output <ids>` | Output ids to generate, comma-separated; glob patterns allowed (e.g. `'*routes*'`). Fails when a pattern matches no output |
 | `--server-only` | Generate the built-in `server` section only (not valid with an `outputs` configuration) |
 | `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
-| `--docs-only` | Generate documentation only |
 | `--force` | Bypass input hash cache and always regenerate |
 | `--no-cache` | Run without reading or writing input hash cache |
 

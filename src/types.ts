@@ -200,32 +200,6 @@ export interface MultiModuleConfig {
 
   /** Module definitions */
   modules: Record<string, ModuleConfig>;
-
-  /** Spec directory structure configuration */
-  spec?: SpecConfig;
-}
-
-/**
- * Spec directory structure configuration
- */
-export interface SpecConfig {
-  /** Root directory for spec files */
-  root?: string;
-  /** Shared resources configuration */
-  shared?: {
-    /** Path to shared OpenAPI schemas */
-    openapi?: string;
-    /** Path to shared templates */
-    templates?: string;
-    /** Path to shared overlays */
-    overlays?: string;
-    /** Path to shared spectral rules */
-    spectral?: string;
-  };
-  /** Overlays to apply (in order) */
-  overlays?: string[];
-  /** Path to spectral ruleset */
-  spectral?: string;
 }
 
 /**
@@ -252,17 +226,11 @@ export interface ModuleDefaults {
   /** Frontend output config (legacy) */
   frontend?: FrontendConfig;
 
-  /** Documentation config */
-  docs?: DocsConfig;
-
   /** Overlay configuration */
   overlays?: OverlayConfig;
 
   /** Flexible output configuration */
   outputs?: Record<string, OutputConfig>;
-
-  /** Shared module name for overlays */
-  sharedModuleName?: string;
 }
 
 /**
@@ -363,17 +331,11 @@ export interface ModuleConfig {
     enabled?: boolean;
   };
 
-  /** Override docs config */
-  docs?: DocsConfig;
-
   /** Module-specific overlays */
   overlays?: string[];
 
   /** Module-specific output overrides */
   outputs?: Record<string, Partial<OutputConfig> & { enabled?: boolean }>;
-
-  /** Module-specific Spectral config */
-  spectral?: string;
 
   /** Explicit dependencies (must be subset of OpenAPI x-micro-contracts-depend-on) */
   dependsOn?: string[];
@@ -403,16 +365,6 @@ export interface FrontendConfig {
   client?: string;
   /** Service re-exports file name */
   service?: string;
-}
-
-/**
- * Documentation config
- */
-export interface DocsConfig {
-  /** Enable documentation generation */
-  enabled?: boolean;
-  /** Template for redoc */
-  template?: string;
 }
 
 /**
@@ -466,19 +418,12 @@ export interface ResolvedModuleConfig {
     service: string;
     template?: string;
   } | null;
-  /** Docs config */
-  docs: {
-    enabled: boolean;
-    template: string;
-  };
   /** Overlay files to apply (in order) */
   overlays: string[];
   /** Overlay collision policy */
   overlayCollision: 'error' | 'warn' | 'last-wins';
   /** Resolved outputs (new flexible system) */
   outputs: ResolvedOutputConfig[];
-  /** Module-specific Spectral config path */
-  spectral?: string;
   /** Config-level dependencies (for validation) */
   dependsOn?: string[];
 }
@@ -589,10 +534,8 @@ const MODULE_KEYS: KeySpec = {
   contractPublic: { output: null },
   server: { ...SERVER_KEYS, enabled: null },
   frontend: { ...FRONTEND_KEYS, enabled: null },
-  docs: { enabled: null, template: null },
   overlays: null,
   outputs: { '*': OUTPUT_KEYS },
-  spectral: null,
   dependsOn: null,
 };
 
@@ -602,22 +545,18 @@ const CONFIG_KEYS: KeySpec = {
     contractPublic: { output: null },
     server: SERVER_KEYS,
     frontend: FRONTEND_KEYS,
-    docs: { enabled: null, template: null },
     overlays: { shared: null, collision: null },
     outputs: { '*': OUTPUT_KEYS },
-    sharedModuleName: null,
   },
   modules: { '*': MODULE_KEYS },
-  spec: {
-    root: null,
-    shared: { openapi: null, templates: null, overlays: null, spectral: null },
-    overlays: null,
-    spectral: null,
-  },
 };
 
 /** Keys removed from the config format, with the replacement to use instead. */
 const REMOVED_KEYS: Record<string, string> = {
+  'defaults.docs': 'documentation generation was removed; run @redocly/cli against the generated spec',
+  'defaults.spectral': 'declare a Spectral command under checks in guardrails.yaml',
+  'defaults.sharedModuleName': 'never had an effect',
+  'spec': 'never had an effect; module spec paths come from modules.<name>.openapi',
   'defaults.templates': 'use defaults.server.template / defaults.frontend.template / defaults.contract.serviceTemplate',
   'defaults.server.routes': 'the file name is part of server.output (e.g. server/src/{module}/routes.generated.ts)',
   'defaults.frontend.shared': 'no longer generated; declare an entry under outputs instead',
@@ -801,12 +740,6 @@ export function resolveModuleConfig(
     service: frontendOverride?.service ?? frontendDefaults?.service ?? 'service.generated.ts',
   } : null;
 
-  // Docs config
-  const docs = {
-    enabled: moduleConfig.docs?.enabled ?? defaults.docs?.enabled ?? true,
-    template: moduleConfig.docs?.template ?? defaults.docs?.template ?? 'default',
-  };
-  
   // Overlays (shared + module-specific)
   const overlays: string[] = [
     ...(defaults.overlays?.shared || []),
@@ -827,11 +760,9 @@ export function resolveModuleConfig(
     serviceTemplate,
     server,
     frontend,
-    docs,
     overlays,
     overlayCollision,
     outputs,
-    spectral: moduleConfig.spectral,
     dependsOn: moduleConfig.dependsOn,
   };
 }

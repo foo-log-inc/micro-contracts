@@ -53,13 +53,6 @@ export const commandDefinitions = {
         }
       },
       {
-        "name": "docs-only",
-        "schema": {
-          "type": "boolean",
-          "default": false
-        }
-      },
-      {
         "name": "skip-lint",
         "schema": {
           "type": "boolean",
@@ -314,13 +307,6 @@ export const commandDefinitions = {
       },
       {
         "name": "frontend-only",
-        "schema": {
-          "type": "boolean",
-          "default": false
-        }
-      },
-      {
-        "name": "docs-only",
         "schema": {
           "type": "boolean",
           "default": false

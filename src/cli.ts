@@ -44,15 +44,13 @@ function isPartialGeneration(opts: {
   contractsOnly?: boolean;
   serverOnly?: boolean;
   frontendOnly?: boolean;
-  docsOnly?: boolean;
 }): boolean {
   return Boolean(
     opts.module ||
     opts.output ||
     opts.contractsOnly ||
     opts.serverOnly ||
-    opts.frontendOnly ||
-    opts.docsOnly
+    opts.frontendOnly
   );
 }
 
@@ -101,7 +99,6 @@ const handlers: CommandHandlers = {
         contractsOnly: opts.contractsOnly,
         serverOnly: opts.serverOnly,
         frontendOnly: opts.frontendOnly,
-        docsOnly: opts.docsOnly,
         skipLint: opts.skipLint,
         modules: opts.module,
         outputs: opts.output,
@@ -517,8 +514,7 @@ const handlers: CommandHandlers = {
                 contractsOnly: opts.contractsOnly,
                 serverOnly: opts.serverOnly,
                 frontendOnly: opts.frontendOnly,
-                docsOnly: opts.docsOnly,
-              });
+                      });
 
               if (opts.manifest !== false) {
                 const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
