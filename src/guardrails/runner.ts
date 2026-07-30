@@ -232,8 +232,10 @@ export async function runAllChecks(options: CheckOptions = {}): Promise<CheckSum
 /**
  * The run's verdict. Skipping every check verified nothing, so it is not
  * success: a mistyped generated directory used to end in "All checks passed".
+ *
+ * The only definition of the verdict — `check` and `pipeline` both print it.
  */
-function formatVerdict(summary: { failed: number; passed: number }): string {
+export function formatVerdict(summary: { failed: number; passed: number }): string {
   if (summary.failed > 0) {
     return '❌ Some checks failed. Fix issues before committing.';
   }

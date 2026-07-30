@@ -182,6 +182,17 @@ generated:
       expect(fs.existsSync(path.join(tempDir, 'packages/out/second.generated.ts'))).toBe(true);
     });
 
+    it('does not call a pipeline that ran nothing successful', () => {
+      // #77 fixed this verdict for `check`; the pipeline printed its own.
+      createGuardrailsConfig();
+
+      const { stdout, exitCode } = runCli('pipeline --skip allowlist,drift,manifest');
+
+      expect(stdout).toContain('No checks ran');
+      expect(stdout).not.toContain('Pipeline completed successfully');
+      expect(exitCode).toBe(1);
+    });
+
     it('deps fails instead of reporting an incomplete graph', () => {
       // A module whose spec is missing would silently drop out of the graph,
       // impact analysis and validation output.

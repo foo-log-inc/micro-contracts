@@ -71,6 +71,7 @@ export { findOpenAPISpecs } from './lint.js';
 
 // Check runner
 export {
+  formatVerdict,
   runAllChecks,
   formatCheckResults,
   formatSingleCheckResult,

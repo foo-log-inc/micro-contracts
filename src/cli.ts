@@ -14,6 +14,7 @@ import {
   formatSingleCheckResult,
   formatCheckStart,
   formatCheckSummary,
+  formatVerdict,
   getAvailableChecks,
   createGuardrailsConfig,
   generateManifest,
@@ -624,6 +625,8 @@ const handlers: CommandHandlers = {
       console.log(`  Duration:      ${totalDuration}ms`);
       console.log('');
 
+      const verdict = formatVerdict({ failed: totalFailed, passed: totalPassed });
+
       if (hasFailure) {
         console.log('❌ Pipeline completed with failures.');
 
@@ -639,6 +642,10 @@ const handlers: CommandHandlers = {
           }
         }
 
+        process.exit(1);
+      } else if (totalPassed === 0) {
+        // Nothing ran, so there is nothing to call successful.
+        console.log(verdict);
         process.exit(1);
       } else {
         console.log('✅ Pipeline completed successfully!');
