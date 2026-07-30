@@ -17,6 +17,15 @@ import { lintSpec } from '../src/generator/linter.js';
 import { resolveModuleConfig } from '../src/types.js';
 import type { OpenAPISpec } from '../src/types.js';
 
+/**
+ * An operation as a bare record, for reaching at extension keys the tests set
+ * or delete directly. Going through unknown is what TypeScript asks for here:
+ * OperationObject and Record<string, unknown> do not overlap.
+ */
+function raw(operation: unknown): Record<string, unknown> {
+  return operation as Record<string, unknown>;
+}
+
 // Import template processor to register Handlebars helpers
 import '../src/generator/templateProcessor.js';
 
@@ -698,7 +707,7 @@ describe('Screen Spec - Lint rules (legacy)', () => {
 
   it('errors when x-screen-id present but x-screen-const missing', () => {
     const spec = createLegacyScreenSpec();
-    delete (spec.paths['/home'].get as Record<string, unknown>)['x-screen-const'];
+    delete raw(spec.paths['/home'].get)['x-screen-const'];
 
     const result = lintSpec(spec, { screen: true });
 
@@ -709,7 +718,7 @@ describe('Screen Spec - Lint rules (legacy)', () => {
 
   it('errors when x-screen-id present but x-screen-name missing', () => {
     const spec = createLegacyScreenSpec();
-    delete (spec.paths['/home'].get as Record<string, unknown>)['x-screen-name'];
+    delete raw(spec.paths['/home'].get)['x-screen-name'];
 
     const result = lintSpec(spec, { screen: true });
 
@@ -731,7 +740,7 @@ describe('Screen Spec - Lint rules (legacy)', () => {
 
   it('errors on invalid x-events (not an array)', () => {
     const spec = createLegacyScreenSpec();
-    (spec.paths['/home'].get as Record<string, unknown>)['x-events'] = 'not-an-array';
+    raw(spec.paths['/home'].get)['x-events'] = 'not-an-array';
 
     const result = lintSpec(spec, { screen: true });
 
@@ -742,7 +751,7 @@ describe('Screen Spec - Lint rules (legacy)', () => {
 
   it('errors on x-events item missing required fields', () => {
     const spec = createLegacyScreenSpec();
-    (spec.paths['/home'].get as Record<string, unknown>)['x-events'] = [
+    raw(spec.paths['/home'].get)['x-events'] = [
       { name: 'test_event' }, // missing type
     ];
 
@@ -773,7 +782,7 @@ describe('Screen Spec - Lint rules (inline x-event)', () => {
 
   it('errors on x-event with invalid type (number)', () => {
     const spec = createInlineEventSpec();
-    (spec.paths['/simple'].get as Record<string, unknown>)['x-event'] = 42;
+    raw(spec.paths['/simple'].get)['x-event'] = 42;
 
     const result = lintSpec(spec, { screen: true });
 
@@ -783,7 +792,7 @@ describe('Screen Spec - Lint rules (inline x-event)', () => {
 
   it('errors on x-event object without name or $ref', () => {
     const spec = createInlineEventSpec();
-    (spec.paths['/simple'].get as Record<string, unknown>)['x-event'] = { type: 'user_action' };
+    raw(spec.paths['/simple'].get)['x-event'] = { type: 'user_action' };
 
     const result = lintSpec(spec, { screen: true });
 
@@ -793,7 +802,7 @@ describe('Screen Spec - Lint rules (inline x-event)', () => {
 
   it('errors when x-events and x-event coexist', () => {
     const spec = createInlineEventSpec();
-    const calGet = spec.paths['/calendar/{yearMonth}'].get as Record<string, unknown>;
+    const calGet = raw(spec.paths['/calendar/{yearMonth}'].get);
     calGet['x-events'] = [{ name: 'old', type: 'screen_view', method: 'track' }];
 
     const result = lintSpec(spec, { screen: true });
@@ -815,7 +824,7 @@ describe('Screen Spec - Lint rules (inline x-event)', () => {
 
   it('errors when x-interactions is not an array', () => {
     const spec = createInlineEventSpec();
-    (spec.paths['/calendar/{yearMonth}'].get as Record<string, unknown>)['x-interactions'] = 'bad';
+    raw(spec.paths['/calendar/{yearMonth}'].get)['x-interactions'] = 'bad';
 
     const result = lintSpec(spec, { screen: true });
 
@@ -825,7 +834,7 @@ describe('Screen Spec - Lint rules (inline x-event)', () => {
 
   it('errors when x-interactions entry lacks name', () => {
     const spec = createInlineEventSpec();
-    (spec.paths['/calendar/{yearMonth}'].get as Record<string, unknown>)['x-interactions'] = [
+    raw(spec.paths['/calendar/{yearMonth}'].get)['x-interactions'] = [
       { description: 'missing name' },
     ];
 
@@ -837,7 +846,7 @@ describe('Screen Spec - Lint rules (inline x-event)', () => {
 
   it('validates x-event inside x-interactions entries', () => {
     const spec = createInlineEventSpec();
-    (spec.paths['/calendar/{yearMonth}'].get as Record<string, unknown>)['x-interactions'] = [
+    raw(spec.paths['/calendar/{yearMonth}'].get)['x-interactions'] = [
       { name: 'swipe', 'x-event': 42 },
     ];
 

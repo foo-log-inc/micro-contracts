@@ -32,7 +32,7 @@ describe("dsl_task binding consistency", () => {
 
   it.each(llmCommands)(
     "%s x-agent.dsl_task matches DSL task registry",
-    (cmdName, cmd) => {
+    (_cmdName, cmd) => {
       const dslTask = cmd["x-agent"]!.dsl_task!;
       expect(taskRegistry[dslTask]).toBeDefined();
       expect(taskRegistry[dslTask].id).toBe(dslTask);
@@ -40,7 +40,7 @@ describe("dsl_task binding consistency", () => {
   );
 
   it("TASK_IDS values all exist in the DSL task registry", () => {
-    for (const [key, taskId] of Object.entries(TASK_IDS)) {
+    for (const taskId of Object.values(TASK_IDS)) {
       expect(taskRegistry[taskId]).toBeDefined();
       expect(taskRegistry[taskId].id).toBe(taskId);
     }
