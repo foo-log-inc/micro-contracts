@@ -11,6 +11,7 @@ import {
   loadOpenAPISpec,
   loadConfig,
   generate,
+  collectInputFiles,
 } from '../src/generator/index.js';
 import type { MultiModuleConfig } from '../src/types.js';
 
@@ -867,6 +868,50 @@ export interface {{interfaceName}} {
 
       await expect(generate(config)).resolves.toBeUndefined();
       expect(fs.existsSync(path.join(tmpDir, 'frontend'))).toBe(false);
+    });
+  });
+
+  describe('input files for the cache', () => {
+    it('covers every template generation reads', () => {
+      const specPath = path.join(tmpDir, 'spec.yaml');
+      fs.writeFileSync(specPath, [
+        'openapi: 3.0.3',
+        'info:',
+        '  title: T',
+        '  version: 1.0.0',
+        'paths: {}',
+        '',
+      ].join('\n'));
+
+      const serviceTemplate = path.join(tmpDir, 'service.hbs');
+      const outputTemplate = path.join(tmpDir, 'routes.hbs');
+      const serverTemplate = path.join(tmpDir, 'server.hbs');
+      for (const template of [serviceTemplate, outputTemplate, serverTemplate]) {
+        fs.writeFileSync(template, 'x');
+      }
+
+      const configPath = path.join(tmpDir, 'micro-contracts.config.yaml');
+      fs.writeFileSync(configPath, 'modules: {}\n');
+
+      const config: MultiModuleConfig = {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'contracts/{module}'), serviceTemplate },
+          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+          server: { output: path.join(tmpDir, 'routes.generated.ts'), template: serverTemplate },
+          outputs: { routes: { output: path.join(tmpDir, 'out.ts'), template: outputTemplate } },
+        },
+        modules: { core: { openapi: specPath } },
+      };
+
+      const files = collectInputFiles(config, configPath);
+
+      // A template missing here does not invalidate the hash when edited, so
+      // the next run skips and leaves the previous output in place.
+      expect(files).toContain(path.resolve(serviceTemplate));
+      expect(files).toContain(path.resolve(outputTemplate));
+      expect(files).toContain(path.resolve(serverTemplate));
+      expect(files).toContain(path.resolve(specPath));
+      expect(files).toContain(path.resolve(configPath));
     });
   });
 

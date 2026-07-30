@@ -115,14 +115,16 @@ export function collectInputFiles(
       }
     }
 
-    // Legacy server/frontend templates
-    if (resolved.server?.template) {
-      const t = path.resolve(resolved.server.template);
-      if (fs.existsSync(t)) files.add(t);
-    }
-    if (resolved.frontend?.template) {
-      const t = path.resolve(resolved.frontend.template);
-      if (fs.existsSync(t)) files.add(t);
+    // Every template generation reads: leaving one out means editing it does not
+    // invalidate the hash, and the run skips with the old output in place.
+    for (const template of [
+      resolved.serviceTemplate,
+      resolved.server?.template,
+      resolved.frontend?.template,
+    ]) {
+      if (!template) continue;
+      const absTemplate = path.resolve(template);
+      if (fs.existsSync(absTemplate)) files.add(absTemplate);
     }
   }
 
