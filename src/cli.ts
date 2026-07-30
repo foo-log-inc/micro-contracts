@@ -376,7 +376,9 @@ const handlers: CommandHandlers = {
         console.log(formatCheckResults(summary, opts.verbose, summary.checks));
       }
 
-      if (summary.failed > 0) {
+      // A run that verified nothing is not a pass, whatever the reason it had
+      // nothing to run.
+      if (summary.failed > 0 || summary.passed === 0) {
         process.exit(1);
       }
 

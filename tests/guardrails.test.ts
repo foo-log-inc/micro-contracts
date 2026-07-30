@@ -619,6 +619,27 @@ describe('getChangedFiles', () => {
   });
 });
 
+describe('check filters', () => {
+  it('rejects a check name that matches nothing', async () => {
+    // --only <typo> leaves nothing to run; --skip <typo> skips nothing while the
+    // caller believes it did.
+    await expect(runAllChecks({ only: ['nosuchcheck'] })).rejects.toThrow(
+      /Unknown check in --only: 'nosuchcheck'/,
+    );
+    await expect(runAllChecks({ skip: ['nosuchcheck'] })).rejects.toThrow(
+      /Unknown check in --skip: 'nosuchcheck'/,
+    );
+  });
+
+  it('runs only the named check, reporting the rest as skipped', async () => {
+    const summary = await runAllChecks({ only: ['manifest'], generatedDir: 'nosuchdir' });
+
+    const ran = summary.results.filter(r => r.message !== 'Skipped by filter');
+    expect(ran.map(r => r.name)).toEqual(['manifest']);
+    expect(summary.passed).toBe(0);
+  });
+});
+
 describe('runAllChecks', () => {
   it('should return available checks', () => {
     const checks = getAvailableChecks();
