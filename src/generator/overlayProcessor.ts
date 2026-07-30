@@ -14,7 +14,7 @@ import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject } fr
 // Types
 // =============================================================================
 
-export interface OverlaySpec {
+interface OverlaySpec {
   overlay: string;  // Version (e.g., "1.0.0")
   info: {
     title: string;
@@ -23,7 +23,7 @@ export interface OverlaySpec {
   actions: OverlayAction[];
 }
 
-export interface OverlayAction {
+interface OverlayAction {
   target: string;  // JSONPath-like selector
   description?: string;
   update?: Record<string, unknown>;
@@ -54,7 +54,7 @@ export interface OverlayResult {
   log: OverlayApplicationLog[];
 }
 
-export interface OverlayApplicationLog {
+interface OverlayApplicationLog {
   overlay: string;
   target: string;
   path: string;

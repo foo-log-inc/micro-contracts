@@ -11,7 +11,7 @@ import {
 } from "../agents/index.js";
 import type { AuditConfig, AuditOptions, ReportFormat } from "../agents/index.js";
 
-export interface CommandAuditGuardrailsOptions {
+interface CommandAuditGuardrailsOptions {
   config?: string;
   guardrails?: string;
   adapter?: string;

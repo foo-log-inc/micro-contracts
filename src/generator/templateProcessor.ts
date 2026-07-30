@@ -16,17 +16,6 @@ import { isReference, getRefName } from '../types.js';
 // Types
 // =============================================================================
 
-export interface TemplateConfig {
-  /** Path to server route template */
-  server?: string;
-  /** Path to frontend client template */
-  frontend?: string;
-  /** Path to service interface template */
-  services?: string;
-  /** Custom templates by name */
-  custom?: Record<string, string>;
-}
-
 export interface TemplateContext {
   /** Module name */
   moduleName: string;
@@ -130,12 +119,12 @@ export interface ScreenInteraction {
   extras: Record<string, unknown>;
 }
 
-export interface UniqueOverlayContext {
+interface UniqueOverlayContext {
   name: string;
   params: ExtensionParameterContext[];
 }
 
-export interface RouteContext {
+interface RouteContext {
   path: string;
   fastifyPath: string;
   /** URL pattern for client (with ${params.xxx} template syntax) */
@@ -179,13 +168,13 @@ export interface RouteContext {
   extensionParams: ExtensionParameterContext[];
 }
 
-export interface RouteExtension {
+interface RouteExtension {
   marker: string;
   value: string;
   registryKey: string;  // e.g., 'middlewareRegistry.requireAuth'
 }
 
-export interface ExtensionParameterContext {
+interface ExtensionParameterContext {
   extensionName: string;
   name: string;
   location: 'headers' | 'query' | 'params';
@@ -193,18 +182,18 @@ export interface ExtensionParameterContext {
   required: boolean;
 }
 
-export interface ParameterContext {
+interface ParameterContext {
   name: string;
   required: boolean;
   schemaName?: string;
 }
 
-export interface ResponseContext {
+interface ResponseContext {
   statusCode: string;
   schemaName?: string;
 }
 
-export interface ServiceContext {
+interface ServiceContext {
   name: string;
   key: string;
   methods: string[];

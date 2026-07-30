@@ -1,6 +1,6 @@
 import { buildExternalInsight } from "../external/insight-provider.js";
 
-export interface InsightsCommandOptions {
+interface InsightsCommandOptions {
   format?: string;
   projectRoot?: string;
   config?: string;

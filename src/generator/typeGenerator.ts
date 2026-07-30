@@ -531,7 +531,7 @@ function generateParamsType(
  * Schema property names are arbitrary strings, so names that are not
  * identifiers are emitted as quoted keys.
  */
-export function formatPropertyKey(name: string): string {
+function formatPropertyKey(name: string): string {
   if (isTsIdentifier(name)) return name;
   return `'${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }

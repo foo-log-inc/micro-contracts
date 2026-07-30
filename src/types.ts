@@ -274,7 +274,7 @@ export interface DependencyRef {
 /**
  * Parse dependency reference string
  */
-export function parseDependencyRef(ref: string): DependencyRef | null {
+function parseDependencyRef(ref: string): DependencyRef | null {
   const parts = ref.split('.');
   if (parts.length !== 3) return null;
   return {
@@ -768,37 +768,6 @@ export function resolveModuleConfig(
 }
 
 // Route info extracted from OpenAPI
-export interface RouteInfo {
-  path: string;
-  method: 'get' | 'post' | 'put' | 'patch' | 'delete';
-  operationId: string;
-  service: string;
-  serviceMethod: string;
-  isPublished: boolean;
-  summary?: string;
-  tags?: string[];
-  queryParams?: ParameterInfo[];
-  pathParams?: ParameterInfo[];
-  requestBody?: {
-    schemaName: string;
-    required: boolean;
-  };
-  responses: ResponseInfo[];
-  /** Middleware/overlay names from x-middleware extension */
-  overlays?: string[];
-}
-
-export interface ParameterInfo {
-  name: string;
-  required: boolean;
-  schemaName?: string;
-}
-
-export interface ResponseInfo {
-  statusCode: string;
-  schemaName?: string;
-}
-
 // Service info for interface generation
 export interface ServiceInfo {
   name: string;
@@ -906,17 +875,6 @@ export function extractDependencies(spec: OpenAPISpec): ModuleDependencies {
 }
 
 /**
- * Get canonical extension value (supports both short and long forms)
- */
-export function getExtensionValue<T>(
-  obj: Record<string, unknown>,
-  shortName: string,
-  longName: string
-): T | undefined {
-  return (obj[longName] ?? obj[shortName]) as T | undefined;
-}
-
-/**
  * Walk a schema graph, visiting the schema and every subschema reachable from
  * it: properties, array items, additionalProperties, allOf/oneOf/anyOf members,
  * and the targets of $ref.
@@ -931,7 +889,7 @@ export function getExtensionValue<T>(
  * was reached through a $ref, its component name. Returning false from `visit`
  * stops the walk.
  */
-export function walkSchemaGraph(
+function walkSchemaGraph(
   schema: SchemaObject | ReferenceObject,
   spec: OpenAPISpec,
   visit: (schema: SchemaObject, refName?: string) => boolean | void,
@@ -993,7 +951,7 @@ export function hasPrivateProperties(
 }
 
 /** Component sections a $ref can point into. */
-export type ComponentSection = 'schemas' | 'responses' | 'parameters' | 'requestBodies';
+type ComponentSection = 'schemas' | 'responses' | 'parameters' | 'requestBodies';
 
 const COMPONENT_SECTIONS: ComponentSection[] = ['schemas', 'responses', 'parameters', 'requestBodies'];
 
@@ -1045,7 +1003,7 @@ export function collectReachableComponents(
 }
 
 /** Parse "#/components/<section>/<name>" into its parts. */
-export function parseComponentRef(ref: string): { section: ComponentSection; name: string } | null {
+function parseComponentRef(ref: string): { section: ComponentSection; name: string } | null {
   const match = ref.match(/^#\/components\/([^/]+)\/(.+)$/);
   if (!match) return null;
   const section = match[1] as ComponentSection;

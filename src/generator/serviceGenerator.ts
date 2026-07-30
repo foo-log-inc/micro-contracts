@@ -16,7 +16,7 @@ import type {
 } from '../types.js';
 import { isReference, getRefName } from '../types.js';
 
-export interface ServiceGeneratorOptions {
+interface ServiceGeneratorOptions {
   /** Only include public endpoints (x-public: true) */
   publicOnly?: boolean;
   /** Path to custom Handlebars template for service interface generation */
@@ -26,7 +26,7 @@ export interface ServiceGeneratorOptions {
 /**
  * Context passed to custom service interface templates (per-service)
  */
-export interface ServiceTemplateContext {
+interface ServiceTemplateContext {
   serviceName: string;
   interfaceName: string;
   methods: ServiceMethodTemplateContext[];
@@ -34,7 +34,7 @@ export interface ServiceTemplateContext {
   spec: OpenAPISpec;
 }
 
-export interface ServiceMethodTemplateContext {
+interface ServiceMethodTemplateContext {
   name: string;
   inputType: string;
   returnType: string;
