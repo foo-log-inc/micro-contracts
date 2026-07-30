@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import Handlebars from 'handlebars';
-import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject, ScreenEventDefinition, InlineEventDefinition, InlineEventRaw, InteractionDefinitionRaw } from '../types.js';
+import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
 import { isReference, getRefName } from '../types.js';
 
@@ -847,11 +847,11 @@ Handlebars.registerHelper('gte', (a, b) => a >= b);
 Handlebars.registerHelper('lt', (a, b) => a < b);
 Handlebars.registerHelper('lte', (a, b) => a <= b);
 Handlebars.registerHelper('and', function(...args) {
-  const options = args.pop();
+  args.pop();  // Handlebars options object
   return args.every(Boolean);
 });
 Handlebars.registerHelper('or', function(...args) {
-  const options = args.pop();
+  args.pop();  // Handlebars options object
   return args.some(Boolean);
 });
 

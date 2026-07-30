@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import yaml from "yaml";
 import { loadConfig, loadOpenAPISpec, lintSpec, formatLintResults } from "../generator/index.js";
 import type { MultiModuleConfig, OpenAPISpec } from "../types.js";
 import { isMultiModuleConfig } from "../types.js";
@@ -58,7 +57,7 @@ function loadModules(
   return { config, configPath: resolved, modules };
 }
 
-function formatSpec(spec: OpenAPISpec, specPath: string): string {
+function formatSpec(_spec: OpenAPISpec, specPath: string): string {
   const raw = fs.readFileSync(specPath, "utf-8");
   const maxLen = 24000;
   if (raw.length > maxLen) {

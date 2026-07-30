@@ -137,7 +137,7 @@ export function processOverlays(
  */
 function applyAction(
   result: OverlayResult,
-  overlay: OverlaySpec,
+  _overlay: OverlaySpec,
   action: OverlayAction,
   overlayFile: string,
   collision: 'error' | 'warn' | 'last-wins',
@@ -659,15 +659,6 @@ function parameterToTsType(param: ParameterObject): string {
     default:
       return 'unknown';
   }
-}
-
-/**
- * Convert string to camelCase
- */
-function camelCase(str: string): string {
-  return str
-    .replace(/[-_](.)/g, (_, c) => c.toUpperCase())
-    .replace(/^./, c => c.toLowerCase());
 }
 
 /**

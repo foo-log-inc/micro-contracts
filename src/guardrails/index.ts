@@ -67,23 +67,7 @@ export {
 export type { GenerateManifestResult } from './manifest.js';
 
 // Lint
-export {
-  findOpenAPISpecs,
-  runLintCheck,
-} from './lint.js';
-
-// Typecheck
-export {
-  findTsConfigs,
-  runTypecheckCheck,
-} from './typecheck.js';
-
-// Docs
-export {
-  checkMarkdownFile,
-  findMarkdownFiles,
-  runDocsCheck,
-} from './docs.js';
+export { findOpenAPISpecs } from './lint.js';
 
 // Check runner
 export {

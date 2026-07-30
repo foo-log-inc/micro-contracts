@@ -6,7 +6,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { matchGlob, matchWithNegation } from '../glob.js';
+import { matchWithNegation } from '../glob.js';
 import { execSync } from 'child_process';
 import type { GuardrailsConfig, AllowlistResult, AllowlistViolation, CheckResult, CheckOptions } from './types.js';
 import { loadGuardrailsConfigWithPath } from './config.js';

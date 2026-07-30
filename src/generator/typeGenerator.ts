@@ -8,7 +8,6 @@ import type {
   ReferenceObject,
   ParameterObject,
   OperationObject,
-  PathItem,
   OpenAPIType,
 } from '../types.js';
 import { isReference, getRefName, isTsIdentifier } from '../types.js';
@@ -305,7 +304,7 @@ function singleTypeToTs(typeName: OpenAPIType): string {
  * Resolve an array of OpenAPI types (with nullable flag) into a TypeScript type string.
  * Handles both single-type and multi-type (OpenAPI 3.1 union) cases.
  */
-function resolveTypeString(types: OpenAPIType[], schema: SchemaObject, nullable: boolean): string {
+function resolveTypeString(types: OpenAPIType[], _schema: SchemaObject, nullable: boolean): string {
   const nullSuffix = nullable ? ' | null' : '';
 
   if (types.length === 0) {
@@ -384,7 +383,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
   const lines: string[] = [];
   const generatedTypes = new Set<string>();
 
-  for (const [path, pathItem] of Object.entries(spec.paths)) {
+  for (const pathItem of Object.values(spec.paths)) {
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[method];
       if (!operation) continue;
@@ -525,10 +524,6 @@ function generateParamsType(
 
   lines.push('}');
   return lines.join('\n');
-}
-
-function capitalize(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 /**
