@@ -681,50 +681,6 @@ function capitalize(str: string): string {
 // =============================================================================
 
 /**
- * Load overlay configuration from micro-contracts config
- */
-export function loadOverlayConfig(
-  configPath: string,
-  moduleName: string
-): OverlayConfig | null {
-  if (!fs.existsSync(configPath)) return null;
-
-  const content = fs.readFileSync(configPath, 'utf-8');
-  const config = yaml.load(content) as Record<string, unknown>;
-
-  const files: string[] = [];
-
-  // Get shared overlays from defaults
-  const defaults = config.defaults as Record<string, unknown> | undefined;
-  if (defaults?.overlays) {
-    const overlays = defaults.overlays as string[] | Record<string, unknown>;
-    if (Array.isArray(overlays)) {
-      files.push(...overlays);
-    } else if (overlays.shared) {
-      files.push(...(overlays.shared as string[]));
-    }
-  }
-
-  // Get module-specific overlays
-  const modules = config.modules as Record<string, Record<string, unknown>> | undefined;
-  const moduleConfig = modules?.[moduleName];
-  if (moduleConfig?.overlays) {
-    const overlays = moduleConfig.overlays as string[];
-    files.push(...overlays);
-  }
-
-  if (files.length === 0) return null;
-
-  const collision = (defaults?.overlays as Record<string, unknown>)?.collision as 
-    'error' | 'warn' | 'last-wins' | undefined;
-
-  return {
-    collision: collision || 'error',
-    files,
-  };
-}
-
-/**
  * Format overlay application log for console output
  */
 export function formatOverlayLog(result: OverlayResult): string {

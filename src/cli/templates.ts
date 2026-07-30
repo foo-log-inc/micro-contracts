@@ -5,7 +5,7 @@
  * Keep in sync with examples/spec/default/templates/
  */
 
-export const STARTER_FASTIFY_ROUTES_TEMPLATE = `/**
+const STARTER_FASTIFY_ROUTES_TEMPLATE = `/**
  * Auto-generated Fastify routes
  * Generated from: {{spec.info.title}} v{{spec.info.version}}
  * DO NOT EDIT MANUALLY
@@ -66,7 +66,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 }
 `;
 
-export const STARTER_FETCH_CLIENT_TEMPLATE = `/**
+const STARTER_FETCH_CLIENT_TEMPLATE = `/**
  * Auto-generated HTTP Client from OpenAPI specification
  * Generated from: {{title}} v{{version}}
  * 
@@ -160,7 +160,7 @@ export const {{key}}Api: {{name}}ServiceApi = {
 {{/each}}
 `;
 
-export const STARTER_SERVICE_STUBS_TEMPLATE = `{{!-- Service implementation stubs template --}}
+const STARTER_SERVICE_STUBS_TEMPLATE = `{{!-- Service implementation stubs template --}}
 {{!-- Generates skeleton implementations for service methods --}}
 // Auto-generated service stubs - Edit to implement business logic
 import type { {{#each services}}{{this}}ServiceApi{{#unless @last}}, {{/unless}}{{/each}} } from '{{config.contractPackage}}/services';
@@ -192,7 +192,7 @@ export class {{this}}Service implements {{this}}ServiceApi {
 {{/each}}
 `;
 
-export const STARTER_OVERLAY_ADAPTER_TEMPLATE = `/**
+const STARTER_OVERLAY_ADAPTER_TEMPLATE = `/**
  * Auto-generated Overlay Adapter
  * Generated from: {{spec.info.title}} v{{spec.info.version}}
  * DO NOT EDIT MANUALLY
@@ -315,7 +315,7 @@ export function sendError(reply: FastifyReply, error: ProblemDetails): void {
 }
 `;
 
-export const STARTER_OVERLAY_STUBS_TEMPLATE = `{{!-- Extension implementation stubs template --}}
+const STARTER_OVERLAY_STUBS_TEMPLATE = `{{!-- Extension implementation stubs template --}}
 {{!-- Generates skeleton implementations for overlay handlers --}}
 // Auto-generated extension stubs - Edit to implement overlay logic
 import type {
@@ -372,7 +372,7 @@ export const overlayHandlers: OverlayRegistry = {
 // Screen Spec Templates
 // =============================================================================
 
-export const STARTER_SCREEN_NAVIGATION_TEMPLATE = `/**
+const STARTER_SCREEN_NAVIGATION_TEMPLATE = `/**
  * Auto-generated screen navigation map from OpenAPI screen specification
  * Generated from: {{title}} v{{version}}
  * DO NOT EDIT MANUALLY
@@ -402,7 +402,7 @@ export const {{screenConst}}_PAGE_LINKS = {
 {{/each}}
 `;
 
-export const STARTER_SCREEN_EVENTS_TEMPLATE = `/**
+const STARTER_SCREEN_EVENTS_TEMPLATE = `/**
  * Auto-generated analytics event hooks from OpenAPI screen specification
  * Generated from: {{title}} v{{version}}
  * DO NOT EDIT MANUALLY
