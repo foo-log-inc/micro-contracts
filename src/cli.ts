@@ -135,7 +135,7 @@ const handlers: CommandHandlers = {
   },
 
   // ── lint ───────────────────────────────────────────────
-  lint: async (input) => {
+  lint: async (input, opts) => {
     try {
       const specPath = path.resolve(input!);
       if (!fs.existsSync(specPath)) {
@@ -145,7 +145,7 @@ const handlers: CommandHandlers = {
 
       console.log(`Linting: ${specPath}\n`);
       const spec = loadOpenAPISpec(specPath);
-      const result = lintSpec(spec, { strict: false });
+      const result = lintSpec(spec, { strict: opts.strict });
 
       console.log(formatLintResults(result));
 

@@ -193,6 +193,41 @@ generated:
       expect(exitCode).toBe(1);
     });
 
+    it('honors lint --strict', () => {
+      // The flag was declared and implemented, but the handler passed
+      // strict: false unconditionally.
+      fs.writeFileSync(
+        path.join(tempDir, 'warned.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: T',
+          '  version: 1.0.0',
+          'paths:',
+          '  /home:',
+          '    get:',
+          '      operationId: getHome',
+          '      x-micro-contracts-service: Home',
+          '      x-micro-contracts-method: get',
+          '      x-events:',
+          '        - name: home_view',
+          '          type: screen_view',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          'components:',
+          '  schemas: {}',
+          '',
+        ].join('\n'),
+      );
+
+      expect(runCli('lint warned.yaml').exitCode).toBe(0);
+
+      const strict = runCli('lint warned.yaml --strict');
+      expect(strict.exitCode).toBe(1);
+      expect(strict.stdout).toMatch(/warning\(s\) \(strict\)/);
+    });
+
     it('deps fails instead of reporting an incomplete graph', () => {
       // A module whose spec is missing would silently drop out of the graph,
       // impact analysis and validation output.
