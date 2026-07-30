@@ -317,7 +317,19 @@ export async function runManifestCheck(options: CheckOptions): Promise<CheckResu
     if (result.valid) {
       const manifest = loadManifest(generatedDir);
       const fileCount = manifest ? Object.keys(manifest.files).length : 0;
-      
+
+      // A manifest recording nothing has nothing to verify: reporting integrity
+      // over zero files says the generated artifacts are intact when none are
+      // being tracked at all.
+      if (fileCount === 0) {
+        return {
+          name: 'manifest',
+          status: 'fail',
+          duration: Date.now() - start,
+          message: `Manifest in ${generatedDir} records no files. Run generate before verifying.`,
+        };
+      }
+
       return {
         name: 'manifest',
         status: 'pass',
