@@ -23,6 +23,7 @@ import {
   checkUncommittedChanges,
   formatCheckResults,
   findOpenAPISpecs,
+  getChangedFiles,
 } from '../src/guardrails/index.js';
 import { execFileSync } from 'child_process';
 
@@ -518,6 +519,75 @@ describe('custom command checks', () => {
       expect(result?.message).toMatch(/Cannot expand \{files\}/);
     } finally {
       process.chdir(previous);
+    }
+  });
+});
+
+describe('getChangedFiles', () => {
+  let repo: string;
+
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: repo, encoding: 'utf-8', stdio: 'pipe' });
+
+  beforeEach(() => {
+    repo = fs.mkdtempSync(path.join(os.tmpdir(), 'changed-files-'));
+    fs.mkdirSync(path.join(repo, 'spec'), { recursive: true });
+    fs.mkdirSync(path.join(repo, '.github'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'spec/a.yaml'), 'a: 1\n');
+    fs.writeFileSync(path.join(repo, '.github/workflow.yml'), 'name: ci\n');
+    git('init', '-q', '.');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    git('add', '-A');
+    git('commit', '-qm', 'init');
+  });
+
+  afterEach(() => {
+    fs.rmSync(repo, { recursive: true, force: true });
+  });
+
+  function inRepo<T>(run: () => T): T {
+    const previous = process.cwd();
+    process.chdir(repo);
+    try {
+      return run();
+    } finally {
+      process.chdir(previous);
+    }
+  }
+
+  it('reports staged and unstaged changes together', () => {
+    // Taking staged files and only falling back to unstaged ones left the
+    // protected-path edit below unseen.
+    fs.appendFileSync(path.join(repo, 'spec/a.yaml'), 'b: 2\n');
+    git('add', 'spec/a.yaml');
+    fs.appendFileSync(path.join(repo, '.github/workflow.yml'), '# tampered\n');
+
+    const files = inRepo(() => getChangedFiles({}));
+
+    expect(files).toContain('spec/a.yaml');
+    expect(files).toContain('.github/workflow.yml');
+  });
+
+  it('reports untracked files', () => {
+    fs.writeFileSync(path.join(repo, 'spec/new.yaml'), 'c: 3\n');
+
+    expect(inRepo(() => getChangedFiles({}))).toContain('spec/new.yaml');
+  });
+
+  it('reports nothing for a clean tree', () => {
+    expect(inRepo(() => getChangedFiles({}))).toEqual([]);
+  });
+
+  it('fails instead of reporting no changes when git cannot run', () => {
+    const notARepo = fs.mkdtempSync(path.join(os.tmpdir(), 'not-a-repo-'));
+    const previous = process.cwd();
+    process.chdir(notARepo);
+    try {
+      expect(() => getChangedFiles({})).toThrow(/Cannot determine changed files/);
+    } finally {
+      process.chdir(previous);
+      fs.rmSync(notARepo, { recursive: true, force: true });
     }
   });
 });

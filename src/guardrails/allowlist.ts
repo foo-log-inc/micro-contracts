@@ -37,29 +37,17 @@ export function getChangedFiles(options: {
       .trim()
       .split('\n')
       .filter(Boolean);
+  } else if (baseRef && baseRef !== 'HEAD') {
+    // Comparing branches (CI mode)
+    files = runGit(`git diff --name-only ${baseRef}...HEAD`);
   } else {
-    // Use git diff (local mode)
-    try {
-      const ref = baseRef || 'HEAD';
-      // Try staged files first
-      let out = execSync('git diff --name-only --cached', { encoding: 'utf8' });
-      files = out.trim().split('\n').filter(Boolean);
-      
-      // If no staged files, try unstaged
-      if (files.length === 0) {
-        out = execSync('git diff --name-only', { encoding: 'utf8' });
-        files = out.trim().split('\n').filter(Boolean);
-      }
-      
-      // If still no files, try diff against base ref
-      if (files.length === 0 && ref !== 'HEAD') {
-        out = execSync(`git diff --name-only ${ref}...HEAD`, { encoding: 'utf8' });
-        files = out.trim().split('\n').filter(Boolean);
-      }
-    } catch (error) {
-      // Git not available or not in a git repo
-      return [];
-    }
+    // Everything not yet committed. Taking staged files and only falling back to
+    // unstaged ones left a partly staged change half inspected: an edit to a
+    // protected path went unseen as long as something else was staged.
+    files = [...new Set([
+      ...runGit('git diff --name-only HEAD'),
+      ...runGit('git ls-files --others --exclude-standard'),
+    ])];
   }
   
   // Filter and convert paths relative to baseDir
@@ -82,6 +70,26 @@ export function getChangedFiles(options: {
   }
   
   return files;
+}
+
+/**
+ * Run a git command, returning its output lines.
+ *
+ * Failures propagate: returning no files would report "nothing changed" when the
+ * truth is that nothing could be inspected.
+ */
+function runGit(command: string): string[] {
+  try {
+    return execSync(command, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+  } catch (error) {
+    throw new Error(
+      `Cannot determine changed files (${command}): ` +
+      (error instanceof Error ? error.message.split('\n')[0] : String(error))
+    );
+  }
 }
 
 /**
