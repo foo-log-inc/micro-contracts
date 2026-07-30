@@ -412,7 +412,7 @@ export const commandDefinitions = {
         "name": "output",
         "schema": {
           "type": "string",
-          "default": "guardrails.yaml"
+          "default": "micro-contracts.guardrails.yaml"
         }
       }
     ]

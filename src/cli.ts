@@ -719,7 +719,7 @@ const handlers: CommandHandlers = {
   // ── guardrails-init ───────────────────────────────────
   guardrailsInit: async (opts) => {
     try {
-      const outputPath = opts.output ?? 'guardrails.yaml';
+      const outputPath = opts.output!;
 
       if (fs.existsSync(outputPath)) {
         console.error(`File already exists: ${outputPath}`);
@@ -731,7 +731,9 @@ const handlers: CommandHandlers = {
       console.log(`Created: ${outputPath}`);
       console.log('\nNext steps:');
       console.log('  1. Review and customize the guardrails configuration');
-      console.log('  2. Run: micro-contracts check');
+      console.log('  2. Run: micro-contracts generate');
+      console.log('  3. Commit the generated artifacts (drift compares against the commit)');
+      console.log('  4. Run: micro-contracts check');
 
     } catch (error) {
       console.error('Failed to create guardrails config:', error instanceof Error ? error.message : error);

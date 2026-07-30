@@ -175,8 +175,8 @@ export function createProgram(
 
   program
     .command("guardrails-init")
-    .description("Create a guardrails.yaml configuration file.")
-    .option("-o, --output <path>", "Output path for guardrails.yaml.", "guardrails.yaml")
+    .description("Create a micro-contracts.guardrails.yaml configuration file.")
+    .option("-o, --output <path>", "Output path for the guardrails configuration.", "micro-contracts.guardrails.yaml")
     .action(async (opts, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       if (globalOpts.introspect) {

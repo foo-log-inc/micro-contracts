@@ -284,6 +284,56 @@ generated:
       expect(typo.stdout).toMatch(/Unknown module or API reference/);
     });
 
+    it('runs the documented setup through a passing check', () => {
+      // Two scaffolders and three gates, none of which had ever been run
+      // against each other's output.
+      fs.writeFileSync(
+        path.join(tempDir, 'my-spec.json'),
+        JSON.stringify({
+          openapi: '3.0.0',
+          info: { title: 'T', version: '1.0.0' },
+          paths: {
+            '/a': {
+              get: {
+                operationId: 'getA',
+                'x-micro-contracts-service': 'A',
+                'x-micro-contracts-method': 'get',
+                responses: { '200': { description: 'ok' } },
+              },
+            },
+          },
+        }),
+      );
+
+      expect(runCli('init core --openapi my-spec.json').exitCode).toBe(0);
+      expect(runCli('guardrails-init').exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, 'micro-contracts.guardrails.yaml'))).toBe(true);
+      expect(runCli('generate').exitCode).toBe(0);
+
+      // drift compares against the commit, which is why the guidance says to
+      // commit before checking.
+      const git = (...args: string[]) =>
+        execSync(`git ${args.join(' ')}`, { cwd: tempDir, encoding: 'utf-8', stdio: 'pipe' });
+      git('add', '-A');
+      git('commit', '-qm', 'scaffold');
+
+      expect(runCli('check').exitCode).toBe(0);
+
+      // Editing what init scaffolded must be allowed: the two scaffolders have
+      // to agree on the layout. Committing first makes the allowlist see only
+      // this edit, so the assertion is about the policy, not about an empty
+      // changed-file list.
+      fs.appendFileSync(path.join(tempDir, 'src/core/container.ts'), '// edit\n');
+
+      const edited = runCli('check --only allowlist');
+      expect(edited.stdout).not.toMatch(/not-in-allowlist|\(protected\)/);
+      expect(edited.exitCode).toBe(0);
+
+      // A hand-edited generated file must still be caught.
+      fs.appendFileSync(path.join(tempDir, 'packages/contract/core/index.ts'), '// tampered\n');
+      expect(runCli('check --only drift').exitCode).toBe(1);
+    });
+
     it('honors lint --strict', () => {
       // The flag was declared and implemented, but the handler passed
       // strict: false unconditionally.

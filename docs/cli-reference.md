@@ -465,9 +465,9 @@ x-agent:
 
 ### guardrails-init
 
-Create a guardrails.yaml configuration file.
+Create a micro-contracts.guardrails.yaml configuration file.
 
-Generates a starter guardrails.yaml with default check configuration. Fails if the target file already exists.
+Generates a starter micro-contracts.guardrails.yaml with default check configuration. Fails if the target file already exists.
 
 **Usage:**
 
@@ -482,11 +482,11 @@ micro-contracts guardrails-init -o custom-guardrails.yaml
 
 | Option | Aliases | Required | Default | Description |
 |---|---|---|---|---|
-| `--output` | -o | No | `"guardrails.yaml"` | Output path for guardrails.yaml. |
+| `--output` | -o | No | `"micro-contracts.guardrails.yaml"` | Output path for the guardrails configuration. |
 
 #### Exit Codes
 
-**Exit 0:** guardrails.yaml created successfully.
+**Exit 0:** Guardrails configuration created successfully.
 
 - **stdout:** format=`text`
 

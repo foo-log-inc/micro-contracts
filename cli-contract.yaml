@@ -713,9 +713,9 @@ command_sets:
       # ── guardrails-init ──────────────────────────────
       guardrails-init:
         path: [guardrails-init]
-        summary: Create a guardrails.yaml configuration file.
+        summary: Create a micro-contracts.guardrails.yaml configuration file.
         description: >-
-          Generates a starter guardrails.yaml with default check
+          Generates a starter micro-contracts.guardrails.yaml with default check
           configuration. Fails if the target file already exists.
         usage:
           - micro-contracts guardrails-init
@@ -724,15 +724,15 @@ command_sets:
         options:
           - name: output
             aliases: [o]
-            description: Output path for guardrails.yaml.
+            description: Output path for the guardrails configuration.
             value_name: path
             schema:
               type: string
-              default: guardrails.yaml
+              default: micro-contracts.guardrails.yaml
 
         exits:
           '0':
-            description: guardrails.yaml created successfully.
+            description: Guardrails configuration created successfully.
             stdout:
               format: text
             files:
