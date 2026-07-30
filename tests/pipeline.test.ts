@@ -215,7 +215,7 @@ generated:
       // Create only guardrails config, no micro-contracts.config.yaml
       createGuardrailsConfig();
       
-      const { stdout, exitCode } = runCli('pipeline --skip drift,manifest');
+      const { stdout } = runCli('pipeline --skip drift,manifest');
       
       // Pipeline should run but skip generation due to missing config
       expect(stdout).toContain('Running AI Guardrails Pipeline');
@@ -277,7 +277,7 @@ generated:
       
       // Pipeline without config will skip generation but continue with checks
       // Some checks may fail in a non-git directory, but --continue-on-error should continue
-      const { stdout, exitCode } = runCli('pipeline --continue-on-error --skip drift');
+      const { stdout } = runCli('pipeline --continue-on-error --skip drift');
       
       expect(stdout).toContain('Running AI Guardrails Pipeline');
       // With --continue-on-error, pipeline should run all steps and show summary

@@ -12,6 +12,7 @@ import {
   type OverlayConfig 
 } from '../src/generator/overlayProcessor.js';
 import type { OpenAPISpec } from '../src/types.js';
+import type { ExtensionInfo } from '../src/generator/overlayProcessor.js';
 
 describe('overlayProcessor', () => {
   let baseSpec: OpenAPISpec;
@@ -369,7 +370,7 @@ actions:
 
   describe('generateExtensionInterfaces', () => {
     it('should generate TypeScript interfaces from extension info', () => {
-      const extensionInfo = new Map([
+      const extensionInfo = new Map<string, ExtensionInfo>([
         ['x-middleware:requireAuth', {
           name: 'requireAuth',
           marker: 'x-middleware',
@@ -402,7 +403,7 @@ actions:
     });
 
     it('should include injected parameters in input type and errors in comment', () => {
-      const extensionInfo = new Map([
+      const extensionInfo = new Map<string, ExtensionInfo>([
         ['x-middleware:tenantIsolation', {
           name: 'tenantIsolation',
           marker: 'x-middleware',

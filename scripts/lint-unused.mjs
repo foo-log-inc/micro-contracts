@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 /**
- * Reports unused imports, locals and parameters in the hand-written sources.
+ * Type-checks the hand-written sources and tests, including unused imports,
+ * locals and parameters.
+ *
+ * Tests are outside the build project (they are not shipped) and vitest only
+ * transpiles them, so this is the only thing that type-checks them at all.
  *
  * `noUnusedLocals` is project-wide and cannot skip a directory, while files
  * under src/generated/ are produced by cli-contracts and can only be fixed
@@ -29,8 +33,8 @@ if (tsc.stderr?.trim()) {
 
 if (diagnostics.length > 0) {
   console.error(diagnostics.join('\n'));
-  console.error(`\n${diagnostics.length} unused declaration(s). Delete them.`);
+  console.error(`\n${diagnostics.length} problem(s) in src/ and tests/.`);
   process.exit(1);
 }
 
-console.log('No unused declarations.');
+console.log('src/ and tests/ type-check clean.');

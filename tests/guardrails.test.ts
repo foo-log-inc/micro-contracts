@@ -406,8 +406,6 @@ describe('gate 3 against a missing generated directory', () => {
       passed: 0,
       failed: 0,
       skipped: 2,
-      total: 2,
-      duration: 1,
       results: [
         { name: 'a', status: 'skip', duration: 0 },
         { name: 'b', status: 'skip', duration: 0 },
