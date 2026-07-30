@@ -5,13 +5,11 @@
  * Supports both built-in checks and custom checks from guardrails.yaml.
  */
 
-import type { CheckOptions, CheckResult, CheckSummary, CheckDefinition, CheckCommandConfig, GateNumber } from './types.js';
+import type { CheckOptions, CheckResult, CheckSummary, CheckDefinition, GateNumber } from './types.js';
 import { runAllowlistCheck } from './allowlist.js';
 import { runDriftCheck } from './drift.js';
 import { runManifestCheck } from './manifest.js';
-import { runLintCheck, runCustomCommandCheck } from './lint.js';
-import { runTypecheckCheck } from './typecheck.js';
-import { runDocsCheck } from './docs.js';
+import { runCustomCommandCheck } from './lint.js';
 import { loadGuardrailsConfigWithPath } from './config.js';
 
 /**
@@ -76,7 +74,14 @@ function loadCustomChecks(options: CheckOptions): CheckDefinition[] {
         name,
         description: `Custom check: ${name}`,
         gate: checkConfig.gate,
-        run: (opts) => runCustomCommandCheck(name, checkConfig.command, opts),
+        run: (opts) => checkConfig.command
+          ? runCustomCommandCheck(name, checkConfig.command, opts)
+          : Promise.resolve({
+              name,
+              status: 'fail' as const,
+              duration: 0,
+              message: `Check '${name}' has no command. Set checks.${name}.command in guardrails.yaml.`,
+            }),
       });
     }
   }
@@ -269,7 +274,7 @@ export function formatCheckStart(check: CheckDefinition): string {
  */
 export function formatCheckSummary(
   summary: CheckSummary,
-  checksWithGates?: CheckDefinition[]
+  _checksWithGates?: CheckDefinition[]
 ): string {
   const lines: string[] = [];
   

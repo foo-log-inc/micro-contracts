@@ -9,18 +9,17 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { spawn } from 'child_process';
 import type { CheckResult, CheckOptions } from './types.js';
-import { lintSpec, formatLintResults, type LintResult } from '../generator/linter.js';
+import { lintSpec } from '../generator/linter.js';
 import type { OpenAPISpec } from '../types.js';
 import { loadGuardrailsConfigWithPath } from './config.js';
 import { findConfigFile, loadConfig } from '../generator/index.js';
 import { isMultiModuleConfig } from '../types.js';
-import { matchWithNegation } from '../glob.js';
 import { glob } from 'glob';
 
 /**
  * Find OpenAPI spec files based on guardrails config or defaults
  */
-export async function findOpenAPISpecs(options: CheckOptions): Promise<string[]> {
+export async function findOpenAPISpecs(_options: CheckOptions): Promise<string[]> {
   // The project config lists every module's spec: that is where the specs are,
   // whatever the layout and whatever the file format. Globbing a fixed
   // directory found nothing for any project that keeps specs elsewhere, and the

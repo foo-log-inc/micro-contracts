@@ -18,7 +18,6 @@ import { loadConfig, loadOpenAPISpec } from "../generator/index.js";
 import { extractDependencies } from "../types.js";
 import type {
   DependencyRef,
-  MultiModuleConfig,
   OpenAPISpec,
   ResolvedModuleConfig,
 } from "../types.js";

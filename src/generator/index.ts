@@ -35,7 +35,7 @@ import {
 } from './templateProcessor.js';
 import { validateDependsOn } from './dependencyGenerator.js';
 import { matchGlob } from '../glob.js';
-import { extractDependencies, expandPlaceholders, collectReachableComponents } from '../types.js';
+import { extractDependencies, collectReachableComponents } from '../types.js';
 
 export { generateTypes } from './typeGenerator.js';
 export { generateSchemas } from './schemaGenerator.js';

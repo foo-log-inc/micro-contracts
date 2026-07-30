@@ -227,7 +227,7 @@ function extractMethodInfo(
 /**
  * Generate service interface content
  */
-function generateServiceInterface(service: ServiceInfo, spec: OpenAPISpec): string {
+function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): string {
   const lines: string[] = [];
   
   lines.push('/**');
@@ -388,6 +388,3 @@ function serviceNameToProperty(serviceName: string): string {
   return baseName.charAt(0).toLowerCase() + baseName.slice(1);
 }
 
-function capitalize(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}

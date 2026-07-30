@@ -1,6 +1,6 @@
 {
   "name": "micro-contracts",
-  "version": "0.18.4",
+  "version": "0.18.5",
   "description": "Contract-first OpenAPI toolchain that keeps TypeScript UI and microservices aligned via code generation",
   "type": "module",
   "main": "dist/index.js",
@@ -30,6 +30,7 @@
   "scripts": {
     "prebuild": "node scripts/ensure-agent-contracts-analyzer.mjs",
     "build": "tsc",
+    "lint": "node scripts/lint-unused.mjs",
     "bundle": "node esbuild.bundle.mjs",
     "bundle:min": "node esbuild.bundle.mjs --minify",
     "dev": "tsx watch src/cli.ts",
