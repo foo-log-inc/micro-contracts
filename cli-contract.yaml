@@ -26,7 +26,7 @@ artifact_slots:
     description: Generated contract packages, server routes, and frontend clients
   guardrails-config:
     direction: read
-    description: guardrails.yaml configuration
+    description: micro-contracts.guardrails.yaml configuration
   manifest:
     direction: write
     description: Generated manifest (.generated-manifest.json)
@@ -125,7 +125,7 @@ command_sets:
           - name: manifest
             description: >-
               Generate manifest after generation. Enabled by default when
-              guardrails.yaml has a generated section. Use --no-manifest to disable.
+              micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable.
             schema:
               type: boolean
               default: true
@@ -376,7 +376,7 @@ command_sets:
 
           - name: guardrails
             aliases: [g]
-            description: Path to guardrails.yaml.
+            description: Path to micro-contracts.guardrails.yaml.
             value_name: path
             schema:
               type: string
@@ -487,7 +487,7 @@ command_sets:
 
           - name: guardrails
             aliases: [g]
-            description: Path to guardrails.yaml.
+            description: Path to micro-contracts.guardrails.yaml.
             value_name: path
             schema:
               type: string
@@ -576,7 +576,7 @@ command_sets:
           side_effects:
             - file_write
           recommended_before_use:
-            - Ensure micro-contracts.config.yaml and guardrails.yaml exist.
+            - Ensure micro-contracts.config.yaml and micro-contracts.guardrails.yaml exist.
             - Verify OpenAPI specs are valid.
 
       # ── deps ─────────────────────────────────────────
@@ -719,7 +719,7 @@ command_sets:
           configuration. Fails if the target file already exists.
         usage:
           - micro-contracts guardrails-init
-          - micro-contracts guardrails-init -o custom-guardrails.yaml
+          - micro-contracts guardrails-init -o custom-micro-contracts.guardrails.yaml
 
         options:
           - name: output
@@ -1206,7 +1206,7 @@ command_sets:
         path: [audit-guardrails]
         summary: Audit guardrails configuration for drift and lint coverage.
         description: >-
-          Checks that guardrails.yaml configuration covers all generated
+          Checks that micro-contracts.guardrails.yaml configuration covers all generated
           output directories for drift detection and that OpenAPI lint
           rules are properly configured. Note: file permission and
           editing checks have been moved to artifact-contracts.
@@ -1230,7 +1230,7 @@ command_sets:
 
           - name: guardrails
             aliases: [g]
-            description: Path to guardrails.yaml.
+            description: Path to micro-contracts.guardrails.yaml.
             value_name: path
             schema:
               type: string
@@ -1301,7 +1301,7 @@ command_sets:
               format: text
 
           '3':
-            description: Input validation failed (guardrails.yaml not found).
+            description: Input validation failed (micro-contracts.guardrails.yaml not found).
             stderr:
               format: text
 

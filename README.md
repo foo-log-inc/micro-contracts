@@ -137,10 +137,10 @@ modules:
     outputs:
       screen-navigation:
         output: frontend/src/screens/navigation.generated.ts
-        template: screen-navigation.hbs
+        template: spec/default/templates/screen-navigation.hbs
       screen-events:
         output: frontend/src/screens/events.generated.ts
-        template: screen-events.hbs
+        template: spec/default/templates/screen-events.hbs
 ```
 
 Initialize a screen module with starter files:
@@ -435,7 +435,7 @@ Run guardrail checks.
 | `--gate <gates>` | Run checks for specific gates only (1-5) |
 | `-v, --verbose` | Enable verbose output |
 | `--fix` | Auto-fix issues where possible |
-| `-g, --guardrails <path>` | Path to `guardrails.yaml` |
+| `-g, --guardrails <path>` | Path to `micro-contracts.guardrails.yaml` |
 | `-d, --generated-dir <path>` | Path to generated files directory (default: `packages/`) |
 | `--changed-files <path>` | Path to file containing changed files (for CI) |
 | `--list` | List available checks |
@@ -451,7 +451,7 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `-v, --verbose` | Enable verbose output |
 | `--skip <checks>` | Skip specific checks (comma-separated) |
 | `--continue-on-error` | Continue running even if a step fails |
-| `-g, --guardrails <path>` | Path to `guardrails.yaml` |
+| `-g, --guardrails <path>` | Path to `micro-contracts.guardrails.yaml` |
 | `-d, --generated-dir <path>` | Path to generated files directory (default: `packages/`) |
 | `--no-manifest` | Skip manifest generation |
 | `--skip-lint` | Skip linting before generation |
@@ -483,11 +483,11 @@ Analyze module dependencies.
 
 ### guardrails-init
 
-Create a `guardrails.yaml` configuration file.
+Create a `micro-contracts.guardrails.yaml` configuration file.
 
 | Option | Description |
 |--------|-------------|
-| `-o, --output <path>` | Output path (default: `guardrails.yaml`) |
+| `-o, --output <path>` | Output path (default: `micro-contracts.guardrails.yaml`) |
 
 ### manifest
 
@@ -551,7 +551,7 @@ Audit guardrails configuration for drift detection and lint rule coverage. File 
 | Option | Description |
 |--------|-------------|
 | `-c, --config <path>` | Path to config file |
-| `-g, --guardrails <path>` | Path to guardrails.yaml |
+| `-g, --guardrails <path>` | Path to micro-contracts.guardrails.yaml |
 | `-a, --adapter <name>` | SDK adapter (`claude`, `openai`, `gemini`, `mock`) |
 | `--model <name>` | LLM model override |
 | `--show-prompt` | Output the constructed prompt without calling LLM |

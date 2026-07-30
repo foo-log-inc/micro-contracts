@@ -334,6 +334,18 @@ generated:
       expect(runCli('check --only drift').exitCode).toBe(1);
     });
 
+    it('runs the screen-spec quick start end to end', () => {
+      // A second scaffolded config, edited by the same fixes as the first.
+      expect(runCli('init home --screens').exitCode).toBe(0);
+
+      const generate = runCli('generate');
+      expect(generate.stdout).toContain('Generation complete');
+      expect(generate.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, 'frontend/src/screens/navigation.generated.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'frontend/src/screens/events.generated.ts'))).toBe(true);
+    });
+
     it('honors lint --strict', () => {
       // The flag was declared and implemented, but the handler passed
       // strict: false unconditionally.
