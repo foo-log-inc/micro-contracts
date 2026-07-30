@@ -1,6 +1,6 @@
 {
   "name": "micro-contracts",
-  "version": "0.18.9",
+  "version": "0.18.10",
   "description": "Contract-first OpenAPI toolchain that keeps TypeScript UI and microservices aligned via code generation",
   "type": "module",
   "main": "dist/index.js",
