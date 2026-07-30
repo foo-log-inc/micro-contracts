@@ -9,9 +9,6 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { spawn } from 'child_process';
 import type { CheckResult, CheckOptions } from './types.js';
-import { lintSpec } from '../generator/linter.js';
-import type { OpenAPISpec } from '../types.js';
-import { loadGuardrailsConfigWithPath } from './config.js';
 import { findConfigFile, loadConfig } from '../generator/index.js';
 import { isMultiModuleConfig } from '../types.js';
 import { glob } from 'glob';
@@ -148,95 +145,6 @@ function expandPlaceholders(command: string, context: {
 }
 
 /**
- * Run lint check on all OpenAPI specs
- */
-export async function runLintCheck(options: CheckOptions): Promise<CheckResult> {
-  const start = Date.now();
-  
-  try {
-    // Load guardrails config to check for custom command
-    const { config } = loadGuardrailsConfigWithPath(options.guardrailsPath);
-    const lintConfig = config?.checks?.lint;
-
-    // If custom command is configured and enabled, use it
-    if (lintConfig?.command && lintConfig.enabled !== false) {
-      return await runExternalLintCheck(lintConfig.command, options, start);
-    }
-
-    // Otherwise, use built-in linter
-    return await runBuiltinLintCheck(options, start);
-    
-  } catch (error) {
-    return {
-      name: 'lint',
-      status: 'fail',
-      duration: Date.now() - start,
-      message: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Run external lint command
- */
-async function runExternalLintCheck(
-  commandTemplate: string,
-  options: CheckOptions,
-  start: number
-): Promise<CheckResult> {
-  // Find OpenAPI specs
-  const specFiles = await findOpenAPISpecs(options);
-  
-  if (specFiles.length === 0) {
-    return {
-      name: 'lint',
-      status: 'skip',
-      duration: Date.now() - start,
-      message: 'No OpenAPI specs found',
-    };
-  }
-
-  // Expand placeholders
-  const command = expandPlaceholders(commandTemplate, {
-    files: specFiles,
-    cwd: process.cwd(),
-  });
-
-  if (options.verbose) {
-    console.log(`Running: ${command}`);
-  }
-
-  // Execute command
-  const { exitCode, stdout, stderr } = await executeCommand(command);
-
-  // Parse output for details
-  const output = (stdout + stderr).trim();
-  const lines = output.split('\n').filter(line => line.trim());
-
-  if (exitCode === 0) {
-    return {
-      name: 'lint',
-      status: 'pass',
-      duration: Date.now() - start,
-      message: `${specFiles.length} spec(s) passed lint`,
-      details: options.verbose && lines.length > 0 ? lines : undefined,
-    };
-  }
-
-  // Count errors and warnings from output
-  const errorCount = (output.match(/error/gi) || []).length;
-  const warningCount = (output.match(/warning/gi) || []).length;
-
-  return {
-    name: 'lint',
-    status: 'fail',
-    duration: Date.now() - start,
-    message: `Lint failed with ${errorCount} error(s), ${warningCount} warning(s)`,
-    details: lines.slice(0, 50), // Limit output
-  };
-}
-
-/**
  * Run a custom command check (generic check execution)
  * This is used for checks defined in guardrails.yaml
  */
@@ -302,68 +210,3 @@ export async function runCustomCommandCheck(
   }
 }
 
-/**
- * Run built-in lint check
- */
-async function runBuiltinLintCheck(options: CheckOptions, start: number): Promise<CheckResult> {
-  // Find all OpenAPI specs
-  const specFiles = await findOpenAPISpecs(options);
-  
-  if (specFiles.length === 0) {
-    return {
-      name: 'lint',
-      status: 'skip',
-      duration: Date.now() - start,
-      message: 'No OpenAPI specs found',
-    };
-  }
-  
-  const allErrors: string[] = [];
-  const allWarnings: string[] = [];
-  let hasErrors = false;
-  
-  for (const specFile of specFiles) {
-    try {
-      const content = fs.readFileSync(specFile, 'utf-8');
-      const spec = yaml.load(content) as OpenAPISpec;
-      
-      const result = lintSpec(spec, { strict: false });
-      
-      if (result.errors.length > 0) {
-        hasErrors = true;
-        for (const error of result.errors) {
-          allErrors.push(`${specFile}: [${error.code}] ${error.message}`);
-        }
-      }
-      
-      if (result.warnings.length > 0) {
-        for (const warning of result.warnings) {
-          allWarnings.push(`${specFile}: [${warning.code}] ${warning.message}`);
-        }
-      }
-    } catch (error) {
-      allErrors.push(`${specFile}: Failed to parse - ${error instanceof Error ? error.message : String(error)}`);
-      hasErrors = true;
-    }
-  }
-  
-  if (hasErrors) {
-    return {
-      name: 'lint',
-      status: 'fail',
-      duration: Date.now() - start,
-      message: `${allErrors.length} error(s) in ${specFiles.length} spec(s)`,
-      details: options.verbose ? [...allErrors, ...allWarnings.map(w => `⚠️ ${w}`)] : allErrors,
-    };
-  }
-  
-  return {
-    name: 'lint',
-    status: 'pass',
-    duration: Date.now() - start,
-    message: `${specFiles.length} spec(s) passed lint`,
-    details: options.verbose && allWarnings.length > 0 
-      ? allWarnings.map(w => `⚠️ ${w}`) 
-      : undefined,
-  };
-}

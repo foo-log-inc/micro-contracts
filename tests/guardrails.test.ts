@@ -368,6 +368,35 @@ describe('checkUncommittedChanges', () => {
   });
 });
 
+describe('manifest with nothing recorded', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'empty-manifest-'));
+    fs.mkdirSync(path.join(tmpDir, 'packages'), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('fails rather than verifying integrity over zero files', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'packages/.generated-manifest.json'),
+      JSON.stringify({ generatorVersion: '0.0.0', files: {} }),
+    );
+
+    const summary = await runAllChecks({
+      only: ['manifest'],
+      generatedDir: path.join(tmpDir, 'packages'),
+    });
+
+    const manifest = summary.results.find(r => r.name === 'manifest');
+    expect(manifest?.status).toBe('fail');
+    expect(manifest?.message).toMatch(/records no files/);
+  });
+});
+
 describe('gate 3 against a missing generated directory', () => {
   let tmpDir: string;
 
