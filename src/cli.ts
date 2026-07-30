@@ -1038,15 +1038,13 @@ function generateConfigTemplate(moduleName: string): string {
     'defaults:', '  contract:', '    output: packages/contract/{module}', '',
     '  contractPublic:', '    output: packages/contract-published/{module}', '',
     '  outputs:', '    server-routes:', '      output: server/src/{module}/routes.generated.ts',
-    '      template: fastify-routes.hbs', '      config:',
+    '      template: spec/default/templates/fastify-routes.hbs', '      config:',
     '        servicesPath: fastify.services.{module}', '',
     '    frontend-api:', '      output: frontend/src/{module}/api.generated.ts',
-    '      template: fetch-client.hbs', '',
+    '      template: spec/default/templates/fetch-client.hbs', '',
     '    shared-client:', '      output: frontend/src/shared/{module}.api.generated.ts',
-    '      template: fetch-client.hbs', '      condition: hasPublicEndpoints', '      config:',
+    '      template: spec/default/templates/fetch-client.hbs', '      condition: hasPublicEndpoints', '      config:',
     '        contractPackage: "@project/contract-published/{module}"', '',
-    '  overlays:', '    shared:', '      - spec/_shared/overlays/middleware.overlay.yaml',
-    '    collision: error', '', '  docs:', '    enabled: true', '',
     'modules:', `  ${moduleName}:`, `    openapi: spec/${moduleName}/openapi/${moduleName}.yaml`, '',
   ].join('\n');
 }
@@ -1055,13 +1053,12 @@ function generateScreenConfigTemplate(moduleName: string): string {
   return [
     '# micro-contracts Configuration (Screen Spec)', '',
     'defaults:', '  contract:', '    output: packages/contract/{module}', '',
-    '  docs:', '    enabled: false', '',
     'modules:', `  ${moduleName}:`, `    openapi: spec/${moduleName}/openapi/${moduleName}.yaml`,
     '    screen: true', '    outputs:', '      screen-navigation:',
     `        output: frontend/src/screens/navigation.generated.ts`,
-    '        template: screen-navigation.hbs', '      screen-events:',
+    '        template: spec/default/templates/screen-navigation.hbs', '      screen-events:',
     `        output: frontend/src/screens/events.generated.ts`,
-    '        template: screen-events.hbs', '',
+    '        template: spec/default/templates/screen-events.hbs', '',
   ].join('\n');
 }
 

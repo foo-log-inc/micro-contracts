@@ -193,6 +193,40 @@ generated:
       expect(exitCode).toBe(1);
     });
 
+    it('runs the documented quick start end to end', () => {
+      // init scaffolds a config, and the rules generate enforces have tightened
+      // repeatedly; without this the two drift apart silently — a scaffolded
+      // project referencing an overlay init never wrote, or a template path that
+      // no longer resolves, only shows up when someone follows the README.
+      fs.writeFileSync(
+        path.join(tempDir, 'my-spec.json'),
+        JSON.stringify({
+          openapi: '3.0.0',
+          info: { title: 'T', version: '1.0.0' },
+          paths: {
+            '/a': {
+              get: {
+                operationId: 'getA',
+                'x-micro-contracts-service': 'A',
+                'x-micro-contracts-method': 'get',
+                responses: { '200': { description: 'ok' } },
+              },
+            },
+          },
+        }),
+      );
+
+      const init = runCli('init core --openapi my-spec.json');
+      expect(init.exitCode).toBe(0);
+
+      const generate = runCli('generate');
+      expect(generate.stdout).toContain('Generation complete');
+      expect(generate.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, 'packages/contract/core/schemas/types.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'server/src/core/routes.generated.ts'))).toBe(true);
+    });
+
     it('honors lint --strict', () => {
       // The flag was declared and implemented, but the handler passed
       // strict: false unconditionally.
