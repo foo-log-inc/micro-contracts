@@ -146,6 +146,10 @@ Prevents unauthorized edits to protected/generated areas.
 |-------|------|-------------|---------------|--------|
 | Allowlist | built-in | Block **direct** edits to `packages/**`, `*.generated.*`; require approval for `.github/**` | `micro-contracts check --only allowlist` | `allowlist` |
 
+The changed files it inspects are everything not yet committed — staged, unstaged
+and untracked alike — or the list given by `--changed-files` in CI. Without a
+usable git repository the check fails rather than reporting no changes.
+
 Files are categorized into three groups:
 
 | Category | Examples | Who can edit |
@@ -153,6 +157,9 @@ Files are categorized into three groups:
 | `allowed` | `spec/**/*.yaml`, `server/src/**/services/**` | Anyone (AI or human) |
 | `protected` | `.github/**`, `spec/spectral.yaml`, `server/src/_shared/overlays/**` | Requires CODEOWNERS approval |
 | `generated` | `packages/**`, `*.generated.*` | Only via `generate` command |
+
+Patterns are evaluated in order and the last match wins, so a negation (`!pattern`)
+must come after the pattern it narrows.
 
 Protected files include:
 - CI/workflow definitions (`.github/**`) — guardrail bypass prevention

@@ -20,6 +20,15 @@ describe('pipeline command', () => {
   beforeEach(() => {
     // Create temp directory for test files
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pipeline-test-'));
+
+    // The guardrails are git-based: the allowlist check reports what changed
+    // against the commit, and fails when it cannot ask git at all.
+    const git = (...args: string[]) =>
+      execSync(`git ${args.join(' ')}`, { cwd: tempDir, encoding: 'utf-8', stdio: 'pipe' });
+    git('init', '-q', '.');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    git('commit', '-q', '--allow-empty', '-m', 'init');
   });
   
   afterEach(() => {
