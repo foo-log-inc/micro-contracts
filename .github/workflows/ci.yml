@@ -35,3 +35,42 @@ jobs:
         run: npm run docs:check
       - name: Verify package contents
         run: npm pack --dry-run
+
+  # The example project is what the README tells a reader to copy, and its own guardrail check is
+  # the eight gates this package exists to provide. Nothing ran it: `examples/` was outside every
+  # job here, so the example shipped code that failed its own code-typecheck gate (#108) — the
+  # gate was working, it had simply never been executed.
+  #
+  # The setup is explicit rather than leaning on npm lifecycle: eslint-plugin is a `file:`
+  # dependency with no `prepare` script, so `npm ci` in examples/ symlinks it without ever
+  # building dist/, and eslint.config.mjs then fails to resolve it. server/ and frontend/ carry
+  # their own lockfiles, and code-typecheck needs their types.
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # spec-breaking diffs the bundled spec against `main`. A shallow checkout has no such
+          # ref, and the gate's own `|| echo "No base spec found"` would turn that into a pass.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install and build the CLI the example invokes
+        run: |
+          npm ci --legacy-peer-deps --ignore-scripts
+          npm run build
+      - name: Build the eslint plugin the example lints with
+        working-directory: eslint-plugin
+        run: |
+          npm ci
+          npm run build
+      - name: Install the example and its two services
+        run: |
+          npm ci --prefix examples
+          npm ci --prefix examples/server
+          npm ci --prefix examples/frontend
+      - name: Guardrail check
+        working-directory: examples
+        run: npm run check
