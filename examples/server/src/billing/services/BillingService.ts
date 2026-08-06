@@ -19,7 +19,23 @@ import type {
 
 // Import from deps/ - type-safe cross-module dependency
 // Only types declared in x-micro-contracts-depend-on are available
-import type { UserServiceApi } from '../../../../packages/contract/billing/deps/core.js';
+import type {
+  User,
+  UserListResponse,
+  User_getUsersInput,
+  User_getUserByIdInput,
+} from '../../../../packages/contract/billing/deps/core.js';
+
+/**
+ * What billing may call on core.User, spelled out from the two operations
+ * x-micro-contracts-depend-on declares. core's own UserServiceApi also carries
+ * createUser, which billing never declared — depending on that interface would
+ * hand this module an operation the contract does not grant it.
+ */
+interface DeclaredUserService {
+  getUsers(input: User_getUsersInput): Promise<UserListResponse>;
+  getUserById(input: User_getUserByIdInput): Promise<User>;
+}
 
 // Mock data store
 const invoices: Invoice[] = [
@@ -46,7 +62,7 @@ const invoices: Invoice[] = [
 
 export class BillingService implements BillingServiceApi {
   // Inject core.User dependency (declared in x-micro-contracts-depend-on)
-  constructor(private userService: UserServiceApi) {}
+  constructor(private userService: DeclaredUserService) {}
 
   async getInvoices(input: Billing_getInvoicesInput): Promise<InvoiceListResponse> {
     let result = [...invoices];
