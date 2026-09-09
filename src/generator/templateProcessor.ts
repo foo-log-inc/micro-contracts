@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import Handlebars from 'handlebars';
 import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
+import { operationKey } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
 import { isReference, getRefName } from '../types.js';
 
@@ -169,9 +170,9 @@ interface RouteContext {
 }
 
 interface RouteExtension {
-  marker: string;
+  /** Marker the overlay target selected on; absent for `$.paths[*][*]` */
+  marker?: string;
   value: string;
-  registryKey: string;  // e.g., 'middlewareRegistry.requireAuth'
 }
 
 interface ExtensionParameterContext {
@@ -416,38 +417,35 @@ function extractRoutes(
       const extensions: RouteExtension[] = [];
       const extensionParams: ExtensionParameterContext[] = [];
       
+      const opKey = operationKey(apiPath, method);
+
       for (const info of extensionInfo) {
-        const extValue = (operation as unknown as Record<string, unknown>)[info.marker];
-        if (extValue) {
-          const matches = Array.isArray(extValue) 
-            ? extValue.includes(info.name)
-            : extValue === info.name;
-            
-          if (matches) {
-            const registryName = markerToRegistryName(info.marker);
-            extensions.push({
-              marker: info.marker,
-              value: info.name,
-              registryKey: `${registryName}.${info.name}`,
-            });
-            
-            // Add parameters injected by this extension
-            for (const param of info.injectedParameters) {
-              // Map OpenAPI 'in' values to HTTP request property names
-              const locationMap: Record<string, 'headers' | 'query' | 'params'> = {
-                header: 'headers',
-                query: 'query',
-                path: 'params',
-              };
-              extensionParams.push({
-                extensionName: info.name,
-                name: param.name,
-                location: locationMap[param.in] || 'headers',
-                tsType: parameterToTsType(param),
-                required: param.required || false,
-              });
-            }
-          }
+        // The overlay target already selected the operations this overlay covers.
+        // Reading that back beats re-deriving it from the operation's marker,
+        // which saw nothing whenever the overlay's name was not the marker's
+        // value — and nothing at all for `$.paths[*][*]`, which has no marker.
+        if (!info.appliesTo.has(opKey)) continue;
+
+        extensions.push({
+          marker: info.marker,
+          value: info.name,
+        });
+
+        // Add parameters injected by this extension
+        for (const param of info.injectedParameters) {
+          // Map OpenAPI 'in' values to HTTP request property names
+          const locationMap: Record<string, 'headers' | 'query' | 'params'> = {
+            header: 'headers',
+            query: 'query',
+            path: 'params',
+          };
+          extensionParams.push({
+            extensionName: info.name,
+            name: param.name,
+            location: locationMap[param.in] || 'headers',
+            tsType: parameterToTsType(param),
+            required: param.required || false,
+          });
         }
       }
 
@@ -556,10 +554,6 @@ function extractServices(routes: RouteContext[]): ServiceContext[] {
   return Array.from(serviceMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function markerToRegistryName(marker: string): string {
-  const name = marker.replace(/^x-/, '');
-  return name.replace(/-([a-z])/g, (_, c) => c.toUpperCase()) + 'Registry';
-}
 
 /**
  * Convert OpenAPI parameter to TypeScript type

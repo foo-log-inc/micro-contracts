@@ -222,6 +222,149 @@ actions:
       expect(() => processOverlays(baseSpec, config)).toThrow(/unsupported target/);
     });
 
+    it('reaches code generation for a $.paths[*][*] overlay, not just the spec', () => {
+      // The spec came out transformed while the generator saw no overlay at all,
+      // so the declaration sat in the repository looking enforced and every
+      // generated route ran without it.
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
+      const overlayPath = path.join(tmpDir, 'access-control.overlay.yaml');
+      fs.writeFileSync(overlayPath, `
+overlay: 1.0.0
+info:
+  title: Access Control Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths[*][*]"
+    x-micro-contracts-overlay-name: auth
+    update:
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '401':
+          description: Unauthorized
+`);
+
+      const result = processOverlays(baseSpec, { collision: 'error', files: [overlayPath] });
+
+      const auth = result.extensionInfo.get('auth');
+      expect(auth).toBeDefined();
+      expect(auth?.marker).toBeUndefined();
+      expect(auth?.injectedParameters.map(p => p.name)).toEqual(['Authorization']);
+      // Every operation in the spec, which is what the target selected
+      expect([...auth!.appliesTo].sort()).toEqual([
+        'get /api/admin/stats',
+        'get /api/users',
+        'post /api/users',
+      ]);
+
+      const interfaces = generateExtensionInterfaces(result.extensionInfo);
+      expect(interfaces).toContain('export type AuthOverlay');
+      expect(interfaces).toContain('auth: AuthOverlay;');
+    });
+
+    it('keeps an unnamed $.paths[*][*] overlay a spec-only injection', () => {
+      // Nothing names the overlay, so there is no handler to generate — the
+      // action injects into the spec and stops there.
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
+      const overlayPath = path.join(tmpDir, 'correlation-id.overlay.yaml');
+      fs.writeFileSync(overlayPath, `
+overlay: 1.0.0
+info:
+  title: Correlation ID Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths[*][*]"
+    update:
+      parameters:
+        - name: X-Correlation-Id
+          in: header
+          required: false
+          schema:
+            type: string
+`);
+
+      const result = processOverlays(baseSpec, { collision: 'error', files: [overlayPath] });
+
+      expect(result.extensionInfo.size).toBe(0);
+      expect(result.spec.paths['/api/users'].get?.parameters).toContainEqual(
+        expect.objectContaining({ name: 'X-Correlation-Id' })
+      );
+    });
+
+    it('selects operations by target when the overlay name is not the marker value', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
+      const overlayPath = path.join(tmpDir, 'renamed.overlay.yaml');
+      fs.writeFileSync(overlayPath, `
+overlay: 1.0.0
+info:
+  title: Renamed Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'requireAdmin')]"
+    x-micro-contracts-overlay-name: auth
+    update:
+      responses:
+        '403':
+          description: Forbidden
+`);
+
+      const result = processOverlays(baseSpec, { collision: 'error', files: [overlayPath] });
+
+      const auth = result.extensionInfo.get('x-middleware:auth');
+      expect([...auth!.appliesTo]).toEqual(['get /api/admin/stats']);
+    });
+
+    it('fails on an action key nothing reads', () => {
+      // Accepting it would leave the overlay applied to every operation the
+      // target selected, with the exclusion silently doing nothing.
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
+      const overlayPath = path.join(tmpDir, 'excluding.overlay.yaml');
+      fs.writeFileSync(overlayPath, `
+overlay: 1.0.0
+info:
+  title: Excluding Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths[*][*]"
+    x-micro-contracts-overlay-name: auth
+    exclude:
+      - /api/health
+    update:
+      responses:
+        '401':
+          description: Unauthorized
+`);
+
+      expect(() => processOverlays(baseSpec, { collision: 'error', files: [overlayPath] }))
+        .toThrow(/unsupported action key: exclude/);
+    });
+
+    it('fails on an injected x-micro-contracts-* extension nothing reads', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
+      const overlayPath = path.join(tmpDir, 'invented.overlay.yaml');
+      fs.writeFileSync(overlayPath, `
+overlay: 1.0.0
+info:
+  title: Invented Extension Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths[*][*]"
+    update:
+      x-micro-contracts-overlays:
+        auth:
+          handler: auth
+          exclude:
+            - /api/health
+`);
+
+      expect(() => processOverlays(baseSpec, { collision: 'error', files: [overlayPath] }))
+        .toThrow(/injects 'x-micro-contracts-overlays', which nothing reads/);
+    });
+
     it('should allow identical content on collision (idempotent)', () => {
       const overlay1 = `
 overlay: 1.0.0
@@ -374,12 +517,14 @@ actions:
         ['x-middleware:requireAuth', {
           name: 'requireAuth',
           marker: 'x-middleware',
+          appliesTo: new Set(['get /api/users']),
           injectedParameters: [],
           injectedResponses: { '401': { description: 'Unauthorized' } },
         }],
         ['x-middleware:tenantIsolation', {
           name: 'tenantIsolation',
           marker: 'x-middleware',
+          appliesTo: new Set(['post /api/users']),
           injectedParameters: [
             { name: 'X-Tenant-Id', in: 'header' as const, required: true },
           ],
@@ -407,6 +552,7 @@ actions:
         ['x-middleware:tenantIsolation', {
           name: 'tenantIsolation',
           marker: 'x-middleware',
+          appliesTo: new Set(['post /api/users']),
           injectedParameters: [
             { name: 'X-Tenant-Id', in: 'header' as const, required: true },
           ],
