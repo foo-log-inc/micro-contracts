@@ -56,5 +56,8 @@
     "embedoc": "^0.9.0",
     "eslint": "^9.39.2",
     "eslint-plugin-micro-contracts": "file:../eslint-plugin"
+  },
+  "overrides": {
+    "csv-parse": "^7.0.2"
   }
 }
