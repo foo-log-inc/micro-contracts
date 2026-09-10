@@ -146,9 +146,13 @@ Prevents unauthorized edits to protected/generated areas.
 |-------|------|-------------|---------------|--------|
 | Allowlist | built-in | Block **direct** edits to `packages/**`, `*.generated.*`; require approval for `.github/**` | `micro-contracts check --only allowlist` | `allowlist` |
 
-The changed files it inspects are everything not yet committed — staged, unstaged
-and untracked alike — or the list given by `--changed-files` in CI. Without a
-usable git repository the check fails rather than reporting no changes.
+On a pull request the check inspects what that pull request adds to its base branch,
+which the runner names in `GITHUB_BASE_REF`. A CI checkout has nothing uncommitted, so
+asking it what changed locally reads no file at all. In a working copy the check
+inspects everything not yet committed — staged, unstaged and untracked alike.
+`--changed-files` supplies the list instead. The check fails rather than reporting no
+changes when it cannot ask git at all, and when the base branch is absent from the
+checkout — clone with `fetch-depth: 0`.
 
 Files are categorized into three groups:
 
@@ -289,8 +293,12 @@ allowed:
   - "!server/src/_shared/overlays/**"
   
   # Configuration
+  # The example is three npm projects (this one, server/, frontend/) and CI installs all
+  # three. A dependency change moves a manifest and its lock together, so allowing one
+  # without the other describes a change nobody can make.
   - micro-contracts.config.yaml
-  - package.json
+  - "**/package.json"
+  - "**/package-lock.json"
   - tsconfig.json
   
   # Documentation

@@ -22,7 +22,11 @@ export const DEFAULT_GUARDRAILS: GuardrailsConfig = {
     'server/src/server.ts',
     'docs/**/*.md',
     'README.md',
-    'package.json',
+    // A dependency change moves a manifest and its lock together, in whichever project of
+    // the tree it belongs to; allowing one without the other describes a change nobody can
+    // make.
+    '**/package.json',
+    '**/package-lock.json',
     'tsconfig.json',
   ],
   protected: [
@@ -152,9 +156,12 @@ allowed:
   - "!server/src/_shared/overlays/**"
   
   # Configuration
+  # A dependency change moves a manifest and its lock together, in whichever project of the
+  # tree it belongs to.
   - micro-contracts.config.yaml
   - micro-contracts.guardrails.yaml
-  - package.json
+  - "**/package.json"
+  - "**/package-lock.json"
   - tsconfig.json
   
   # Documentation

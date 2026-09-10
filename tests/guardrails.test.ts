@@ -155,6 +155,20 @@ describe('verifyAllowlist', () => {
   });
 });
 
+describe('the shipped default allowlist', () => {
+  it('allows a lockfile wherever it allows the manifest beside it', () => {
+    // A dependency change moves both; allowing only one describes a change nobody can make.
+    for (const file of [
+      'package.json',
+      'package-lock.json',
+      'server/package.json',
+      'server/package-lock.json',
+    ]) {
+      expect(verifyAllowlist([file], DEFAULT_GUARDRAILS).valid).toBe(true);
+    }
+  });
+});
+
 describe('loadGuardrailsConfig', () => {
   it('should return default config when no file exists', () => {
     const config = loadGuardrailsConfig('/nonexistent/guardrails.yaml');
@@ -552,11 +566,16 @@ describe('custom command checks', () => {
 
 describe('getChangedFiles', () => {
   let repo: string;
+  let baseRefEnv: string | undefined;
 
   const git = (...args: string[]) =>
     execFileSync('git', args, { cwd: repo, encoding: 'utf-8', stdio: 'pipe' });
 
   beforeEach(() => {
+    // The runner exports GITHUB_BASE_REF on every pull request, and each test below states
+    // for itself whether it is a working copy or a pull request.
+    baseRefEnv = process.env.GITHUB_BASE_REF;
+    delete process.env.GITHUB_BASE_REF;
     repo = fs.mkdtempSync(path.join(os.tmpdir(), 'changed-files-'));
     fs.mkdirSync(path.join(repo, 'spec'), { recursive: true });
     fs.mkdirSync(path.join(repo, '.github'), { recursive: true });
@@ -570,6 +589,11 @@ describe('getChangedFiles', () => {
   });
 
   afterEach(() => {
+    if (baseRefEnv === undefined) {
+      delete process.env.GITHUB_BASE_REF;
+    } else {
+      process.env.GITHUB_BASE_REF = baseRefEnv;
+    }
     fs.rmSync(repo, { recursive: true, force: true });
   });
 
@@ -604,6 +628,28 @@ describe('getChangedFiles', () => {
 
   it('reports nothing for a clean tree', () => {
     expect(inRepo(() => getChangedFiles({}))).toEqual([]);
+  });
+
+  it('reports what a pull request changed, from a checkout with nothing uncommitted', () => {
+    // A CI checkout is clean, so asking the working tree what changed reads no file at all
+    // and calls that a pass. The base branch is what the pull request is proposed against.
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    fs.appendFileSync(path.join(repo, '.github/workflow.yml'), '# tampered\n');
+    git('add', '-A');
+    git('commit', '-qm', 'edit a protected path');
+    process.env.GITHUB_BASE_REF = 'main';
+
+    expect(inRepo(() => getChangedFiles({}))).toEqual(['.github/workflow.yml']);
+  });
+
+  it('fails instead of passing when the base branch is missing from the checkout', () => {
+    // A shallow checkout has no origin/main. Reading that as "nothing to compare against,
+    // so nothing changed" is the pass that inspected nothing.
+    process.env.GITHUB_BASE_REF = 'main';
+
+    expect(() => inRepo(() => getChangedFiles({}))).toThrow(
+      /origin\/main is not in this checkout/,
+    );
   });
 
   it('fails instead of reporting no changes when git cannot run', () => {
