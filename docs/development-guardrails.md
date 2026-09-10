@@ -459,6 +459,8 @@ checks:
     gate: 5
     enabled: false  # Enable when scripts/verify-doc-consistency.mjs exists
   
+# harness: a throwaway edit to a protected path, to prove Gate 1 can be satisfied
+
 ```
 
 📄 Source: [`micro-contracts.guardrails.yaml`](../examples/micro-contracts.guardrails.yaml) (lines full)
