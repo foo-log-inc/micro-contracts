@@ -19,8 +19,8 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci --legacy-peer-deps --ignore-scripts
-      - name: Audit
-        run: npm audit --audit-level=moderate
+      - name: Audit every dependency graph in the repository
+        run: .github/scripts/npm-audit-all.sh
       - name: Verify npm signatures
         run: npm audit signatures
       - name: Lint
