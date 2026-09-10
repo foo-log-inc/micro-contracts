@@ -139,6 +139,7 @@ describe('templateProcessor', () => {
         ['x-middleware:requireAuth', {
           name: 'requireAuth',
           marker: 'x-middleware',
+          appliesTo: new Set(['get /api/users']),
           injectedParameters: [],
           injectedResponses: { '401': { description: 'Unauthorized' } },
         }],
@@ -148,6 +149,32 @@ describe('templateProcessor', () => {
 
       expect(context.extensionInfo).toHaveLength(1);
       expect(context.extensionInfo[0].name).toBe('requireAuth');
+    });
+
+    it('wires an overlay onto the operations its target selected, and no others', () => {
+      // The overlay name here is not the value of any marker on the operation:
+      // an overlay named through x-micro-contracts-overlay-name, or selected by
+      // `$.paths[*][*]`, can only be matched through what the target selected.
+      const extensionInfo = new Map<string, ExtensionInfo>([
+        ['auth', {
+          name: 'auth',
+          appliesTo: new Set(['get /api/users']),
+          injectedParameters: [
+            { name: 'Authorization', in: 'header', required: true, schema: { type: 'string' } },
+          ],
+          injectedResponses: { '401': { description: 'Unauthorized' } },
+        }],
+      ]);
+
+      const context = buildTemplateContext(testSpec, 'core', { extensionInfo });
+
+      const getUsers = context.routes.find(r => r.operationId === 'getUsers');
+      expect(getUsers?.extensions.map(e => e.value)).toEqual(['auth']);
+      expect(getUsers?.extensionParams.map(p => p.name)).toEqual(['Authorization']);
+      expect(context.uniqueOverlays.map(o => o.name)).toEqual(['auth']);
+
+      const createUser = context.routes.find(r => r.operationId === 'createUser');
+      expect(createUser?.extensions).toEqual([]);
     });
 
     it('should set correct module name and paths', () => {

@@ -70,6 +70,21 @@ export interface OperationObject {
 }
 
 /**
+ * The `x-micro-contracts-*` operation extensions above, as a runtime list.
+ *
+ * The namespace belongs to this tool, so a key in it that nothing reads is a
+ * typo or an invented setting — see the overlay processor, which rejects one
+ * rather than merging it into every operation and generating nothing.
+ */
+export const MICRO_CONTRACTS_OPERATION_EXTENSIONS: readonly string[] = [
+  'x-micro-contracts-service',
+  'x-micro-contracts-method',
+  'x-micro-contracts-published',
+  'x-micro-contracts-non-exportable',
+  'x-micro-contracts-depend-on',
+];
+
+/**
  * Screen analytics event definition (used in x-events)
  * @deprecated Use InlineEventDefinition with inline x-event instead
  */

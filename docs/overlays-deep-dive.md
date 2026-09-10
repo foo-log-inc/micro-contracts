@@ -274,7 +274,31 @@ micro-contracts uses a restricted JSONPath dialect for reliable parsing:
 - target: "$.paths[*][*][?(@.x-middleware[*] == 'requireAuth')]"
 ```
 
-### 4. Marker vs Injection Responsibility
+### 4. Naming an Action Generates Its Handler
+
+The target chooses the operations. `x-micro-contracts-overlay-name` chooses whether those
+operations get a handler:
+
+| Action | Applied to the spec | Handler generated |
+|--------|---------------------|-------------------|
+| `[?(@.x-middleware contains 'requireAuth')]` | operations carrying that marker value | yes, named `requireAuth` |
+| `$.paths[*][*]` with `x-micro-contracts-overlay-name: auth` | every operation | yes, named `auth` |
+| `$.paths[*][*]` | every operation | no — spec injection only |
+
+A named action gets an `OverlayRegistry` entry, a handler type, an extractor in the overlay
+adapter, and a `runOverlays` call on every operation its target selected — through a marker or
+through `$.paths[*][*]`. An unnamed action injects its parameters, responses and extension
+properties into the spec and stops there, which is what a documentation-only header such as
+`X-Correlation-Id` needs.
+
+Keys the generator does not read are rejected rather than ignored. An action carries `target`,
+`description`, `update` and `x-micro-contracts-overlay-name`; anything else fails generation, as
+does an `update` that injects an unknown `x-micro-contracts-*` extension. There is no
+per-endpoint exclusion list — an overlay covers exactly what its target selects, so an endpoint
+that must stay outside it (a health check, an authentication callback) is carved out by marking
+the operations that need the overlay instead of applying it to all of them.
+
+### 5. Marker vs Injection Responsibility
 
 | Layer | Responsibility |
 |-------|----------------|

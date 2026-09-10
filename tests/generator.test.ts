@@ -356,6 +356,101 @@ actions:
       expect(fs.existsSync(generatedSpecPath)).toBe(true);
     });
 
+    it('generates the overlay adapter and route wiring for a $.paths[*][*] overlay', async () => {
+      // Through the templates the README hands a reader, so the assertion is on
+      // the seam that shipped empty: the spec carried the overlay while
+      // routes.generated.ts called no handler and the adapter was never written.
+      const repoRoot = path.resolve(__dirname, '..');
+      const templates = path.join(repoRoot, 'examples/spec/default/templates');
+
+      const specPath = path.join(tmpDir, 'spec.yaml');
+      fs.writeFileSync(specPath, `
+openapi: 3.0.3
+info:
+  title: Test API
+  version: 1.0.0
+paths:
+  /api/users:
+    get:
+      operationId: getUsers
+      x-micro-contracts-service: User
+      x-micro-contracts-method: getUsers
+      responses:
+        '200':
+          description: Success
+components:
+  schemas: {}
+`);
+
+      const overlayPath = path.join(tmpDir, 'access-control.overlay.yaml');
+      fs.writeFileSync(overlayPath, `
+overlay: 1.0.0
+info:
+  title: Access Control Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths[*][*]"
+    x-micro-contracts-overlay-name: auth
+    update:
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '401':
+          description: Unauthorized
+`);
+
+      const config: MultiModuleConfig = {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'packages/contract/{module}') },
+          contractPublic: { output: path.join(tmpDir, 'packages/contract-published/{module}') },
+          outputs: {
+            'overlay-adapter': {
+              output: path.join(tmpDir, 'server/src/{module}/overlayAdapter.generated.ts'),
+              template: path.join(templates, 'overlay-adapter.hbs'),
+              condition: 'hasOverlays',
+              config: { contractPackage: '@project/contract/{module}' },
+            },
+            'server-routes': {
+              output: path.join(tmpDir, 'server/src/{module}/routes.generated.ts'),
+              template: path.join(templates, 'fastify-routes.hbs'),
+              config: {
+                servicesPath: 'fastify.services.{module}',
+                contractPackage: '@project/contract/{module}',
+              },
+            },
+          },
+          overlays: { shared: [overlayPath], collision: 'error' },
+        },
+        modules: {
+          core: { openapi: specPath },
+        },
+      };
+
+      await generate(config, { skipLint: true });
+
+      const overlaysPath = path.join(tmpDir, 'packages/contract/core/overlays/index.ts');
+      expect(fs.existsSync(overlaysPath)).toBe(true);
+      const overlayContent = fs.readFileSync(overlaysPath, 'utf-8');
+      expect(overlayContent).toContain('export type AuthOverlay');
+      expect(overlayContent).toContain('auth: AuthOverlay;');
+
+      const adapterPath = path.join(tmpDir, 'server/src/core/overlayAdapter.generated.ts');
+      expect(fs.existsSync(adapterPath)).toBe(true);
+      const adapterContent = fs.readFileSync(adapterPath, 'utf-8');
+      expect(adapterContent).toContain("'getUsers': ['auth']");
+      expect(adapterContent).toContain("getHeader(req, 'Authorization')");
+
+      const routesContent = fs.readFileSync(
+        path.join(tmpDir, 'server/src/core/routes.generated.ts'),
+        'utf-8'
+      );
+      expect(routesContent).toContain("runOverlays('getUsers', handlers, toHttpRequest(req))");
+    });
+
     it('should filter to specific modules', async () => {
       // Create specs
       const coreSpecPath = path.join(tmpDir, 'core.yaml');
