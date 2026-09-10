@@ -50,8 +50,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # spec-breaking diffs the bundled spec against `main`. A shallow checkout has no such
-          # ref, and the gate's own `|| echo "No base spec found"` would turn that into a pass.
+          # Two gates read history. spec-breaking diffs the bundled spec against `main`, and its
+          # own `|| echo "No base spec found"` would turn a missing ref into a pass. The
+          # allowlist diffs the pull request against its base branch, because a checkout has
+          # nothing uncommitted and asking it what changed locally inspects no file at all.
+          # A shallow checkout carries neither ref.
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:

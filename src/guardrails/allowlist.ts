@@ -19,12 +19,14 @@ import { loadGuardrailsConfigWithPath } from './config.js';
 export function getChangedFiles(options: {
   /** Path to file containing list of changed files */
   changedFilesPath?: string;
-  /** Base ref for git diff (default: HEAD) */
+  /** Ref to diff against. Defaults to the base of the pull request under review, if any. */
   baseRef?: string;
   /** Base directory to filter files (only files under this dir are returned) */
   baseDir?: string;
 }): string[] {
-  const { changedFilesPath, baseRef, baseDir } = options;
+  const { changedFilesPath, baseDir } = options;
+  // A list handed in from outside is already the answer; there is nothing left to resolve.
+  const baseRef = changedFilesPath ? undefined : (options.baseRef ?? pullRequestBaseRef());
   
   let files: string[];
   
@@ -38,7 +40,7 @@ export function getChangedFiles(options: {
       .split('\n')
       .filter(Boolean);
   } else if (baseRef && baseRef !== 'HEAD') {
-    // Comparing branches (CI mode)
+    // What the pull request adds to its base.
     files = runGit(`git diff --name-only ${baseRef}...HEAD`);
   } else {
     // Everything not yet committed. Taking staged files and only falling back to
@@ -70,6 +72,39 @@ export function getChangedFiles(options: {
   }
   
   return files;
+}
+
+/**
+ * The ref the changes under review are proposed against, when the run is a CI check on a
+ * pull request.
+ *
+ * A CI checkout is clean, so "everything not yet committed" is empty there: the check read
+ * no file at all and reported a pass on every pull request, including ones that edited a
+ * protected path. The base branch is the only thing such a run has to compare against.
+ * GitHub Actions sets GITHUB_BASE_REF on pull_request events and leaves it empty everywhere
+ * else, so a working copy still answers about its own uncommitted edits.
+ */
+function pullRequestBaseRef(): string | undefined {
+  const branch = process.env.GITHUB_BASE_REF?.trim();
+  if (!branch) {
+    return undefined;
+  }
+
+  const ref = `origin/${branch}`;
+  try {
+    execSync(`git rev-parse --verify --quiet ${ref}^{commit}`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch {
+    // Reading this as "nothing to compare, so nothing changed" is how the check passed
+    // without inspecting anything in the first place.
+    throw new Error(
+      `Cannot determine changed files: ${ref} is not in this checkout. ` +
+      'Check out the full history (actions/checkout with fetch-depth: 0).'
+    );
+  }
+  return ref;
 }
 
 /**
@@ -138,10 +173,20 @@ export async function runAllowlistCheck(options: CheckOptions): Promise<CheckRes
     const { config, baseDir, configPath } = loadGuardrailsConfigWithPath(options.guardrailsPath);
     
     // Get changed files relative to guardrails config directory
+    const baseRef = options.changedFilesPath ? undefined : pullRequestBaseRef();
     const changedFiles = getChangedFiles({
       changedFilesPath: options.changedFilesPath,
+      baseRef,
       baseDir,  // Filter to files under guardrails.yaml directory
     });
+    
+    // An empty result means "this pull request changed nothing here" or "this working tree
+    // has no edits here", and those are different claims. Naming what was compared is what
+    // separates them: a green run that had read no file at all read identically to one that
+    // had read the whole change.
+    const against = baseRef
+      ? `compared against ${baseRef}`
+      : 'compared against the working tree';
     
     if (changedFiles.length === 0) {
       return {
@@ -149,8 +194,8 @@ export async function runAllowlistCheck(options: CheckOptions): Promise<CheckRes
         status: 'pass',
         duration: Date.now() - start,
         message: configPath 
-          ? `No changed files under ${path.basename(path.dirname(configPath))}/`
-          : 'No changed files to check',
+          ? `No changed files under ${path.basename(path.dirname(configPath))}/ (${against})`
+          : `No changed files to check (${against})`,
       };
     }
     
@@ -162,7 +207,7 @@ export async function runAllowlistCheck(options: CheckOptions): Promise<CheckRes
         name: 'allowlist',
         status: 'pass',
         duration: Date.now() - start,
-        message: `All ${changedFiles.length} changed files are within allowed boundaries`,
+        message: `All ${changedFiles.length} changed files are within allowed boundaries (${against})`,
       };
     }
     

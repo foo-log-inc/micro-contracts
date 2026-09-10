@@ -46,7 +46,10 @@ describe('pipeline command', () => {
     const execOptions: ExecSyncOptionsWithStringEncoding = {
       cwd: options.cwd || tempDir,
       encoding: 'utf-8',
-      env: { ...process.env, NO_COLOR: '1' },
+      // These fixtures are a working copy, and the allowlist asks about the working tree.
+      // On a pull request the runner exports GITHUB_BASE_REF, which would make the check ask
+      // a scratch repo what it changed against a branch it has never heard of.
+      env: { ...process.env, NO_COLOR: '1', GITHUB_BASE_REF: '' },
     };
     
     try {

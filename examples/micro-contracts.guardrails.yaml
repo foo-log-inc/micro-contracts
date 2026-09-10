@@ -20,8 +20,12 @@ allowed:
   - "!server/src/_shared/overlays/**"
   
   # Configuration
+  # The example is three npm projects (this one, server/, frontend/) and CI installs all
+  # three. A dependency change moves a manifest and its lock together, so allowing one
+  # without the other describes a change nobody can make.
   - micro-contracts.config.yaml
-  - package.json
+  - "**/package.json"
+  - "**/package-lock.json"
   - tsconfig.json
   
   # Documentation
