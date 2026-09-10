@@ -159,7 +159,7 @@ Files are categorized into three groups:
 | Category | Examples | Who can edit |
 |----------|----------|--------------|
 | `allowed` | `spec/**/*.yaml`, `server/src/**/services/**` | Anyone (AI or human) |
-| `protected` | `.github/**`, `spec/spectral.yaml`, `server/src/_shared/overlays/**` | Requires CODEOWNERS approval |
+| `protected` | `.github/**`, `spec/spectral.yaml`, `server/src/_shared/overlays/**` | Anyone, once a maintainer approves the pull request (see below) |
 | `generated` | `packages/**`, `*.generated.*` | Only via `generate` command |
 
 Patterns are evaluated in order and the last match wins, so a negation (`!pattern`)
@@ -169,6 +169,35 @@ Protected files include:
 - CI/workflow definitions (`.github/**`) — guardrail bypass prevention
 - Spectral lint rules (`spec/spectral.yaml`) — security rule tampering
 - Shared overlay implementations (`server/src/_shared/overlays/**`) — security logic
+- The guardrails config itself, under every name it is loaded as
+  (`micro-contracts.guardrails.yaml`/`.yml`, and the legacy `guardrails.yaml`/`.yml`)
+
+#### Approving a protected change
+
+**The approval is the `guardrails-approved` label on the pull request.** With it, the
+protected paths in that pull request pass the gate; the check reports the pass and names
+each path it let through, so a run that waived something never reads like one that waived
+nothing. Removing the label makes the gate red again.
+
+An approval covers `protected` paths only. A file that no pattern describes still fails as
+`not-in-allowlist`: the label says "yes, change that protected path", not "yes, change
+anything".
+
+The label is a human's act in the GitHub UI, and CI cannot perform it — adding a label
+needs `pull-requests: write` and the workflow runs with `contents: read`. The check reads
+the labels out of the event payload the run was triggered with, so the same run always
+reaches the same verdict.
+
+Two things follow for the workflow:
+
+- `on.pull_request.types` must include `labeled` and `unlabeled`. The default types
+  (`opened`, `synchronize`, `reopened`) do not re-run anything when a label changes, so
+  the approval would arrive after the only run that could have read it.
+- `permissions` must **not** grant `pull-requests: write`, or the workflow could label its
+  own pull request and the approval would be approving itself.
+
+Outside a pull request there is nothing to read and the check stays strict: a working copy
+has no local flag, variable or option that waives a protected path.
 
 ### Gate 2: OpenAPI Spec Validation
 
@@ -470,9 +499,14 @@ npx --yes -p micro-contracts@${MICRO_CONTRACTS_VERSION} micro-contracts check
 
 ### Protecting `.github/**`
 
-- Feature branches MUST NOT modify `.github/**`
-- Changes require dedicated "infra PR" with CODEOWNERS approval
+- Feature branches MUST NOT modify `.github/**` on their own
+- Changes require a dedicated "infra PR" carrying the `guardrails-approved` label, applied
+  by one of the owners below
 - **Rationale**: CI definition is part of the guardrail
+
+Create the label once per repository (`gh label create guardrails-approved`), and restrict
+who may apply it through repository roles: applying a label needs write access, which is
+what makes it usable as an approval at all.
 
 ### Required Status Checks
 
@@ -493,6 +527,9 @@ npx --yes -p micro-contracts@${MICRO_CONTRACTS_VERSION} micro-contracts check
 | `server/src/_shared/overlays/**` | security/platform | Security logic |
 | `micro-contracts.guardrails.yaml` | security/platform | Guardrail config |
 | `.github/**` | infra/maintainer | CI definitions |
+
+These owners are who to ask for the `guardrails-approved` label. CODEOWNERS decides whose
+review GitHub requires; the label is what Gate 1 reads.
 
 ---
 
@@ -518,6 +555,8 @@ npx --yes -p micro-contracts@${MICRO_CONTRACTS_VERSION} micro-contracts check
 |----------|------|--------|
 | Edit `spec/**/*.yaml` → regenerate → commit | — | ✅ Allowed |
 | Edit `server/src/**/services/**` | — | ✅ Allowed |
+| Edit `.github/**` without the `guardrails-approved` label | 1 | ❌ Blocked |
+| Edit `.github/**` with the `guardrails-approved` label | 1 | ✅ Allowed, and named in the check output |
 | Edit `packages/**/*.ts` directly | 1 | ❌ Blocked |
 | Edit `*.generated.ts` directly | 1 | ❌ Blocked |
 | Edit spec but forget to regenerate | 3 | ❌ Fails drift |

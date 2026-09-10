@@ -54,15 +54,16 @@ export function getChangedFiles(options: {
   
   // Filter and convert paths relative to baseDir
   if (baseDir) {
-    // Get git root to resolve absolute paths
-    let gitRoot: string;
-    try {
-      gitRoot = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
-    } catch {
-      gitRoot = process.cwd();
-    }
+    // git answers with the real path, so the configured directory has to be resolved the
+    // same way before the two are compared. A checkout under macOS's /var/... symlink
+    // matched no file at all against a root git named as /private/var/...: the check
+    // reported "no changed files" and passed, having inspected nothing.
+    //
+    // Guessing process.cwd() when git cannot name its root did the same from the other
+    // side, and could not happen anyway — the diff above already asked git and threw.
+    const gitRoot = runGit('git rev-parse --show-toplevel')[0];
     
-    const absoluteBaseDir = path.resolve(baseDir);
+    const absoluteBaseDir = fs.realpathSync(path.resolve(baseDir));
     
     // Filter to only files under baseDir and convert to relative paths
     files = files
@@ -108,6 +109,75 @@ function pullRequestBaseRef(): string | undefined {
 }
 
 /**
+ * The label a human puts on a pull request to approve the protected paths it touches.
+ */
+const APPROVAL_LABEL = 'guardrails-approved';
+
+/**
+ * The approval recorded on the pull request under review, described for the check's output,
+ * or undefined when nothing approved it.
+ *
+ * `protected` has always meant "requires special approval", and nothing could supply that
+ * approval: a pull request touching such a path failed a gate it had no way to satisfy, and a
+ * gate nobody can satisfy is one everybody learns to read past.
+ *
+ * A label is a human's act in the GitHub UI, and this job cannot perform it: adding one needs
+ * `pull-requests: write` and the workflow holds `contents: read`. The labels arrive inside the
+ * event payload the run was triggered with, so the verdict is a function of that payload
+ * rather than of a live read that could answer differently on a re-run.
+ *
+ * Outside a pull request there is no approval to read, and a working copy stays strict: no
+ * local flag or variable of ours says otherwise.
+ */
+function pullRequestApproval(): string | undefined {
+  if (process.env.GITHUB_EVENT_NAME !== 'pull_request') {
+    return undefined;
+  }
+
+  const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
+  if (!eventPath || !fs.existsSync(eventPath)) {
+    // Quietly reading this as "not approved" would leave an approved pull request red with
+    // nothing to say why.
+    throw new Error(
+      'Cannot read the pull request under review: GITHUB_EVENT_PATH names ' +
+      `${eventPath || 'nothing'}, so the ${APPROVAL_LABEL} label cannot be seen.`
+    );
+  }
+
+  let event: unknown;
+  try {
+    event = JSON.parse(fs.readFileSync(eventPath, 'utf-8'));
+  } catch (error) {
+    throw new Error(
+      `Cannot read the pull request under review (${eventPath}): ` +
+      (error instanceof Error ? error.message.split('\n')[0] : String(error))
+    );
+  }
+
+  const pullRequest = (event as { pull_request?: { number?: unknown; labels?: unknown } })
+    .pull_request;
+  const labels = pullRequest?.labels;
+  if (!Array.isArray(labels)) {
+    throw new Error(
+      `Cannot read the pull request under review (${eventPath}): the payload of a ` +
+      'pull_request event carries pull_request.labels, and this one does not.'
+    );
+  }
+
+  const approved = labels.some(
+    (label: unknown) => (label as { name?: unknown } | null)?.name === APPROVAL_LABEL
+  );
+  if (!approved) {
+    return undefined;
+  }
+
+  const number = pullRequest?.number;
+  return typeof number === 'number'
+    ? `the ${APPROVAL_LABEL} label on pull request #${number}`
+    : `the ${APPROVAL_LABEL} label`;
+}
+
+/**
  * Run a git command, returning its output lines.
  *
  * Failures propagate: returning no files would report "nothing changed" when the
@@ -132,14 +202,26 @@ function runGit(command: string): string[] {
  */
 export function verifyAllowlist(
   changedFiles: string[],
-  config: GuardrailsConfig
+  config: GuardrailsConfig,
+  /**
+   * How the protected paths in this change were approved, phrased for the check's output.
+   * Its presence is the approval; undefined is an unapproved change.
+   */
+  approval?: string
 ): AllowlistResult {
   const violations: AllowlistViolation[] = [];
+  const waived: string[] = [];
   
   for (const file of changedFiles) {
-    // 1. Check if protected (not allowed in normal PRs)
+    // 1. Check if protected (not allowed without approval)
     if (matchWithNegation(config.protected, file)) {
-      violations.push({ file, reason: 'protected' });
+      // `protected` is defined as "requires special approval". With one recorded this is the
+      // change that was approved; without one, this is the gate doing its job.
+      if (approval) {
+        waived.push(file);
+      } else {
+        violations.push({ file, reason: 'protected' });
+      }
       continue;
     }
     
@@ -150,7 +232,8 @@ export function verifyAllowlist(
       continue;
     }
     
-    // 3. Must be in allowed list
+    // 3. Must be in allowed list. An approval says "yes, touch that protected path"; a file
+    //    no pattern describes is not a file anyone was shown, let alone approved.
     if (!matchWithNegation(config.allowed, file)) {
       violations.push({ file, reason: 'not-in-allowlist' });
     }
@@ -159,6 +242,7 @@ export function verifyAllowlist(
   return {
     valid: violations.length === 0,
     violations,
+    waived,
   };
 }
 
@@ -174,6 +258,9 @@ export async function runAllowlistCheck(options: CheckOptions): Promise<CheckRes
     
     // Get changed files relative to guardrails config directory
     const baseRef = options.changedFilesPath ? undefined : pullRequestBaseRef();
+    // Independent of where the file list came from: --changed-files supplies the list, not
+    // the question of whether a human approved the protected paths in it.
+    const approval = pullRequestApproval();
     const changedFiles = getChangedFiles({
       changedFilesPath: options.changedFilesPath,
       baseRef,
@@ -200,14 +287,22 @@ export async function runAllowlistCheck(options: CheckOptions): Promise<CheckRes
     }
     
     // Verify allowlist
-    const result = verifyAllowlist(changedFiles, config);
+    const result = verifyAllowlist(changedFiles, config, approval);
     
     if (result.valid) {
+      // A run that let a protected path through says so. Reported as an ordinary pass it
+      // would read exactly like a change that touched nothing protected at all.
+      const waived = result.waived.length > 0
+        ? `; ${result.waived.length} protected path(s) allowed by ${approval}`
+        : '';
       return {
         name: 'allowlist',
         status: 'pass',
         duration: Date.now() - start,
-        message: `All ${changedFiles.length} changed files are within allowed boundaries (${against})`,
+        message: `All ${changedFiles.length} changed files are within allowed boundaries (${against})${waived}`,
+        details: result.waived.length > 0
+          ? result.waived.map(f => `  - ${f} (protected, approved)`)
+          : undefined,
       };
     }
     
@@ -215,6 +310,12 @@ export async function runAllowlistCheck(options: CheckOptions): Promise<CheckRes
     const details = result.violations.map(v => 
       `  - ${v.file} (${v.reason})`
     );
+    if (result.violations.some(v => v.reason === 'protected')) {
+      details.push(
+        `  \u2192 a protected path needs the ${APPROVAL_LABEL} label on the pull request; ` +
+        'ask a maintainer to add it.'
+      );
+    }
     
     return {
       name: 'allowlist',
@@ -250,6 +351,7 @@ export function formatAllowlistResult(result: AllowlistResult): string {
     }
     
     lines.push('\n💡 If this is a generated artifact, run the pinned generator and pass drift/manifest checks.');
+    lines.push(`💡 If a protected path is meant to change, a maintainer adds the ${APPROVAL_LABEL} label to the pull request.`);
     lines.push('💡 If this should be editable, update guardrails.yaml (allowed/protected/generated).');
   }
   

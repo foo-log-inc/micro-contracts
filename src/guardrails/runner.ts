@@ -269,7 +269,11 @@ export function formatSingleCheckResult(
   
   let output = `  ${icon} ${gateStr}${result.name.padEnd(20)} ${status} (${result.duration}ms)`;
   
-  if (result.message && (verbose || result.status !== 'pass')) {
+  // A passing check that attached details is reporting something beyond the routine — today
+  // that is an approval letting a protected path through, and a run that stays silent about
+  // it reads exactly like one where nothing was waived.
+  const notable = result.details !== undefined && result.details.length > 0;
+  if (result.message && (verbose || notable || result.status !== 'pass')) {
     output += `\n    ${result.message}`;
   }
   

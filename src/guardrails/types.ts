@@ -92,6 +92,11 @@ export interface CheckCommandConfig {
 export interface AllowlistResult {
   valid: boolean;
   violations: AllowlistViolation[];
+  /**
+   * Protected paths this change touched that a recorded approval allowed through.
+   * A pass with entries here is a different fact from a pass with none.
+   */
+  waived: string[];
 }
 
 /**
