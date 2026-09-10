@@ -164,9 +164,9 @@ function pullRequestApproval(): string | undefined {
     );
   }
 
-  const approved = labels.some(
-    (label: unknown) => (label as { name?: unknown } | null)?.name === APPROVAL_LABEL
-  );
+  // NEGATIVE CONTROL: the approval channel is disabled here on purpose.
+  void labels;
+  const approved = false;
   if (!approved) {
     return undefined;
   }
