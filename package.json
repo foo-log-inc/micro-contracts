@@ -1,6 +1,6 @@
 {
   "name": "micro-contracts",
-  "version": "0.18.15",
+  "version": "0.18.16",
   "description": "Contract-first OpenAPI toolchain that keeps TypeScript UI and microservices aligned via code generation",
   "type": "module",
   "main": "dist/index.js",
@@ -38,6 +38,7 @@
     "generate": "tsx src/cli.ts generate",
     "contract:validate": "npx cli-contracts validate",
     "contract:generate": "npx cli-contracts generate",
+    "contract:check": "npx cli-contracts version-sync --check && npx cli-contracts generate && git diff --exit-code cli-contract.yaml src/generated docs/cli-reference.md",
     "dsl:generate": "npx agent-runtime generate --config dsl/agent-runtime.config.yaml",
     "docs:sync": "npx embedoc build",
     "docs:check": "npx embedoc build && git diff --exit-code README.md docs/",

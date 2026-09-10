@@ -22,8 +22,11 @@ import {
   getAvailableChecks,
   checkUncommittedChanges,
   formatCheckResults,
+  formatSingleCheckResult,
   findOpenAPISpecs,
   getChangedFiles,
+  runAllowlistCheck,
+  generateGuardrailsTemplate,
 } from '../src/guardrails/index.js';
 import { execFileSync } from 'child_process';
 
@@ -140,6 +143,35 @@ describe('verifyAllowlist', () => {
     expect(result.violations[0].reason).toBe('not-in-allowlist');
   });
   
+  it('lets an approval through a protected path, and names what it let through', () => {
+    // `protected` means "requires special approval". Without a way to record one, a pull
+    // request touching such a path failed a gate it had no way to satisfy.
+    const result = verifyAllowlist(['guardrails.yaml'], config, 'the label on pull request #1');
+
+    expect(result.valid).toBe(true);
+    expect(result.violations).toHaveLength(0);
+    expect(result.waived).toEqual(['guardrails.yaml']);
+  });
+
+  it('does not let an approval through a path no pattern describes', () => {
+    // An approval says "yes, touch that protected path", not "yes, touch anything".
+    const result = verifyAllowlist(['random/file.ts'], config, 'the label on pull request #1');
+
+    expect(result.valid).toBe(false);
+    expect(result.violations).toEqual([{ file: 'random/file.ts', reason: 'not-in-allowlist' }]);
+    expect(result.waived).toEqual([]);
+  });
+
+  it('waives nothing when no protected path was touched', () => {
+    const result = verifyAllowlist(
+      ['spec/core/openapi/core.yaml'],
+      config,
+      'the label on pull request #1',
+    );
+
+    expect(result.waived).toEqual([]);
+  });
+
   it('should handle multiple files', () => {
     const result = verifyAllowlist([
       'spec/core/openapi/core.yaml',  // allowed
@@ -156,6 +188,22 @@ describe('verifyAllowlist', () => {
 });
 
 describe('the shipped default allowlist', () => {
+  it('protects the guardrails config under every name the loader accepts', () => {
+    // The default protected only the legacy `guardrails.yaml` while `guardrails-init` wrote
+    // `micro-contracts.guardrails.yaml`: the file that says what may change was itself
+    // changeable by any pull request.
+    for (const file of [
+      'micro-contracts.guardrails.yaml',
+      'micro-contracts.guardrails.yml',
+      'guardrails.yaml',
+      'guardrails.yml',
+    ]) {
+      const result = verifyAllowlist([file], DEFAULT_GUARDRAILS);
+      expect(result.valid).toBe(false);
+      expect(result.violations[0].reason).toBe('protected');
+    }
+  });
+
   it('allows a lockfile wherever it allows the manifest beside it', () => {
     // A dependency change moves both; allowing only one describes a change nobody can make.
     for (const file of [
@@ -662,6 +710,174 @@ describe('getChangedFiles', () => {
       process.chdir(previous);
       fs.rmSync(notARepo, { recursive: true, force: true });
     }
+  });
+});
+
+describe('the approval a pull request carries for its protected paths', () => {
+  let repo: string;
+  let saved: Record<string, string | undefined>;
+
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: repo, encoding: 'utf-8', stdio: 'pipe' });
+
+  const CI_VARS = ['GITHUB_BASE_REF', 'GITHUB_EVENT_NAME', 'GITHUB_EVENT_PATH'];
+
+  /** The pull_request payload a runner writes to GITHUB_EVENT_PATH, carrying these labels. */
+  function eventWithLabels(...names: string[]): string {
+    const file = path.join(repo, 'event.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        action: 'labeled',
+        number: 42,
+        pull_request: { number: 42, labels: names.map(name => ({ name })) },
+      }),
+    );
+    return file;
+  }
+
+  /** What a pull_request run sees: a clean checkout, a base branch, and an event payload. */
+  function onPullRequest(labels: string[]) {
+    process.env.GITHUB_BASE_REF = 'main';
+    process.env.GITHUB_EVENT_NAME = 'pull_request';
+    process.env.GITHUB_EVENT_PATH = eventWithLabels(...labels);
+  }
+
+  beforeEach(() => {
+    saved = Object.fromEntries(CI_VARS.map(name => [name, process.env[name]]));
+    for (const name of CI_VARS) delete process.env[name];
+
+    repo = fs.mkdtempSync(path.join(os.tmpdir(), 'approval-'));
+    fs.writeFileSync(
+      path.join(repo, 'micro-contracts.guardrails.yaml'),
+      ['allowed:', '  - docs/**/*.md', 'protected:', '  - .github/**', 'generated: []', ''].join('\n'),
+    );
+    fs.mkdirSync(path.join(repo, '.github'), { recursive: true });
+    fs.mkdirSync(path.join(repo, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.github/workflow.yml'), 'name: ci\n');
+    fs.writeFileSync(path.join(repo, 'docs/readme.md'), 'hello\n');
+    git('init', '-q', '.');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    git('add', '-A');
+    git('commit', '-qm', 'init');
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  });
+
+  afterEach(() => {
+    for (const name of CI_VARS) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name]!;
+    }
+    fs.rmSync(repo, { recursive: true, force: true });
+  });
+
+  async function checkInRepo() {
+    const previous = process.cwd();
+    process.chdir(repo);
+    try {
+      return await runAllowlistCheck({
+        guardrailsPath: path.join(repo, 'micro-contracts.guardrails.yaml'),
+      });
+    } finally {
+      process.chdir(previous);
+    }
+  }
+
+  /** Commit a change to a path the config protects. */
+  function changeProtectedPath() {
+    fs.appendFileSync(path.join(repo, '.github/workflow.yml'), '# edited\n');
+    git('add', '-A');
+    git('commit', '-qm', 'edit a protected path');
+  }
+
+  it('fails a protected change that carries no approval', async () => {
+    changeProtectedPath();
+    onPullRequest([]);
+
+    const result = await checkInRepo();
+
+    expect(result.status).toBe('fail');
+    expect(result.details?.join('\n')).toContain('.github/workflow.yml (protected)');
+    expect(result.details?.join('\n')).toContain('guardrails-approved');
+  });
+
+  it('passes a protected change the label approves, and says what it let through', async () => {
+    changeProtectedPath();
+    onPullRequest(['guardrails-approved']);
+
+    const result = await checkInRepo();
+
+    expect(result.status).toBe('pass');
+    expect(result.message).toContain('1 protected path(s) allowed by');
+    expect(result.message).toContain('pull request #42');
+    expect(result.details?.join('\n')).toContain('.github/workflow.yml (protected, approved)');
+  });
+
+  it('fails a protected change carrying some other label', async () => {
+    changeProtectedPath();
+    onPullRequest(['documentation', 'needs-review']);
+
+    expect((await checkInRepo()).status).toBe('fail');
+  });
+
+  it('passes a change that touches nothing protected, and stays quiet about it', async () => {
+    fs.appendFileSync(path.join(repo, 'docs/readme.md'), 'more\n');
+    git('add', '-A');
+    git('commit', '-qm', 'edit an allowed path');
+    onPullRequest([]);
+
+    const result = await checkInRepo();
+
+    expect(result.status).toBe('pass');
+    expect(result.message).not.toContain('protected');
+    expect(result.details).toBeUndefined();
+  });
+
+  it('stays strict in a working copy, whatever an event payload lying around says', async () => {
+    // The approval is a fact about a pull request. Outside one there is nothing to read, and
+    // no local switch of ours says otherwise.
+    fs.appendFileSync(path.join(repo, '.github/workflow.yml'), '# edited\n');
+    process.env.GITHUB_EVENT_PATH = eventWithLabels('guardrails-approved');
+
+    expect((await checkInRepo()).status).toBe('fail');
+  });
+
+  it('fails loudly when the pull request it must read is unreadable', async () => {
+    // Reading an unreadable payload as "not approved" would leave an approved pull request
+    // red with nothing to say why.
+    changeProtectedPath();
+    onPullRequest(['guardrails-approved']);
+    fs.writeFileSync(process.env.GITHUB_EVENT_PATH!, 'not json');
+
+    const result = await checkInRepo();
+
+    expect(result.status).toBe('fail');
+    expect(result.message).toContain('Cannot read the pull request under review');
+  });
+
+  it('shows the approval in ordinary, non-verbose output', async () => {
+    // CI runs `check` without -v, and there a pass prints its message only when the check
+    // reported something beyond the routine.
+    changeProtectedPath();
+    onPullRequest(['guardrails-approved']);
+    const result = await checkInRepo();
+
+    const line = formatSingleCheckResult(result, { name: 'allowlist', description: '', gate: 1, run: runAllowlistCheck });
+
+    expect(line).toContain('protected path(s) allowed by');
+  });
+});
+
+describe('the scaffolded guardrails template', () => {
+  it('does not list its own config as allowed as well as protected', () => {
+    // protected is tested first, so the allowed entry never decided anything: it read as a
+    // permission that was not one.
+    const template = generateGuardrailsTemplate();
+    const allowed = template.slice(template.indexOf('allowed:'), template.indexOf('protected:'));
+
+    expect(allowed).not.toContain('micro-contracts.guardrails.yaml');
+    expect(template.slice(template.indexOf('protected:'))).toContain('micro-contracts.guardrails.yaml');
   });
 });
 

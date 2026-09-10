@@ -10,6 +10,22 @@ import yaml from 'js-yaml';
 import type { GuardrailsConfig } from './types.js';
 
 /**
+ * The names a guardrails config is loaded under, in the order they are looked for.
+ * `guardrails.yaml`/`.yml` are the legacy names.
+ *
+ * The default `protected` list below is built from this one. Naming them apart left the
+ * shipped default protecting only the legacy name while `guardrails-init` wrote
+ * `micro-contracts.guardrails.yaml` — a config that governs what may change, and that any
+ * pull request could rewrite unremarked.
+ */
+const GUARDRAILS_CONFIG_NAMES = [
+  'micro-contracts.guardrails.yaml',
+  'micro-contracts.guardrails.yml',
+  'guardrails.yaml',
+  'guardrails.yml',
+];
+
+/**
  * Default guardrails configuration
  */
 export const DEFAULT_GUARDRAILS: GuardrailsConfig = {
@@ -32,7 +48,7 @@ export const DEFAULT_GUARDRAILS: GuardrailsConfig = {
   protected: [
     'spec/spectral.yaml',
     'spec/_shared/overlays/**',
-    'guardrails.yaml',
+    ...GUARDRAILS_CONFIG_NAMES,
     '.github/**',
   ],
   generated: [
@@ -48,13 +64,7 @@ export const DEFAULT_GUARDRAILS: GuardrailsConfig = {
  */
 export function findGuardrailsConfig(startDir?: string): string | null {
   const dir = startDir || process.cwd();
-  // Support multiple naming conventions
-  const candidates = [
-    'micro-contracts.guardrails.yaml',
-    'micro-contracts.guardrails.yml',
-    'guardrails.yaml',  // Legacy name
-    'guardrails.yml',
-  ];
+  const candidates = GUARDRAILS_CONFIG_NAMES;
   
   let current = path.resolve(dir);
   const root = path.parse(current).root;
@@ -159,7 +169,6 @@ allowed:
   # A dependency change moves a manifest and its lock together, in whichever project of the
   # tree it belongs to.
   - micro-contracts.config.yaml
-  - micro-contracts.guardrails.yaml
   - "**/package.json"
   - "**/package-lock.json"
   - tsconfig.json

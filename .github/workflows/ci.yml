@@ -3,8 +3,17 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    # A protected path is allowed through by a label a human adds, and the default types
+    # (opened, synchronize, reopened) do not include that. Without `labeled` the approval
+    # arrived after the only run that could have read it, and the gate stayed red with no
+    # way left to turn it green. `unlabeled` is the same door in reverse: withdrawing the
+    # approval has to bring the gate back.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
+# The allowlist gate lets a protected path through when a human has labelled the pull
+# request. `pull-requests: write` would let this workflow add that label itself, which is
+# the approval approving itself — read-only is what keeps the label a human's act.
 permissions:
   contents: read
 
@@ -25,8 +34,12 @@ jobs:
         run: npm audit signatures
       - name: Lint
         run: npm run lint --if-present
-      - name: Verify contract version matches the package version
-        run: npx cli-contracts version-sync --check
+      # version-sync alone only reconciles cli-contract.yaml with package.json. The CLI's
+      # embedded contract and cli-reference.md are generated from that file and nothing
+      # regenerated them, so `micro-contracts extract` shipped 0.18.11 out of a 0.18.15
+      # package while this step reported the versions in sync.
+      - name: Verify the contract and everything generated from it match the package version
+        run: npm run contract:check
       - name: Build
         run: npm run build
       - name: Test
