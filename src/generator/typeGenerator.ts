@@ -126,7 +126,9 @@ function generateSchemaType(
 }
 
 /**
- * Generate interface type for object schema
+ * Generate the type of an object schema: an interface, or — when the schema is
+ * nullable, which an interface cannot express — the same members as a type
+ * alias with `| null`.
  */
 function generateInterfaceType(
   name: string, 
@@ -135,11 +137,12 @@ function generateInterfaceType(
 ): string {
   const lines: string[] = [];
   const required = new Set(schema.required || []);
+  const { nullable } = normalizeType(schema);
 
   if (schema.description) {
     lines.push(`/** ${schema.description} */`);
   }
-  lines.push(`export interface ${name} {`);
+  lines.push(nullable ? `export type ${name} = {` : `export interface ${name} {`);
 
   if (schema.properties) {
     for (const [propName, propSchema] of Object.entries(schema.properties)) {
@@ -166,7 +169,7 @@ function generateInterfaceType(
     }
   }
 
-  lines.push('}');
+  lines.push(nullable ? '} | null;' : '}');
   return lines.join('\n');
 }
 
