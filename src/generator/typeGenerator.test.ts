@@ -164,4 +164,49 @@ describe('OpenAPI 3.1 type array nullable syntax', () => {
     const output = generateTypes(spec);
     expect(output).toContain('export type NullableString = string | null;');
   });
+
+  it('maps type: null to null, so a union with it stays typed', () => {
+    const spec = minimalSpec({
+      Org: { type: 'object', properties: { id: { type: 'string' } } },
+      Me: {
+        type: 'object',
+        properties: {
+          org: { oneOf: [{ $ref: '#/components/schemas/Org' }, { type: 'null' }] },
+          nothing: { type: 'null' },
+        },
+      },
+    });
+    const iface = extractInterface(generateTypes(spec), 'Me');
+    expect(iface).toContain('org?: (Org | null);');
+    expect(iface).toContain('nothing?: null;');
+  });
+
+  it('keeps nullable beside a $ref', () => {
+    const spec = minimalSpec({
+      Org: { type: 'object', properties: { id: { type: 'string' } } },
+      Me: {
+        type: 'object',
+        properties: { org: { $ref: '#/components/schemas/Org', nullable: true } },
+      },
+      MaybeOrg: { $ref: '#/components/schemas/Org', nullable: true },
+    });
+    const output = generateTypes(spec);
+    expect(extractInterface(output, 'Me')).toContain('org?: Org | null;');
+    expect(output).toContain('export type MaybeOrg = Org | null;');
+  });
+
+  it('keeps nullable on a top-level composition', () => {
+    const spec = minimalSpec({
+      Org: { type: 'object', properties: { id: { type: 'string' } } },
+      MaybeOrg: { allOf: [{ $ref: '#/components/schemas/Org' }], nullable: true },
+    });
+    expect(generateTypes(spec)).toContain('export type MaybeOrg = (Org) | null;');
+  });
+
+  it('applies a top-level array to the whole nullable item type', () => {
+    const spec = minimalSpec({
+      Names: { type: 'array', items: { type: ['string', 'null'] } },
+    });
+    expect(generateTypes(spec)).toContain('export type Names = (string | null)[];');
+  });
 });

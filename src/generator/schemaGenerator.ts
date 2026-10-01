@@ -105,7 +105,7 @@ function generateSchemaExport(
   schema: SchemaObject | ReferenceObject,
   spec: OpenAPISpec
 ): string {
-  const jsonSchema = convertToJsonSchema(name, schema, spec);
+  const jsonSchema = { $id: name, ...convertSchemaValue(schema, spec) };
   const schemaStr = JSON.stringify(jsonSchema, null, 2)
     .split('\n')
     .map((line, i) => i === 0 ? line : '  ' + line)
@@ -115,149 +115,79 @@ function generateSchemaExport(
 }
 
 /**
- * Convert OpenAPI schema to JSON Schema with $id
- */
-function convertToJsonSchema(
-  name: string,
-  schema: SchemaObject | ReferenceObject,
-  spec: OpenAPISpec
-): Record<string, unknown> {
-  if (isReference(schema)) {
-    return { $ref: `${getRefName(schema.$ref)}#` };
-  }
-
-  const result: Record<string, unknown> = {
-    $id: name,
-  };
-
-  // Handle allOf, oneOf, anyOf
-  if (schema.allOf) {
-    result.allOf = schema.allOf.map(s => convertSchemaValue(s, spec));
-    return result;
-  }
-  if (schema.oneOf) {
-    result.oneOf = schema.oneOf.map(s => convertSchemaValue(s, spec));
-    return result;
-  }
-  if (schema.anyOf) {
-    result.anyOf = schema.anyOf.map(s => convertSchemaValue(s, spec));
-    return result;
-  }
-
-  // Copy basic properties
-  if (schema.type) result.type = schema.type;
-  if (schema.description) result.description = schema.description;
-  if (schema.enum) result.enum = schema.enum;
-  if (schema.format) result.format = schema.format;
-  if (schema.default !== undefined) result.default = schema.default;
-  if (schema.nullable) result.nullable = schema.nullable;
-
-  // Number constraints
-  if (schema.minimum !== undefined) result.minimum = schema.minimum;
-  if (schema.maximum !== undefined) result.maximum = schema.maximum;
-
-  // String constraints
-  if (schema.minLength !== undefined) result.minLength = schema.minLength;
-  if (schema.maxLength !== undefined) result.maxLength = schema.maxLength;
-  if (schema.pattern) result.pattern = schema.pattern;
-
-  // Array constraints
-  if (schema.minItems !== undefined) result.minItems = schema.minItems;
-  if (schema.maxItems !== undefined) result.maxItems = schema.maxItems;
-  if (schema.items) {
-    result.items = convertSchemaValue(schema.items, spec);
-  }
-
-  // Object properties
-  if (schema.properties) {
-    result.properties = {};
-    for (const [propName, propSchema] of Object.entries(schema.properties)) {
-      (result.properties as Record<string, unknown>)[propName] = 
-        convertSchemaValue(propSchema, spec);
-    }
-  }
-  if (schema.required && schema.required.length > 0) {
-    result.required = schema.required;
-  }
-  if (schema.additionalProperties !== undefined) {
-    if (typeof schema.additionalProperties === 'boolean') {
-      result.additionalProperties = schema.additionalProperties;
-    } else {
-      result.additionalProperties = convertSchemaValue(schema.additionalProperties, spec);
-    }
-  }
-
-  return result;
-}
-
-/**
- * Convert schema value (without $id)
+ * Convert an OpenAPI schema to the JSON Schema Fastify validates (Ajv) and
+ * serializes (fast-json-stringify) with.
+ *
+ * Each keyword is translated on its own, so a keyword beside `$ref` or a
+ * composition is kept rather than dropped.
  */
 function convertSchemaValue(
   schema: SchemaObject | ReferenceObject,
   spec: OpenAPISpec
 ): Record<string, unknown> {
-  if (isReference(schema)) {
-    return { $ref: `${getRefName(schema.$ref)}#` };
-  }
-
   const result: Record<string, unknown> = {};
 
-  // Handle allOf, oneOf, anyOf
-  if (schema.allOf) {
-    result.allOf = schema.allOf.map(s => convertSchemaValue(s, spec));
-    return result;
+  if (isReference(schema)) {
+    result.$ref = `${getRefName(schema.$ref)}#`;
   }
-  if (schema.oneOf) {
-    result.oneOf = schema.oneOf.map(s => convertSchemaValue(s, spec));
-    return result;
-  }
-  if (schema.anyOf) {
-    result.anyOf = schema.anyOf.map(s => convertSchemaValue(s, spec));
-    return result;
-  }
+  // A reference may carry schema keywords beside it (OpenAPI 3.1).
+  const node = schema as SchemaObject;
+
+  if (node.allOf) result.allOf = node.allOf.map(s => convertSchemaValue(s, spec));
+  if (node.oneOf) result.oneOf = node.oneOf.map(s => convertSchemaValue(s, spec));
+  if (node.anyOf) result.anyOf = node.anyOf.map(s => convertSchemaValue(s, spec));
 
   // Copy basic properties
-  if (schema.type) result.type = schema.type;
-  if (schema.description) result.description = schema.description;
-  if (schema.enum) result.enum = schema.enum;
-  if (schema.format) result.format = schema.format;
-  if (schema.default !== undefined) result.default = schema.default;
-  if (schema.nullable) result.nullable = schema.nullable;
+  if (node.type) result.type = node.type;
+  if (node.description) result.description = node.description;
+  if (node.enum) result.enum = node.enum;
+  if (node.format) result.format = node.format;
+  if (node.default !== undefined) result.default = node.default;
+  if (node.nullable) result.nullable = node.nullable;
 
   // Number constraints
-  if (schema.minimum !== undefined) result.minimum = schema.minimum;
-  if (schema.maximum !== undefined) result.maximum = schema.maximum;
+  if (node.minimum !== undefined) result.minimum = node.minimum;
+  if (node.maximum !== undefined) result.maximum = node.maximum;
 
   // String constraints
-  if (schema.minLength !== undefined) result.minLength = schema.minLength;
-  if (schema.maxLength !== undefined) result.maxLength = schema.maxLength;
-  if (schema.pattern) result.pattern = schema.pattern;
+  if (node.minLength !== undefined) result.minLength = node.minLength;
+  if (node.maxLength !== undefined) result.maxLength = node.maxLength;
+  if (node.pattern) result.pattern = node.pattern;
 
   // Array constraints
-  if (schema.minItems !== undefined) result.minItems = schema.minItems;
-  if (schema.maxItems !== undefined) result.maxItems = schema.maxItems;
-  if (schema.items) {
-    result.items = convertSchemaValue(schema.items, spec);
+  if (node.minItems !== undefined) result.minItems = node.minItems;
+  if (node.maxItems !== undefined) result.maxItems = node.maxItems;
+  if (node.items) {
+    result.items = convertSchemaValue(node.items, spec);
   }
 
   // Object properties
-  if (schema.properties) {
+  if (node.properties) {
     result.properties = {};
-    for (const [propName, propSchema] of Object.entries(schema.properties)) {
+    for (const [propName, propSchema] of Object.entries(node.properties)) {
       (result.properties as Record<string, unknown>)[propName] = 
         convertSchemaValue(propSchema, spec);
     }
   }
-  if (schema.required && schema.required.length > 0) {
-    result.required = schema.required;
+  if (node.required && node.required.length > 0) {
+    result.required = node.required;
   }
-  if (schema.additionalProperties !== undefined) {
-    if (typeof schema.additionalProperties === 'boolean') {
-      result.additionalProperties = schema.additionalProperties;
+  if (node.additionalProperties !== undefined) {
+    if (typeof node.additionalProperties === 'boolean') {
+      result.additionalProperties = node.additionalProperties;
     } else {
-      result.additionalProperties = convertSchemaValue(schema.additionalProperties, spec);
+      result.additionalProperties = convertSchemaValue(node.additionalProperties, spec);
     }
+  }
+
+  // Ajv and fast-json-stringify read `nullable` only as a widening of `type`.
+  // Without a type Ajv refuses the schema, and a `$ref` or composition beside
+  // it still rejects null — fast-json-stringify then writes null as `{}`.
+  // There, null becomes a branch of its own, tried first so that Ajv's type
+  // coercion cannot turn a null into the other branch's empty value.
+  if (result.nullable && (result.type === undefined || result.$ref || result.allOf || result.oneOf || result.anyOf)) {
+    delete result.nullable;
+    return { anyOf: [{ type: 'null' }, result] };
   }
 
   return result;
