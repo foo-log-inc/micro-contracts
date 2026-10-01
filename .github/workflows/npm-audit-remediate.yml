@@ -48,9 +48,12 @@ jobs:
         # the part it did fix. The gate that is enforced is the one that carries the risk — the
         # fix may leave an advisory behind, but it may never bring one in.
         #
-        # `--legacy-peer-deps` matches the install steps. Without it the fix resolves a
-        # different tree from the one that is installed, and on npm 10.9.x it aborts with
-        # "Cannot read properties of null (reading 'edgesOut')" before touching the lockfile.
+        # Each tree is resolved with the flags it is installed with. The root is installed with
+        # `--legacy-peer-deps`; without it the fix resolves a different tree from the one that is
+        # installed, and on npm 10.9.x it aborts with "Cannot read properties of null (reading
+        # 'edgesOut')" before touching the lockfile. Every other tree is installed with plain
+        # `npm ci` (ci.yml), and resolving one with `--legacy-peer-deps` drops the peer
+        # dependencies that install needs, leaving a lockfile `npm ci` rejects as out of sync.
         #
         # An abort leaves the lockfile untouched and exits 1 — exactly what a converged fix
         # with a surviving advisory looks like — so neither the hash nor the exit code
@@ -62,7 +65,7 @@ jobs:
           fix_here() {
             for _ in 1 2 3 4 5; do
               before=$(git hash-object package-lock.json)
-              npm audit fix --package-lock-only --ignore-scripts --legacy-peer-deps \
+              npm audit fix --package-lock-only --ignore-scripts "$@" \
                 > "$RUNNER_TEMP/audit-fix.log" 2>&1 || true
               cat "$RUNNER_TEMP/audit-fix.log"
               if grep -q '^npm error' "$RUNNER_TEMP/audit-fix.log"; then
@@ -72,7 +75,7 @@ jobs:
               if [ "$(git hash-object package-lock.json)" = "$before" ]; then break; fi
             done
           }
-          fix_here
+          fix_here --legacy-peer-deps
           for lock in $(git ls-files '*/package-lock.json'); do
             ( cd "$(dirname "$lock")" && fix_here )
           done
