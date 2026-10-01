@@ -203,6 +203,25 @@ describe('OpenAPI 3.1 type array nullable syntax', () => {
     expect(generateTypes(spec)).toContain('export type MaybeOrg = (Org) | null;');
   });
 
+  it('types a nullable object component as its members or null', () => {
+    const spec = minimalSpec({
+      Org: {
+        type: 'object',
+        nullable: true,
+        description: 'Owning organization',
+        properties: { id: { type: 'string', description: 'Org id' } },
+      },
+      Team: { type: ['object', 'null'], properties: { name: { type: 'string' } } },
+      Me: { type: 'object', properties: { org: { $ref: '#/components/schemas/Org' } } },
+    });
+    const output = generateTypes(spec);
+    expect(output).toContain(
+      '/** Owning organization */\nexport type Org = {\n  /** Org id */\n  id?: string;\n} | null;'
+    );
+    expect(output).toContain('export type Team = {\n  name?: string;\n} | null;');
+    expect(extractInterface(output, 'Me')).toContain('org?: Org;');
+  });
+
   it('applies a top-level array to the whole nullable item type', () => {
     const spec = minimalSpec({
       Names: { type: 'array', items: { type: ['string', 'null'] } },
