@@ -16,15 +16,17 @@ import { isReference, getRefName, isTsIdentifier } from '../types.js';
  * Normalize OpenAPI 3.1 type arrays into a non-null type and a nullable flag.
  * Returns undefined for type if the schema has no type field.
  */
-function normalizeType(schema: SchemaObject): { types: OpenAPIType[]; nullable: boolean } {
-  const raw = schema.type;
+function normalizeType(schema: SchemaObject | ReferenceObject): { types: OpenAPIType[]; nullable: boolean } {
+  // A reference may carry schema keywords beside it (OpenAPI 3.1).
+  const node = schema as SchemaObject;
+  const raw = node.type;
   if (raw === undefined) {
-    return { types: [], nullable: !!schema.nullable };
+    return { types: [], nullable: !!node.nullable };
   }
   const arr = Array.isArray(raw) ? raw : [raw];
   const hasNull = arr.includes('null');
   const nonNull = arr.filter((t): t is OpenAPIType => t !== 'null');
-  return { types: nonNull, nullable: hasNull || !!schema.nullable };
+  return { types: nonNull, nullable: hasNull || !!node.nullable };
 }
 
 /**
@@ -113,51 +115,14 @@ function generateSchemaType(
   schema: SchemaObject | ReferenceObject,
   spec: OpenAPISpec
 ): string {
-  if (isReference(schema)) {
-    const refName = getRefName(schema.$ref);
-    return `export type ${name} = ${refName};`;
-  }
-
-  // Handle allOf, oneOf, anyOf
-  if (schema.allOf) {
-    const types = schema.allOf.map(s => schemaToTypeString(s, spec)).join(' & ');
-    return `export type ${name} = ${types};`;
-  }
-  if (schema.oneOf) {
-    const types = schema.oneOf.map(s => schemaToTypeString(s, spec)).join(' | ');
-    return `export type ${name} = ${types};`;
-  }
-  if (schema.anyOf) {
-    const types = schema.anyOf.map(s => schemaToTypeString(s, spec)).join(' | ');
-    return `export type ${name} = ${types};`;
-  }
-
-  const { types, nullable } = normalizeType(schema);
-
-  // Handle object type
-  if (types.includes('object') || schema.properties) {
+  // A plain object schema becomes an interface; anything else is the same type
+  // a property of that schema would get.
+  const composed = !isReference(schema) && (schema.allOf || schema.oneOf || schema.anyOf);
+  if (!isReference(schema) && !composed && (normalizeType(schema).types.includes('object') || schema.properties)) {
     return generateInterfaceType(name, schema, spec);
   }
 
-  // Handle enum
-  if (schema.enum) {
-    const enumValues = schema.enum.map(v => 
-      typeof v === 'string' ? `'${v}'` : String(v)
-    ).join(' | ');
-    const suffix = nullable ? ' | null' : '';
-    return `export type ${name} = ${enumValues}${suffix};`;
-  }
-
-  // Handle array
-  if (types.includes('array') && schema.items) {
-    const itemType = schemaToTypeString(schema.items, spec);
-    const suffix = nullable ? ' | null' : '';
-    return `export type ${name} = ${itemType}[]${suffix};`;
-  }
-
-  // Handle primitive types (including type arrays like ['string', 'null'])
-  const tsType = resolveTypeString(types, schema, nullable);
-  return `export type ${name} = ${tsType};`;
+  return `export type ${name} = ${schemaToTypeString(schema, spec)};`;
 }
 
 /**
@@ -212,12 +177,12 @@ function schemaToTypeString(
   schema: SchemaObject | ReferenceObject,
   spec: OpenAPISpec
 ): string {
-  if (isReference(schema)) {
-    return getRefName(schema.$ref);
-  }
-
   const { types, nullable } = normalizeType(schema);
   const nullSuffix = nullable ? ' | null' : '';
+
+  if (isReference(schema)) {
+    return `${getRefName(schema.$ref)}${nullSuffix}`;
+  }
 
   // Handle allOf, oneOf, anyOf
   if (schema.allOf) {
@@ -304,11 +269,12 @@ function singleTypeToTs(typeName: OpenAPIType): string {
  * Resolve an array of OpenAPI types (with nullable flag) into a TypeScript type string.
  * Handles both single-type and multi-type (OpenAPI 3.1 union) cases.
  */
-function resolveTypeString(types: OpenAPIType[], _schema: SchemaObject, nullable: boolean): string {
+function resolveTypeString(types: OpenAPIType[], schema: SchemaObject, nullable: boolean): string {
   const nullSuffix = nullable ? ' | null' : '';
 
   if (types.length === 0) {
-    return `unknown${nullSuffix}`;
+    // A declared type of only 'null' admits null alone; no declared type admits anything.
+    return schema.type !== undefined ? 'null' : `unknown${nullSuffix}`;
   }
 
   const tsTypes = types.map(t => singleTypeToTs(t));
