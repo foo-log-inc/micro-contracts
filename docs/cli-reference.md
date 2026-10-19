@@ -70,7 +70,7 @@ micro-contracts generate --force
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
 | `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable. |
-| `--manifest-dir` |  | No | `"packages/"` | Directory for manifest output. |
+| `--manifest-dir` |  | No |  | Directory for manifest output. Defaults to the deepest directory holding every location the config generates to (contract, published contract and outputs), so that the manifest can record each output. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
 | `--cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
 
@@ -257,7 +257,7 @@ micro-contracts check --list-gates
 | `--verbose` | -v | No | `false` | Enable verbose output. |
 | `--fix` |  | No | `false` | Auto-fix issues where possible. |
 | `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
-| `--generated-dir` | -d | No | `"packages/"` | Path to generated files directory. |
+| `--generated-dir` | -d | No |  | Directory holding the manifest of generated files. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to. |
 | `--changed-files` |  | No |  | Path to file containing list of changed files (for CI). |
 | `--list` |  | No | `false` | List available checks and exit. |
 | `--list-gates` |  | No | `false` | List available gates and exit. |
@@ -319,7 +319,7 @@ micro-contracts pipeline --contracts-only --skip-lint
 | `--skip` |  | No |  | Skip specific checks (comma-separated). |
 | `--continue-on-error` |  | No | `false` | Continue running even if a step fails. |
 | `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
-| `--generated-dir` | -d | No | `"packages/"` | Path to generated files directory. |
+| `--generated-dir` | -d | No |  | Directory holding the manifest of generated files. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to. |
 | `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default. Use --no-manifest to disable. |
 | `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
@@ -535,7 +535,7 @@ micro-contracts manifest -o custom-manifest.json
 
 | Option | Aliases | Required | Default | Description |
 |---|---|---|---|---|
-| `--dir` | -d | No | `"packages/"` | Directory to scan. |
+| `--dir` | -d | No |  | Directory to scan. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to. |
 | `--verify` |  | No | `false` | Verify existing manifest instead of generating. |
 | `--output` | -o | No |  | Output manifest path. Defaults to {dir}/.generated-manifest.json. |
 

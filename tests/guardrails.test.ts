@@ -21,6 +21,7 @@ import {
   runAllChecks,
   getAvailableChecks,
   checkUncommittedChanges,
+  generatedFilesRule,
   formatCheckResults,
   formatSingleCheckResult,
   findOpenAPISpecs,
@@ -386,7 +387,7 @@ describe('checkUncommittedChanges', () => {
   }
 
   it('reports a clean generated directory as valid', () => {
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.valid).toBe(true);
     expect(result.changedFiles).toEqual([]);
@@ -395,7 +396,7 @@ describe('checkUncommittedChanges', () => {
   it('detects an unstaged edit to a generated file', () => {
     fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// hand edit\n');
 
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.valid).toBe(false);
     expect(result.changedFiles).toContain('packages/types.ts');
@@ -407,7 +408,7 @@ describe('checkUncommittedChanges', () => {
     fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// hand edit\n');
     git('add', '-A');
 
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.valid).toBe(false);
     expect(result.changedFiles).toContain('packages/types.ts');
@@ -416,10 +417,20 @@ describe('checkUncommittedChanges', () => {
   it('detects an untracked generated file', () => {
     fs.writeFileSync(path.join(repo, 'packages/new.generated.ts'), 'export const x = 1;\n');
 
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.valid).toBe(false);
     expect(result.changedFiles).toContain('packages/new.generated.ts');
+  });
+
+  it('reports only generated files when the directory holds hand-written ones too', () => {
+    fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'src/app.ts'), 'export const app = 1;\n');
+
+    const result = inRepo(() => checkUncommittedChanges('.', generatedFilesRule()));
+
+    expect(result.changedFiles).not.toContain('src/app.ts');
+    expect(result.valid).toBe(true);
   });
 
   it('reports each changed file once', () => {
@@ -427,7 +438,7 @@ describe('checkUncommittedChanges', () => {
     git('add', '-A');
     fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// more\n');
 
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.changedFiles.filter(f => f === 'packages/types.ts')).toHaveLength(1);
   });

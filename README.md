@@ -392,7 +392,7 @@ Generate code from OpenAPI specifications.
 | `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
 | `--skip-lint` | Skip linting before generation |
 | `--no-manifest` | Skip manifest generation |
-| `--manifest-dir <path>` | Directory for manifest (default: `packages/`) |
+| `--manifest-dir <path>` | Directory for manifest (default: the deepest directory holding every configured output) |
 | `--force` | Bypass input hash cache and always regenerate |
 | `--no-cache` | Run without reading or writing input hash cache |
 
@@ -400,8 +400,10 @@ A run that generates a subset (`--output`, `--module`, or any `--*-only`) does n
 record the input hash, so the next full run regenerates rather than reporting no
 changes.
 
-The manifest records the files in its directory that the `generated:` patterns of
-`micro-contracts.guardrails.yaml` match. A full run records the input hash
+The manifest (`.generated-manifest.json`) lives in the deepest directory holding every
+location the config generates to — the project root when outputs sit both in
+`packages/` and next to the server code — and records the files there that the
+`generated:` patterns of `micro-contracts.guardrails.yaml` match. A full run records the input hash
 only when the manifest records every file of every configured output, so an output
 outside that directory or outside the `generated:` patterns leaves the hash out and
 generate names the file that did. The cache skips a run only when the manifest
@@ -452,7 +454,7 @@ Run guardrail checks.
 | `-v, --verbose` | Enable verbose output |
 | `--fix` | Auto-fix issues where possible |
 | `-g, --guardrails <path>` | Path to `micro-contracts.guardrails.yaml` |
-| `-d, --generated-dir <path>` | Path to generated files directory (default: `packages/`) |
+| `-d, --generated-dir <path>` | Directory holding the manifest (default: the one `generate` writes it to) |
 | `--changed-files <path>` | Path to file containing changed files (for CI) |
 | `--list` | List available checks |
 | `--list-gates` | List available gates |
@@ -468,7 +470,7 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--skip <checks>` | Skip specific checks (comma-separated) |
 | `--continue-on-error` | Continue running even if a step fails |
 | `-g, --guardrails <path>` | Path to `micro-contracts.guardrails.yaml` |
-| `-d, --generated-dir <path>` | Path to generated files directory (default: `packages/`) |
+| `-d, --generated-dir <path>` | Directory holding the manifest (default: the one `generate` writes it to) |
 | `--no-manifest` | Skip manifest generation |
 | `--skip-lint` | Skip linting before generation |
 | `--contracts-only` | Generate contract packages only |
@@ -482,8 +484,7 @@ A run that generates a subset (`--output`, `--module`, or any `--*-only`) does n
 record the input hash, so the next full run regenerates rather than reporting no
 changes.
 
-The cache reads the manifest in `--generated-dir`, under the same conditions as
-`generate`.
+The cache reads the same manifest as `generate`, under the same conditions.
 
 > See **[Enforceable Guardrails](docs/development-guardrails.md)** for gate details and CI configuration.
 
@@ -514,7 +515,7 @@ Generate or verify manifest for generated artifacts.
 
 | Option | Description |
 |--------|-------------|
-| `-d, --dir <path>` | Directory to scan (default: `packages/`) |
+| `-d, --dir <path>` | Directory to scan (default: the one `generate` writes the manifest to) |
 | `--verify` | Verify existing manifest |
 | `-o, --output <path>` | Output manifest path |
 

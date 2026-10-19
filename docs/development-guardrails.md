@@ -34,7 +34,7 @@ The following diagram illustrates the overall architecture of the guardrails sys
 |------|------|-------|------------------|
 | **1** | Change Allowlist | repo-wide | Editing protected/generated areas directly |
 | **2** | OpenAPI Spec Validation | `spec/**` | Invalid specs, bad extensions, breaking changes |
-| **3** | Generated Artifact Integrity | `packages/**`, `*.generated.*` | Hand-editing generated code, drift, tampering |
+| **3** | Generated Artifact Integrity | files matching `generated:` (`packages/**`, `*.generated.*`) | Hand-editing generated code, drift, tampering |
 | **4** | Code Quality | `server/**`, `frontend/**` | Type errors, lint issues, failing tests |
 | **5** | Doc & Architectural Consistency | `docs/**`, all code | Doc/code mismatch, broken references, architecture drift |
 
@@ -61,7 +61,7 @@ Options:
   -v, --verbose               Enable verbose output (groups by gate)
   --fix                       Auto-fix issues where possible
   -g, --guardrails <path>     Path to micro-contracts.guardrails.yaml
-  -d, --generated-dir <path>  Path to generated files directory (default: "packages/")
+  -d, --generated-dir <path>  Directory holding the manifest (default: the one generate writes it to)
   --changed-files <path>      Path to file containing list of changed files (for CI)
   --list                      List available checks with gate assignments
   --list-gates                List available gates
@@ -102,7 +102,7 @@ Options:
   --continue-on-error         Continue running even if a step fails
   -g, --guardrails <path>     Path to micro-contracts.guardrails.yaml
   -c, --config <path>         Path to config file (micro-contracts.config.yaml)
-  -d, --generated-dir <path>  Path to generated files directory (default: "packages/")
+  -d, --generated-dir <path>  Directory holding the manifest (default: the one generate writes it to)
   --no-manifest               Skip manifest generation
   --skip-lint                 Skip linting before generation
   --contracts-only            Generate contract packages only
@@ -226,7 +226,7 @@ Transforms `spec/**` → `packages/**`.
 |---------|-------------|
 | `micro-contracts generate` | Generate contracts from OpenAPI specs |
 
-> **Note**: When `micro-contracts.guardrails.yaml` has a `generated:` section defined, `generate` automatically creates/updates `packages/.generated-manifest.json`. Use `--no-manifest` to skip this behavior.
+> **Note**: When `micro-contracts.guardrails.yaml` has a `generated:` section defined, `generate` automatically creates/updates `.generated-manifest.json` in the deepest directory holding every location the config generates to (the project root when outputs sit both in `packages/` and next to the server code). `pipeline` and `check` read it there. Use `--no-manifest` to skip this behavior.
 
 ### Gate 3: Generated Artifact Integrity
 
@@ -236,7 +236,7 @@ Ensures generated code matches spec and hasn't been tampered.
 
 | Check | Type | Description | Local Command | CI Job |
 |-------|------|-------------|---------------|--------|
-| Drift | built-in | `packages/**` must match the commit (staged, unstaged and untracked all count) | `micro-contracts check --only drift` | `drift` |
+| Drift | built-in | Generated files must match the commit (staged, unstaged and untracked all count) | `micro-contracts check --only drift` | `drift` |
 | Manifest | built-in | SHA-256 hash verification | `micro-contracts check --only manifest` | `manifest` |
 | Package typecheck | custom | Generated packages compile (`tsc`) | `micro-contracts check --only package-typecheck` | `package-typecheck` |
 | Project rules | custom | Project-specific Spectral rules on **generated** spec | `micro-contracts check --only spec-project` | `spec-project` |
@@ -244,9 +244,10 @@ Ensures generated code matches spec and hasn't been tampered.
 
 > **Why spec checks in Gate 3?** `spec-project` and `spec-breaking-published` validate the **generated/bundled** spec output, not the source. They run after generation to verify the published contract.
 
-**Drift check** — After running `generate`, `packages/**` must match committed state:
+**Drift check** — After running `generate`, the generated files (those the `generated:`
+patterns match, and the manifest) in the manifest's directory must match committed state:
 ```bash
-git diff --exit-code HEAD -- packages/ && git ls-files --others --exclude-standard packages/
+git diff --name-only HEAD -- <dir> && git ls-files --others --exclude-standard <dir>
 ```
 Comparing against `HEAD` rather than the index matters: a pre-commit run stages
 its changes first, and comparing the worktree to the index would report a
@@ -256,7 +257,7 @@ A configured generated directory that does not exist fails both checks: nothing 
 inspect is not the same as nothing wrong. A run in which every check skipped
 reports `No checks ran` rather than success.
 
-**Manifest verification** — `packages/.generated-manifest.json` stores:
+**Manifest verification** — `.generated-manifest.json` stores:
 - SHA-256 hashes of all generated files: the files in the directory that the
   `generated:` patterns match, read relative to the guardrails config. A
   hand-written package beside them is neither recorded nor reported.
@@ -468,7 +469,7 @@ checks:
 
 ### Manifest Format
 
-When guardrails are configured with a `generated:` section, `micro-contracts generate` automatically creates `packages/.generated-manifest.json`:
+When guardrails are configured with a `generated:` section, `micro-contracts generate` automatically creates `.generated-manifest.json`, with paths relative to its directory:
 
 ```json
 {
@@ -476,7 +477,7 @@ When guardrails are configured with a `generated:` section, `micro-contracts gen
   "generatorVersion": "0.9.3",
   "updatedAt": "2024-01-15T10:30:00Z",
   "files": {
-    "contract/core/schemas/types.ts": {
+    "packages/contract/core/schemas/types.ts": {
       "sha256": "a1b2c3d4e5f6...",
       "source": "spec/core/openapi/core.yaml"
     }

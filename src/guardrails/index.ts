@@ -55,6 +55,7 @@ export {
 export {
   hashFile,
   generatedFilesRule,
+  resolveManifestDir,
   getGeneratedFiles,
   generateManifest,
   writeManifest,

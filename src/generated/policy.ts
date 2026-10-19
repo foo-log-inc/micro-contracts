@@ -69,8 +69,7 @@ export const commandDefinitions = {
       {
         "name": "manifest-dir",
         "schema": {
-          "type": "string",
-          "default": "packages/"
+          "type": "string"
         }
       },
       {
@@ -192,8 +191,7 @@ export const commandDefinitions = {
       {
         "name": "generated-dir",
         "schema": {
-          "type": "string",
-          "default": "packages/"
+          "type": "string"
         }
       },
       {
@@ -273,8 +271,7 @@ export const commandDefinitions = {
       {
         "name": "generated-dir",
         "schema": {
-          "type": "string",
-          "default": "packages/"
+          "type": "string"
         }
       },
       {
@@ -422,8 +419,7 @@ export const commandDefinitions = {
       {
         "name": "dir",
         "schema": {
-          "type": "string",
-          "default": "packages/"
+          "type": "string"
         }
       },
       {

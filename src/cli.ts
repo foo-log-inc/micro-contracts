@@ -21,6 +21,7 @@ import {
   writeManifest,
   canSkipGeneration,
   generatedFilesRule,
+  resolveManifestDir,
   GATE_DESCRIPTIONS,
   loadGuardrailsConfigWithPath,
 } from './guardrails/index.js';
@@ -87,8 +88,8 @@ const handlers: CommandHandlers = {
         inputHash = computeInputHash(config, configPath, VERSION);
 
         if (useCache) {
-          const manifestDir = opts.manifestDir || 'packages/';
-          const skipCheck = await canSkipGeneration(manifestDir, inputHash, generatedFilesRule());
+          const rule = generatedFilesRule();
+          const skipCheck = await canSkipGeneration(resolveManifestDir(opts.manifestDir, rule), inputHash, rule);
           if (skipCheck.skip) {
             console.log(`No input changes detected, skipping generation (${skipCheck.reason})`);
             return;
@@ -109,11 +110,12 @@ const handlers: CommandHandlers = {
         const { config: guardrailsConfig } = loadGuardrailsConfigWithPath();
 
         if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
-          const manifestDir = opts.manifestDir || 'packages/';
+          const rule = generatedFilesRule();
+          const manifestDir = resolveManifestDir(opts.manifestDir, rule);
           if (fs.existsSync(manifestDir)) {
             const manifestInputHash =
               (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-            const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, generatedFilesRule(), {
+            const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
               generatorVersion: VERSION,
               inputHash: manifestInputHash,
               outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
@@ -495,8 +497,8 @@ const handlers: CommandHandlers = {
             inputHash = computeInputHash(config, configPath, VERSION);
 
             if (useCache) {
-              const manifestDir = opts.generatedDir || 'packages/';
-              const skipCheck = await canSkipGeneration(manifestDir, inputHash, generatedFilesRule(opts.guardrails));
+              const rule = generatedFilesRule(opts.guardrails);
+              const skipCheck = await canSkipGeneration(resolveManifestDir(opts.generatedDir, rule), inputHash, rule);
               if (skipCheck.skip) {
                 generationCacheSkipped = true;
                 generateSkipped = true;
@@ -526,11 +528,12 @@ const handlers: CommandHandlers = {
               if (opts.manifest !== false) {
                 const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
                 if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
-                  const manifestDir = opts.generatedDir || 'packages/';
+                  const rule = generatedFilesRule(opts.guardrails);
+                  const manifestDir = resolveManifestDir(opts.generatedDir, rule);
                   if (fs.existsSync(manifestDir)) {
                     const manifestInputHash =
                       (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-                    const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, generatedFilesRule(opts.guardrails), {
+                    const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
                       generatorVersion: VERSION,
                       inputHash: manifestInputHash,
                       outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
@@ -755,7 +758,8 @@ const handlers: CommandHandlers = {
   // ── manifest ──────────────────────────────────────────
   manifest: async (opts) => {
     try {
-      const baseDir = opts.dir ?? 'packages/';
+      const rule = generatedFilesRule();
+      const baseDir = resolveManifestDir(opts.dir, rule);
 
       if (!fs.existsSync(baseDir)) {
         console.error(`Directory not found: ${baseDir}`);
@@ -764,14 +768,14 @@ const handlers: CommandHandlers = {
 
       if (opts.verify) {
         const { verifyManifest, formatManifestResult } = await import('./guardrails/index.js');
-        const result = await verifyManifest(baseDir, generatedFilesRule());
+        const result = await verifyManifest(baseDir, rule);
         console.log(formatManifestResult(result));
         if (!result.valid) {
           process.exit(1);
         }
       } else {
         console.log(`Generating manifest for: ${baseDir}`);
-        const { manifest, changed } = await generateManifest(baseDir, generatedFilesRule(), {
+        const { manifest, changed } = await generateManifest(baseDir, rule, {
           generatorVersion: VERSION,
         });
 

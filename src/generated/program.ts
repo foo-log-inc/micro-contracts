@@ -42,7 +42,7 @@ export function createProgram(
     .option("--frontend-only", "Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead.", false)
     .option("--skip-lint", "Skip Spectral linting before generation.", false)
     .option("--manifest", "Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable.", true)
-    .option("--manifest-dir <path>", "Directory for manifest output.", "packages/")
+    .option("--manifest-dir <path>", "Directory for manifest output. Defaults to the deepest directory holding every location the config generates to (contract, published contract and outputs), so that the manifest can record each output.")
     .option("--force", "Bypass input hash cache and always regenerate.", false)
     .option("--cache", "Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache.", true)
     .action(async (opts, cmd) => {
@@ -98,7 +98,7 @@ export function createProgram(
     .option("-v, --verbose", "Enable verbose output.", false)
     .option("--fix", "Auto-fix issues where possible.", false)
     .option("-g, --guardrails <path>", "Path to micro-contracts.guardrails.yaml.")
-    .option("-d, --generated-dir <path>", "Path to generated files directory.", "packages/")
+    .option("-d, --generated-dir <path>", "Directory holding the manifest of generated files. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to.")
     .option("--changed-files <path>", "Path to file containing list of changed files (for CI).")
     .option("--list", "List available checks and exit.", false)
     .option("--list-gates", "List available gates and exit.", false)
@@ -120,7 +120,7 @@ export function createProgram(
     .option("--skip <checks>", "Skip specific checks (comma-separated).")
     .option("--continue-on-error", "Continue running even if a step fails.", false)
     .option("-g, --guardrails <path>", "Path to micro-contracts.guardrails.yaml.")
-    .option("-d, --generated-dir <path>", "Path to generated files directory.", "packages/")
+    .option("-d, --generated-dir <path>", "Directory holding the manifest of generated files. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to.")
     .option("--manifest", "Generate manifest after generation. Enabled by default. Use --no-manifest to disable.", true)
     .option("--skip-lint", "Skip Spectral linting before generation.", false)
     .option("--contracts-only", "Generate contract packages only.", false)
@@ -190,7 +190,7 @@ export function createProgram(
   program
     .command("manifest")
     .description("Generate or verify manifest for generated artifacts.")
-    .option("-d, --dir <path>", "Directory to scan.", "packages/")
+    .option("-d, --dir <path>", "Directory to scan. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to.")
     .option("--verify", "Verify existing manifest instead of generating.", false)
     .option("-o, --output <path>", "Output manifest path. Defaults to {dir}/.generated-manifest.json.")
     .action(async (opts, cmd) => {

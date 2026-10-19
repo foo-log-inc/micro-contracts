@@ -220,11 +220,13 @@ generated:
       fs.mkdirSync(path.join(tempDir, 'packages/app/src'), { recursive: true });
       fs.writeFileSync(path.join(tempDir, 'packages/app/src/index.ts'), 'export const handWritten = 1;\n');
 
+      // The manifest lives where it can see every output: here, the project root.
       expect(runCli('generate').exitCode).toBe(0);
       const manifest = JSON.parse(
-        fs.readFileSync(path.join(tempDir, 'packages/.generated-manifest.json'), 'utf-8'),
+        fs.readFileSync(path.join(tempDir, '.generated-manifest.json'), 'utf-8'),
       );
-      expect(Object.keys(manifest.files)).not.toContain('app/src/index.ts');
+      expect(Object.keys(manifest.files)).toContain('contracts/orders/index.ts');
+      expect(Object.keys(manifest.files)).not.toContain('packages/app/src/index.ts');
 
       fs.rmSync(path.join(tempDir, 'contracts'), { recursive: true, force: true });
       const again = runCli('generate');
@@ -235,10 +237,70 @@ generated:
       fs.writeFileSync(path.join(tempDir, 'packages/app/src/index.ts'), 'export const handWritten = 2;\n');
       const check = runCli('check --only manifest');
       expect(check.stdout).not.toContain('app/src/index.ts');
-      // Generating again cannot help: the outputs are elsewhere.
-      expect(check.stdout).not.toContain('Run generate before verifying');
-      expect(check.stdout).toContain('contracts/orders');
-      expect(check.stdout).toContain('--manifest-dir');
+      expect(check.exitCode).toBe(0);
+
+      // A directory given explicitly that the outputs lie outside: generating
+      // again cannot help, and the failure says so.
+      expect(runCli('generate --manifest-dir packages/').exitCode).toBe(0);
+      const explicit = runCli('check --only manifest --generated-dir packages/');
+      expect(explicit.exitCode).toBe(1);
+      expect(explicit.stdout).not.toContain('Run generate before verifying');
+      expect(explicit.stdout).toContain('contracts/orders');
+      expect(explicit.stdout).toContain('--manifest-dir');
+    });
+
+    it('caches a project generating both into packages/ and next to its server code', () => {
+      fs.mkdirSync(path.join(tempDir, 'api'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'api/core.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Core',
+          '  version: 1.0.0',
+          'paths:',
+          '  /items:',
+          '    get:',
+          '      operationId: getItems',
+          '      x-micro-contracts-service: Item',
+          '      x-micro-contracts-method: getItems',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(path.join(tempDir, 'routes.hbs'), '{{#each routes}}{{operationId}}\n{{/each}}');
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        [
+          'defaults:',
+          '  contract:',
+          '    output: packages/contract/{module}',
+          '  outputs:',
+          '    routes:',
+          '      output: server/src/{module}/routes.generated.ts',
+          '      template: routes.hbs',
+          'modules:',
+          '  core:',
+          '    openapi: api/core.yaml',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.guardrails.yaml'),
+        'generated:\n  - "packages/**"\n  - "**/*.generated.ts"\n',
+      );
+
+      expect(runCli('generate').exitCode).toBe(0);
+      expect(runCli('generate').stdout).toContain('No input changes detected');
+
+      fs.rmSync(path.join(tempDir, 'server/src/core/routes.generated.ts'));
+      const again = runCli('generate');
+      expect(again.stdout).not.toContain('No input changes detected');
+      expect(fs.existsSync(path.join(tempDir, 'server/src/core/routes.generated.ts'))).toBe(true);
+
+      expect(runCli('check --only manifest').exitCode).toBe(0);
     });
 
     it('regenerates an output in the manifest directory that the generated patterns leave out', () => {

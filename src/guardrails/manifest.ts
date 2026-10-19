@@ -52,6 +52,65 @@ export function generatedFilesRule(guardrailsPath?: string): GeneratedFilesRule 
 }
 
 /**
+ * Whether `file`, relative to the guardrails config's directory, is a
+ * generated artifact: a file the `generated:` patterns match, or the manifest
+ * itself, which generate writes wherever it lives.
+ *
+ * The one answer the manifest, the drift check and the allowlist all use.
+ */
+export function isGeneratedFile(patterns: string[] | undefined, file: string): boolean {
+  return path.basename(file) === MANIFEST_FILENAME || matchWithNegation(patterns, file);
+}
+
+/** The locations the project config generates to, or undefined without a project config. */
+function projectOutputs(): string[] | undefined {
+  const configPath = findConfigFile();
+  if (!configPath) return undefined;
+  const config = loadConfig(configPath);
+  return isMultiModuleConfig(config) ? configuredOutputs(config) : undefined;
+}
+
+/** The deepest directory holding every one of `dirs` (absolute paths). */
+function commonAncestor(dirs: string[]): string {
+  const split = dirs.map(dir => dir.split(path.sep));
+  const common: string[] = [];
+  for (let i = 0; split.every(segments => i < segments.length && segments[i] === split[0][i]); i++) {
+    common.push(split[0][i]);
+  }
+  return common.join(path.sep) || path.sep;
+}
+
+/**
+ * The directory the manifest lives in — the one generate writes it to and
+ * pipeline, check and manifest read it from.
+ *
+ * `explicit` (--manifest-dir, --generated-dir, --dir) when given. Otherwise the
+ * deepest directory holding every location the project config generates to,
+ * so that the manifest can record each output; with no project config, the
+ * deepest directory holding everything the generated: patterns can match.
+ */
+export function resolveManifestDir(explicit: string | undefined, rule: GeneratedFilesRule): string {
+  if (explicit) return explicit;
+
+  const outputs = projectOutputs();
+  const dirs = outputs && outputs.length > 0
+    ? outputs.map(output => path.dirname(path.resolve(output)))
+    : rule.patterns
+      .filter(pattern => !pattern.startsWith('!'))
+      .map(pattern => {
+        // The segments before the first wildcard; a pattern without one names a file.
+        const segments = pattern.split('/');
+        const wildcard = segments.findIndex(segment => /[*?[\]{}]/.test(segment));
+        return wildcard < 0
+          ? path.dirname(path.resolve(rule.baseDir, pattern))
+          : path.resolve(rule.baseDir, ...segments.slice(0, wildcard));
+      });
+  if (dirs.length === 0) return '.';
+
+  return path.relative(process.cwd(), commonAncestor(dirs)) || '.';
+}
+
+/**
  * The generated files in a directory, relative to it.
  *
  * Only what `rule` calls generated: a hand-written file in the same directory
@@ -75,7 +134,7 @@ export async function getGeneratedFiles(
   return files
     .filter(file => {
       const fromRuleBase = path.relative(rule.baseDir, path.resolve(baseDir, file)).split(path.sep).join('/');
-      return matchWithNegation(rule.patterns, fromRuleBase);
+      return isGeneratedFile(rule.patterns, fromRuleBase);
     })
     .sort();
 }
@@ -368,12 +427,7 @@ export async function verifyManifest(baseDir: string, rule: GeneratedFilesRule):
 
 /** The configured generation outputs (see configuredOutputs) that lie outside `dir`. */
 function outputsOutside(dir: string): string[] {
-  const configPath = findConfigFile();
-  if (!configPath) return [];
-  const config = loadConfig(configPath);
-  if (!isMultiModuleConfig(config)) return [];
-
-  return configuredOutputs(config).filter(output => {
+  return (projectOutputs() ?? []).filter(output => {
     const relative = path.relative(path.resolve(dir), path.resolve(output));
     return relative.startsWith('..') || path.isAbsolute(relative);
   });
@@ -384,7 +438,8 @@ function outputsOutside(dir: string): string[] {
  */
 export async function runManifestCheck(options: CheckOptions): Promise<CheckResult> {
   const start = Date.now();
-  const generatedDir = options.generatedDir || 'packages/';
+  const rule = generatedFilesRule(options.guardrailsPath);
+  const generatedDir = resolveManifestDir(options.generatedDir, rule);
   
   try {
     // Nothing to verify is not the same as verified.
@@ -397,7 +452,7 @@ export async function runManifestCheck(options: CheckOptions): Promise<CheckResu
       };
     }
     
-    const result = await verifyManifest(generatedDir, generatedFilesRule(options.guardrailsPath));
+    const result = await verifyManifest(generatedDir, rule);
     
     if (result.valid) {
       const manifest = loadManifest(generatedDir);
@@ -480,7 +535,7 @@ export function formatManifestResult(result: ManifestResult): string {
     }
     
     lines.push('\n💡 Run `micro-contracts generate` to regenerate all artifacts.');
-    lines.push('💡 Do NOT edit files in packages/ directly.');
+    lines.push('💡 Do NOT edit generated files directly.');
   }
   
   return lines.join('\n');
