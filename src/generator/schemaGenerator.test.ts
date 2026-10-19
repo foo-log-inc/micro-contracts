@@ -174,3 +174,44 @@ describe('validation keywords', () => {
     expect((await post('/create', { quantity: 5, note: 'n', a: 1, b: 2 })).statusCode).toBe(400);
   });
 });
+
+describe('schema identity', () => {
+  it('registers a component under its own name even when the author gave it an $id and $schema', async () => {
+    const identitySpec = {
+      openapi: '3.1.0',
+      info: { title: 'Test', version: '1.0.0' },
+      paths: {},
+      components: {
+        schemas: {
+          Foo: { type: 'object', properties: { a: { type: 'string' } } },
+          Bar: {
+            $id: 'https://example.com/bar',
+            $schema: 'https://json-schema.org/draft/2020-12/schema',
+            type: 'object',
+            properties: { foo: { $ref: '#/components/schemas/Foo' } },
+          },
+        },
+      },
+    } as unknown as OpenAPISpec;
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'schema-identity-test-'));
+    const validatorsPath = path.join(dir, 'validators.ts');
+    fs.writeFileSync(validatorsPath, generateSchemas(identitySpec));
+    const { allSchemas } = await import(validatorsPath);
+
+    const identityApp = Fastify();
+    try {
+      for (const schema of allSchemas) {
+        identityApp.addSchema(schema);
+      }
+      identityApp.post('/bars', { schema: { body: { $ref: 'Bar#' } } }, async (request) => request.body);
+      await identityApp.ready();
+
+      const res = await identityApp.inject({ method: 'POST', url: '/bars', payload: { foo: { a: 'x' } } });
+      expect(res.statusCode).toBe(200);
+    } finally {
+      await identityApp.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

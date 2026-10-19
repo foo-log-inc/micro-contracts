@@ -81,12 +81,17 @@ function generateSchemaExport(
 }
 
 /**
- * Keywords a validator leaves out: OpenAPI annotations that are not JSON
- * Schema, or are shaped differently from the JSON Schema keyword of the same
- * name. None of them takes part in validation, and Ajv — strict, as Fastify
- * runs it — refuses a schema carrying one.
+ * Keywords a validator leaves out. None of them takes part in validation:
+ *
+ * - OpenAPI annotations that are not JSON Schema, or are shaped differently
+ *   from the JSON Schema keyword of the same name. Ajv — strict, as Fastify
+ *   runs it — refuses a schema carrying one.
+ * - `$id` and `$schema`: the generator names every schema itself (the name
+ *   routes reference it by), and Fastify's Ajv decides the dialect. An author's
+ *   `$id` would replace that name and a `$schema` Ajv does not hold would stop
+ *   Fastify from starting.
  */
-const ANNOTATION_KEYWORDS = new Set(['example', 'examples', 'xml', 'externalDocs', 'discriminator']);
+const EXCLUDED_KEYWORDS = new Set(['example', 'examples', 'xml', 'externalDocs', 'discriminator', '$id', '$schema']);
 
 /** Keywords whose value is a schema (or, for `items`, a list of them). */
 const SUBSCHEMA_KEYWORDS = new Set([
@@ -108,7 +113,7 @@ const SUBSCHEMA_MAP_KEYWORDS = new Set(['properties', 'patternProperties', 'depe
  * validator constrains. Only what JSON Schema spells differently is
  * translated: `$ref`, `nullable`, the boolean `exclusiveMinimum` /
  * `exclusiveMaximum` of OpenAPI 3.0, and the schemas nested in other keywords.
- * Extensions (`x-*`) and the annotations above are left out.
+ * Extensions (`x-*`) and the keywords above are left out.
  */
 function convertSchemaValue(
   schema: SchemaObject | ReferenceObject,
@@ -119,7 +124,7 @@ function convertSchemaValue(
   const node = schema as SchemaObject & Partial<ReferenceObject>;
 
   for (const [keyword, value] of Object.entries(node)) {
-    if (keyword.startsWith('x-') || ANNOTATION_KEYWORDS.has(keyword)) continue;
+    if (keyword.startsWith('x-') || EXCLUDED_KEYWORDS.has(keyword)) continue;
 
     if (keyword === '$ref') {
       result.$ref = `${getRefName(value as string)}#`;
