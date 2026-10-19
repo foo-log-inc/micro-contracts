@@ -1,0 +1,9 @@
+# Core module Redocly rules
+# Module-specific lint rules (extends shared rules)
+extends:
+  - ../_shared/redocly.yaml         # Inherit shared rules
+
+# Core module specific rules can be added here
+# Example: escalate warning to error for this module
+# oas3_0Rules:
+#   operation-description: error    # Override: warn → error
