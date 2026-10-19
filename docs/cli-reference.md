@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.18.18
+**Version:** 0.19.0
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ Contract-first OpenAPI toolchain for TypeScript.
 
 Generate code from OpenAPI specifications.
 
-Loads the multi-module config, applies overlays, runs Spectral linting (unless skipped), and generates contract packages, server routes, frontend clients, and documentation from OpenAPI specs. Supports input-hash caching to skip unnecessary regeneration.
+Loads the multi-module config, lints each spec with the rules of the lint command (unless skipped), applies overlays, and generates contract packages, server routes, frontend clients, and documentation from OpenAPI specs. Supports input-hash caching to skip unnecessary regeneration.
 
 **Usage:**
 
@@ -68,11 +68,11 @@ micro-contracts generate --force
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
-| `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
-| `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable. |
-| `--manifest-dir` |  | No | `"packages/"` | Directory for manifest output. |
+| `--skip-lint` |  | No | `false` | Skip linting (the rules of the lint command) before generation. |
+| `--manifest`, `--no-manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable. |
+| `--manifest-dir` |  | No |  | Directory for manifest output. Defaults to the deepest directory holding every location the config generates to (contract, published contract and outputs), so that the manifest can record each output. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
-| `--cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
+| `--cache`, `--no-cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
 
 #### Exit Codes
 
@@ -108,7 +108,7 @@ x-agent:
 
 Lint OpenAPI specification.
 
-Validates an OpenAPI specification for x-micro-contracts extension violations and structural issues using Spectral rules.
+Validates an OpenAPI specification against micro-contracts' own rules: the x-micro-contracts-* extensions every operation needs, screen spec consistency, and what a published endpoint may reach (x-private, x-micro-contracts-non-exportable).
 
 **Usage:**
 
@@ -158,7 +158,7 @@ x-agent:
 
 Initialize a new module structure with starter templates.
 
-Creates the directory structure, starter Handlebars templates, shared schemas, Spectral rules, and optional config file for a new module. Can also process an existing OpenAPI spec to auto-add x-micro-contracts extensions.
+Creates the directory structure, starter Handlebars templates, shared schemas, Redocly lint rules, and optional config file for a new module. Can also process an existing OpenAPI spec to auto-add x-micro-contracts extensions.
 
 **Usage:**
 
@@ -257,7 +257,7 @@ micro-contracts check --list-gates
 | `--verbose` | -v | No | `false` | Enable verbose output. |
 | `--fix` |  | No | `false` | Auto-fix issues where possible. |
 | `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
-| `--generated-dir` | -d | No | `"packages/"` | Path to generated files directory. |
+| `--generated-dir` | -d | No |  | Directory holding the manifest of generated files. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to. |
 | `--changed-files` |  | No |  | Path to file containing list of changed files (for CI). |
 | `--list` |  | No | `false` | List available checks and exit. |
 | `--list-gates` |  | No | `false` | List available gates and exit. |
@@ -319,14 +319,14 @@ micro-contracts pipeline --contracts-only --skip-lint
 | `--skip` |  | No |  | Skip specific checks (comma-separated). |
 | `--continue-on-error` |  | No | `false` | Continue running even if a step fails. |
 | `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
-| `--generated-dir` | -d | No | `"packages/"` | Path to generated files directory. |
-| `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default. Use --no-manifest to disable. |
-| `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
+| `--generated-dir` | -d | No |  | Directory holding the manifest of generated files. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to. |
+| `--manifest`, `--no-manifest` |  | No | `true` | Generate manifest after generation. Enabled by default. Use --no-manifest to disable. |
+| `--skip-lint` |  | No | `false` | Skip linting (the rules of the lint command) before generation. |
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
-| `--cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
+| `--cache`, `--no-cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
 
 #### Exit Codes
 
@@ -535,7 +535,7 @@ micro-contracts manifest -o custom-manifest.json
 
 | Option | Aliases | Required | Default | Description |
 |---|---|---|---|---|
-| `--dir` | -d | No | `"packages/"` | Directory to scan. |
+| `--dir` | -d | No |  | Directory to scan. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to. |
 | `--verify` |  | No | `false` | Verify existing manifest instead of generating. |
 | `--output` | -o | No |  | Output manifest path. Defaults to {dir}/.generated-manifest.json. |
 

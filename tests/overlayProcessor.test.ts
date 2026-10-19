@@ -266,6 +266,33 @@ actions:
       expect(interfaces).toContain('auth: AuthOverlay;');
     });
 
+    it('injects a parameter held in components.parameters as that parameter', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-test-'));
+      const overlayPath = path.join(tmpDir, 'tenant.overlay.yaml');
+      fs.writeFileSync(overlayPath, `
+overlay: 1.0.0
+info:
+  title: Tenant Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'tenantIsolation')]"
+    update:
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+`);
+      baseSpec.components = {
+        parameters: {
+          TenantHeader: { name: 'X-Tenant-Id', in: 'header', required: true, schema: { type: 'string' } },
+        },
+      };
+
+      const result = processOverlays(baseSpec, { collision: 'error', files: [overlayPath] });
+
+      const tenant = result.extensionInfo.get('x-middleware:tenantIsolation');
+      expect(tenant?.injectedParameters.map(p => [p.name, p.in])).toEqual([['X-Tenant-Id', 'header']]);
+      expect(generateExtensionInterfaces(result.extensionInfo)).toContain("'X-Tenant-Id': string;");
+    });
+
     it('keeps an unnamed $.paths[*][*] overlay a spec-only injection', () => {
       // Nothing names the overlay, so there is no handler to generate — the
       // action injects into the spec and stops there.

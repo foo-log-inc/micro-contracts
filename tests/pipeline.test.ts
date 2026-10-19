@@ -191,6 +191,257 @@ generated:
       expect(fs.existsSync(path.join(tempDir, 'packages/out/second.generated.ts'))).toBe(true);
     });
 
+    it('keeps hand-written packages out of the manifest and regenerates outputs it cannot vouch for', () => {
+      fs.mkdirSync(path.join(tempDir, 'api/orders'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'api/orders/openapi.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Orders',
+          '  version: 1.0.0',
+          'paths:',
+          '  /orders:',
+          '    get:',
+          '      operationId: getOrders',
+          '      x-micro-contracts-service: Order',
+          '      x-micro-contracts-method: getOrders',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        ['defaults:', '  contract:', '    output: contracts/{module}', 'modules:', '  orders:', '    openapi: api/orders/openapi.yaml', ''].join('\n'),
+      );
+      fs.writeFileSync(path.join(tempDir, 'micro-contracts.guardrails.yaml'), 'generated:\n  - "contracts/**"\n');
+      fs.mkdirSync(path.join(tempDir, 'packages/app/src'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'packages/app/src/index.ts'), 'export const handWritten = 1;\n');
+
+      // The manifest lives where it can see every output: here, the project root.
+      expect(runCli('generate').exitCode).toBe(0);
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(tempDir, '.generated-manifest.json'), 'utf-8'),
+      );
+      expect(Object.keys(manifest.files)).toContain('contracts/orders/index.ts');
+      expect(Object.keys(manifest.files)).not.toContain('packages/app/src/index.ts');
+
+      fs.rmSync(path.join(tempDir, 'contracts'), { recursive: true, force: true });
+      const again = runCli('generate');
+      expect(again.exitCode).toBe(0);
+      expect(again.stdout).not.toContain('No input changes detected');
+      expect(fs.existsSync(path.join(tempDir, 'contracts/orders/index.ts'))).toBe(true);
+
+      fs.writeFileSync(path.join(tempDir, 'packages/app/src/index.ts'), 'export const handWritten = 2;\n');
+      const check = runCli('check --only manifest');
+      expect(check.stdout).not.toContain('app/src/index.ts');
+      expect(check.exitCode).toBe(0);
+
+      // A directory given explicitly that the outputs lie outside: generating
+      // again cannot help, and the failure says so.
+      expect(runCli('generate --manifest-dir packages/').exitCode).toBe(0);
+      const explicit = runCli('check --only manifest --generated-dir packages/');
+      expect(explicit.exitCode).toBe(1);
+      expect(explicit.stdout).not.toContain('Run generate before verifying');
+      expect(explicit.stdout).toContain('contracts/orders');
+      expect(explicit.stdout).toContain('--manifest-dir');
+    });
+
+    it('caches a project generating both into packages/ and next to its server code', () => {
+      fs.mkdirSync(path.join(tempDir, 'api'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'api/core.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Core',
+          '  version: 1.0.0',
+          'paths:',
+          '  /items:',
+          '    get:',
+          '      operationId: getItems',
+          '      x-micro-contracts-service: Item',
+          '      x-micro-contracts-method: getItems',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(path.join(tempDir, 'routes.hbs'), '{{#each routes}}{{operationId}}\n{{/each}}');
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        [
+          'defaults:',
+          '  contract:',
+          '    output: packages/contract/{module}',
+          '  outputs:',
+          '    routes:',
+          '      output: server/src/{module}/routes.generated.ts',
+          '      template: routes.hbs',
+          'modules:',
+          '  core:',
+          '    openapi: api/core.yaml',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.guardrails.yaml'),
+        'generated:\n  - "packages/**"\n  - "**/*.generated.ts"\n',
+      );
+
+      expect(runCli('generate').exitCode).toBe(0);
+      expect(runCli('generate').stdout).toContain('No input changes detected');
+
+      fs.rmSync(path.join(tempDir, 'server/src/core/routes.generated.ts'));
+      const again = runCli('generate');
+      expect(again.stdout).not.toContain('No input changes detected');
+      expect(fs.existsSync(path.join(tempDir, 'server/src/core/routes.generated.ts'))).toBe(true);
+
+      expect(runCli('check --only manifest').exitCode).toBe(0);
+    });
+
+    it('regenerates an output in the manifest directory that the generated patterns leave out', () => {
+      fs.mkdirSync(path.join(tempDir, 'api/orders'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'api/orders/openapi.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Orders',
+          '  version: 1.0.0',
+          'paths:',
+          '  /orders:',
+          '    get:',
+          '      operationId: getOrders',
+          '      x-micro-contracts-service: Order',
+          '      x-micro-contracts-method: getOrders',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(path.join(tempDir, 'dump.hbs'), '{{#each routes}}{{operationId}}\n{{/each}}');
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        [
+          'defaults:',
+          '  contract:',
+          '    output: packages/contract/{module}',
+          '  outputs:',
+          '    dump:',
+          '      output: packages/server/{module}/routes.ts',
+          '      template: dump.hbs',
+          'modules:',
+          '  orders:',
+          '    openapi: api/orders/openapi.yaml',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.guardrails.yaml'),
+        'generated:\n  - "packages/contract/**"\n  - "**/*.generated.ts"\n',
+      );
+
+      expect(runCli('generate').exitCode).toBe(0);
+      fs.rmSync(path.join(tempDir, 'packages/server'), { recursive: true, force: true });
+
+      const again = runCli('generate');
+      expect(again.exitCode).toBe(0);
+      expect(again.stdout).not.toContain('No input changes detected');
+      expect(fs.existsSync(path.join(tempDir, 'packages/server/orders/routes.ts'))).toBe(true);
+    });
+
+    it('places the manifest by the config passed with --config, not the one in the working directory', () => {
+      fs.mkdirSync(path.join(tempDir, 'api'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'conf'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'api/core.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Core',
+          '  version: 1.0.0',
+          'paths:',
+          '  /items:',
+          '    get:',
+          '      operationId: getItems',
+          '      x-micro-contracts-service: Item',
+          '      x-micro-contracts-method: getItems',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          '',
+        ].join('\n'),
+      );
+      const configFor = (dir: string) => [
+        'defaults:',
+        '  contract:',
+        `    output: ${dir}/contract/{module}`,
+        '  contractPublic:',
+        `    output: ${dir}/published/{module}`,
+        'modules:',
+        '  core:',
+        '    openapi: api/core.yaml',
+        '',
+      ].join('\n');
+      // The working directory's own config generates elsewhere.
+      fs.writeFileSync(path.join(tempDir, 'micro-contracts.config.yaml'), configFor('other'));
+      fs.writeFileSync(path.join(tempDir, 'conf/real.yaml'), configFor('gen'));
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.guardrails.yaml'),
+        'generated:\n  - "gen/**"\n  - "other/**"\n',
+      );
+
+      expect(runCli('generate --config conf/real.yaml').exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, 'gen/.generated-manifest.json'))).toBe(true);
+      expect(runCli('generate --config conf/real.yaml').stdout).toContain('No input changes detected');
+    });
+
+    it('generate --no-manifest writes no manifest, and --no-cache neither reads nor writes the cache', () => {
+      createMinimalConfig();
+      createMinimalSpec();
+      createGuardrailsConfig();
+      const manifestPath = path.join(tempDir, 'packages/.generated-manifest.json');
+
+      const noManifest = runCli('generate --no-manifest');
+      expect(noManifest.stdout).not.toMatch(/unknown option/);
+      expect(noManifest.exitCode).toBe(0);
+      expect(fs.existsSync(manifestPath)).toBe(false);
+
+      expect(runCli('generate').exitCode).toBe(0);
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeDefined();
+
+      const noCache = runCli('generate --no-cache');
+      expect(noCache.stdout).not.toMatch(/unknown option/);
+      expect(noCache.exitCode).toBe(0);
+      expect(noCache.stdout).not.toContain('No input changes detected');
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeUndefined();
+    });
+
+    it('pipeline --no-manifest writes no manifest, and --no-cache neither reads nor writes the cache', () => {
+      createMinimalConfig();
+      createMinimalSpec();
+      createGuardrailsConfig();
+      const manifestPath = path.join(tempDir, 'packages/.generated-manifest.json');
+
+      const noManifest = runCli('pipeline --no-manifest --skip drift,manifest');
+      expect(noManifest.stdout).not.toMatch(/unknown option/);
+      expect(noManifest.stdout).toMatch(/Generate\s+PASS/);
+      expect(fs.existsSync(manifestPath)).toBe(false);
+
+      runCli('pipeline --skip drift,manifest');
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeDefined();
+
+      const noCache = runCli('pipeline --no-cache --skip drift,manifest');
+      expect(noCache.stdout).not.toMatch(/unknown option/);
+      expect(noCache.stdout).toMatch(/Generate\s+PASS/);
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeUndefined();
+    });
+
     it('does not call a pipeline that ran nothing successful', () => {
       // #77 fixed this verdict for `check`; the pipeline printed its own.
       createGuardrailsConfig();
@@ -352,6 +603,14 @@ generated:
 
       expect(fs.existsSync(path.join(tempDir, 'frontend/src/screens/navigation.generated.ts'))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, 'frontend/src/screens/events.generated.ts'))).toBe(true);
+    });
+
+    it('lints a screen spec on its own under the rules generate applies to it', () => {
+      expect(runCli('init home --screens').exitCode).toBe(0);
+
+      const lint = runCli('lint spec/home/openapi/home.yaml --strict');
+      expect(lint.stdout).not.toContain('MISSING_X_SERVICE');
+      expect(lint.exitCode).toBe(0);
     });
 
     it('honors lint --strict', () => {

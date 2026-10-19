@@ -866,7 +866,7 @@ export const resolvedDsl: Record<string, unknown> = {
     },
     "lint-results-input": {
       "type": "document",
-      "description": "Spectral lint results for the target OpenAPI spec (ephemeral input)",
+      "description": "micro-contracts lint results (the lint command's rules) for the target OpenAPI spec (ephemeral input)",
       "authority": "derived"
     },
     "deps-graph-input": {

@@ -7,6 +7,13 @@
 export const Invoice = {
     "$id": "Invoice",
     "type": "object",
+    "required": [
+      "id",
+      "userId",
+      "amount",
+      "status",
+      "createdAt"
+    ],
     "properties": {
       "id": {
         "type": "string"
@@ -43,19 +50,16 @@ export const Invoice = {
         "type": "string",
         "format": "date-time"
       }
-    },
-    "required": [
-      "id",
-      "userId",
-      "amount",
-      "status",
-      "createdAt"
-    ]
+    }
   } as const;
 
 export const InvoiceListResponse = {
     "$id": "InvoiceListResponse",
     "type": "object",
+    "required": [
+      "invoices",
+      "total"
+    ],
     "properties": {
       "invoices": {
         "type": "array",
@@ -66,16 +70,16 @@ export const InvoiceListResponse = {
       "total": {
         "type": "integer"
       }
-    },
-    "required": [
-      "invoices",
-      "total"
-    ]
+    }
   } as const;
 
 export const CreateInvoiceRequest = {
     "$id": "CreateInvoiceRequest",
     "type": "object",
+    "required": [
+      "userId",
+      "amount"
+    ],
     "properties": {
       "userId": {
         "type": "string",
@@ -92,16 +96,15 @@ export const CreateInvoiceRequest = {
       "description": {
         "type": "string"
       }
-    },
-    "required": [
-      "userId",
-      "amount"
-    ]
+    }
   } as const;
 
 export const PayInvoiceRequest = {
     "$id": "PayInvoiceRequest",
     "type": "object",
+    "required": [
+      "paymentMethodId"
+    ],
     "properties": {
       "paymentMethodId": {
         "type": "string"
@@ -110,15 +113,16 @@ export const PayInvoiceRequest = {
         "type": "boolean",
         "default": false
       }
-    },
-    "required": [
-      "paymentMethodId"
-    ]
+    }
   } as const;
 
 export const PaymentResult = {
     "$id": "PaymentResult",
     "type": "object",
+    "required": [
+      "success",
+      "transactionId"
+    ],
     "properties": {
       "success": {
         "type": "boolean"
@@ -130,16 +134,81 @@ export const PaymentResult = {
         "type": "string",
         "format": "date-time"
       }
-    },
-    "required": [
-      "success",
-      "transactionId"
-    ]
+    }
   } as const;
 
-// Parameter schemas
-export const Billing_getInvoicesParams = {
-    "$id": "Billing_getInvoicesParams",
+export const ValidationError = {
+    "$id": "ValidationError",
+    "type": "object",
+    "required": [
+      "pointer",
+      "detail"
+    ],
+    "properties": {
+      "pointer": {
+        "type": "string",
+        "description": "JSON Pointer to the invalid field"
+      },
+      "detail": {
+        "type": "string",
+        "description": "Error message for this field"
+      }
+    }
+  } as const;
+
+export const ProblemDetails = {
+    "$id": "ProblemDetails",
+    "type": "object",
+    "description": "RFC 9457 Problem Details for HTTP APIs",
+    "required": [
+      "type",
+      "title",
+      "status"
+    ],
+    "properties": {
+      "type": {
+        "type": "string",
+        "format": "uri-reference",
+        "description": "A URI reference that identifies the problem type"
+      },
+      "title": {
+        "type": "string",
+        "description": "A short, human-readable summary"
+      },
+      "status": {
+        "type": "integer",
+        "description": "The HTTP status code"
+      },
+      "detail": {
+        "type": "string",
+        "description": "A human-readable explanation specific to this occurrence"
+      },
+      "instance": {
+        "type": "string",
+        "format": "uri",
+        "description": "A URI reference to the specific occurrence"
+      },
+      "code": {
+        "type": "string",
+        "description": "Application-specific error code (SCREAMING_SNAKE_CASE)"
+      },
+      "traceId": {
+        "type": "string",
+        "description": "Request trace ID for debugging"
+      },
+      "errors": {
+        "type": "array",
+        "description": "Detailed validation errors",
+        "items": {
+          "$ref": "ValidationError#"
+        }
+      }
+    }
+  } as const;
+
+// Operation parameter and request body schemas
+export const Billing_getInvoicesQueryParams = {
+    "$id": "Billing_getInvoicesQueryParams",
     "type": "object",
     "properties": {
       "userId": {
@@ -157,8 +226,8 @@ export const Billing_getInvoicesParams = {
     }
   } as const;
 
-export const Billing_getInvoiceByIdParams = {
-    "$id": "Billing_getInvoiceByIdParams",
+export const Billing_getInvoiceByIdPathParams = {
+    "$id": "Billing_getInvoiceByIdPathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -170,8 +239,8 @@ export const Billing_getInvoiceByIdParams = {
     ]
   } as const;
 
-export const Billing_payInvoiceParams = {
-    "$id": "Billing_payInvoiceParams",
+export const Billing_payInvoicePathParams = {
+    "$id": "Billing_payInvoicePathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -191,7 +260,9 @@ export const allSchemas = [
   CreateInvoiceRequest,
   PayInvoiceRequest,
   PaymentResult,
-  Billing_getInvoicesParams,
-  Billing_getInvoiceByIdParams,
-  Billing_payInvoiceParams,
+  ValidationError,
+  ProblemDetails,
+  Billing_getInvoicesQueryParams,
+  Billing_getInvoiceByIdPathParams,
+  Billing_payInvoicePathParams,
 ] as const;

@@ -8,28 +8,9 @@ import type {
   SchemaObject, 
   ReferenceObject,
   ParameterObject,
-  OperationObject,
 } from '../types.js';
-import { isReference, getRefName } from '../types.js';
-
-/**
- * Get a valid TypeScript identifier from service and method
- * e.g., "User" + "getSchema" -> "User_getSchema"
- */
-function getOperationTypeBase(operation: OperationObject): string {
-  const service = operation['x-micro-contracts-service'] as string | undefined;
-  const method = operation['x-micro-contracts-method'] as string | undefined;
-  
-  if (service && method) {
-    return `${service}_${method}`;
-  }
-  
-  if (operation.operationId) {
-    return operation.operationId.replace(/[^a-zA-Z0-9]/g, '_');
-  }
-  
-  return 'Unknown';
-}
+import { isReference, getRefName, resolveOperation } from '../types.js';
+import { operationTypeNames } from './typeGenerator.js';
 
 /**
  * Generate JSON Schema TypeScript file from OpenAPI spec
@@ -52,11 +33,14 @@ export function generateSchemas(spec: OpenAPISpec): string {
     }
   }
 
-  // Generate query/path parameter schemas from paths
-  const paramSchemas = generateParameterSchemas(spec);
-  if (paramSchemas) {
-    lines.push('// Parameter schemas');
-    lines.push(paramSchemas);
+  // Generate the parameter and inline request body schemas of operations
+  const opSchemas = operationSchemas(spec);
+  if (opSchemas.length > 0) {
+    lines.push('// Operation parameter and request body schemas');
+    for (const { name, schema } of opSchemas) {
+      lines.push(generateSchemaExport(name, schema, spec));
+      lines.push('');
+    }
   }
 
   // Export all schema names for registration
@@ -69,29 +53,11 @@ export function generateSchemas(spec: OpenAPISpec): string {
       lines.push(`  ${name},`);
     }
   }
-  
-  // Add parameter schemas
-  for (const [, pathItem] of Object.entries(spec.paths)) {
-    for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
-      const operation = pathItem[method];
-      if (!operation) continue;
-      
-      const typeBase = getOperationTypeBase(operation);
 
-      // Combine query and path params into a single Params schema
-      const queryParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && p.in === 'query'
-      );
-      const pathParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && p.in === 'path'
-      );
-      const allParams = [...pathParams, ...queryParams];
-      if (allParams.length > 0) {
-        lines.push(`  ${typeBase}Params,`);
-      }
-    }
+  for (const { name } of opSchemas) {
+    lines.push(`  ${name},`);
   }
-  
+
   lines.push('] as const;');
 
   return lines.join('\n');
@@ -115,68 +81,76 @@ function generateSchemaExport(
 }
 
 /**
+ * Keywords a validator leaves out. None of them takes part in validation:
+ *
+ * - OpenAPI annotations that are not JSON Schema, or are shaped differently
+ *   from the JSON Schema keyword of the same name. Ajv — strict, as Fastify
+ *   runs it — refuses a schema carrying one.
+ * - `$id` and `$schema`: the generator names every schema itself (the name
+ *   routes reference it by), and Fastify's Ajv decides the dialect. An author's
+ *   `$id` would replace that name and a `$schema` Ajv does not hold would stop
+ *   Fastify from starting.
+ */
+const EXCLUDED_KEYWORDS = new Set(['example', 'examples', 'xml', 'externalDocs', 'discriminator', '$id', '$schema']);
+
+/** Keywords whose value is a schema (or, for `items`, a list of them). */
+const SUBSCHEMA_KEYWORDS = new Set([
+  'items', 'additionalItems', 'additionalProperties', 'not', 'contains', 'propertyNames',
+  'if', 'then', 'else', 'unevaluatedItems', 'unevaluatedProperties', 'contentSchema',
+]);
+
+/** Keywords whose value is a list of schemas. */
+const SUBSCHEMA_LIST_KEYWORDS = new Set(['allOf', 'oneOf', 'anyOf', 'prefixItems']);
+
+/** Keywords whose value maps names to schemas. */
+const SUBSCHEMA_MAP_KEYWORDS = new Set(['properties', 'patternProperties', 'dependentSchemas', '$defs', 'definitions']);
+
+/**
  * Convert an OpenAPI schema to the JSON Schema Fastify validates (Ajv) and
  * serializes (fast-json-stringify) with.
  *
- * Each keyword is translated on its own, so a keyword beside `$ref` or a
- * composition is kept rather than dropped.
+ * Every keyword is kept as written, so whatever the contract constrains, the
+ * validator constrains. Only what JSON Schema spells differently is
+ * translated: `$ref`, `nullable`, the boolean `exclusiveMinimum` /
+ * `exclusiveMaximum` of OpenAPI 3.0, and the schemas nested in other keywords.
+ * Extensions (`x-*`) and the keywords above are left out.
  */
 function convertSchemaValue(
   schema: SchemaObject | ReferenceObject,
   spec: OpenAPISpec
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-
-  if (isReference(schema)) {
-    result.$ref = `${getRefName(schema.$ref)}#`;
-  }
   // A reference may carry schema keywords beside it (OpenAPI 3.1).
-  const node = schema as SchemaObject;
+  const node = schema as SchemaObject & Partial<ReferenceObject>;
 
-  if (node.allOf) result.allOf = node.allOf.map(s => convertSchemaValue(s, spec));
-  if (node.oneOf) result.oneOf = node.oneOf.map(s => convertSchemaValue(s, spec));
-  if (node.anyOf) result.anyOf = node.anyOf.map(s => convertSchemaValue(s, spec));
+  for (const [keyword, value] of Object.entries(node)) {
+    if (keyword.startsWith('x-') || EXCLUDED_KEYWORDS.has(keyword)) continue;
 
-  // Copy basic properties
-  if (node.type) result.type = node.type;
-  if (node.description) result.description = node.description;
-  if (node.enum) result.enum = node.enum;
-  if (node.format) result.format = node.format;
-  if (node.default !== undefined) result.default = node.default;
-  if (node.nullable) result.nullable = node.nullable;
-
-  // Number constraints
-  if (node.minimum !== undefined) result.minimum = node.minimum;
-  if (node.maximum !== undefined) result.maximum = node.maximum;
-
-  // String constraints
-  if (node.minLength !== undefined) result.minLength = node.minLength;
-  if (node.maxLength !== undefined) result.maxLength = node.maxLength;
-  if (node.pattern) result.pattern = node.pattern;
-
-  // Array constraints
-  if (node.minItems !== undefined) result.minItems = node.minItems;
-  if (node.maxItems !== undefined) result.maxItems = node.maxItems;
-  if (node.items) {
-    result.items = convertSchemaValue(node.items, spec);
-  }
-
-  // Object properties
-  if (node.properties) {
-    result.properties = {};
-    for (const [propName, propSchema] of Object.entries(node.properties)) {
-      (result.properties as Record<string, unknown>)[propName] = 
-        convertSchemaValue(propSchema, spec);
+    if (keyword === '$ref') {
+      result.$ref = `${getRefName(value as string)}#`;
+    } else if (keyword === 'nullable') {
+      if (value === true) result.nullable = true;
+    } else if (keyword === 'exclusiveMinimum' || keyword === 'exclusiveMaximum') {
+      // OpenAPI 3.0 flags `minimum` / `maximum` as exclusive; JSON Schema
+      // states the exclusive bound itself.
+      if (typeof value !== 'boolean') result[keyword] = value;
+    } else if (SUBSCHEMA_KEYWORDS.has(keyword)) {
+      result[keyword] = convertSubschema(value, spec);
+    } else if (SUBSCHEMA_LIST_KEYWORDS.has(keyword)) {
+      result[keyword] = (value as Array<SchemaObject | ReferenceObject>).map(s => convertSchemaValue(s, spec));
+    } else if (SUBSCHEMA_MAP_KEYWORDS.has(keyword)) {
+      result[keyword] = Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([name, s]) => [name, convertSubschema(s, spec)])
+      );
+    } else {
+      result[keyword] = value;
     }
   }
-  if (node.required && node.required.length > 0) {
-    result.required = node.required;
-  }
-  if (node.additionalProperties !== undefined) {
-    if (typeof node.additionalProperties === 'boolean') {
-      result.additionalProperties = node.additionalProperties;
-    } else {
-      result.additionalProperties = convertSchemaValue(node.additionalProperties, spec);
+
+  for (const [flag, bound] of [['exclusiveMinimum', 'minimum'], ['exclusiveMaximum', 'maximum']] as const) {
+    if (node[flag] === true && node[bound] !== undefined) {
+      result[flag] = node[bound];
+      delete result[bound];
     }
   }
 
@@ -193,81 +167,66 @@ function convertSchemaValue(
   return result;
 }
 
-/**
- * Generate parameter schemas from paths
- */
-function generateParameterSchemas(spec: OpenAPISpec): string {
-  const lines: string[] = [];
-  const generatedSchemas = new Set<string>();
+/** A keyword's schema value: a schema, a boolean schema, or a list of schemas. */
+function convertSubschema(value: unknown, spec: OpenAPISpec): unknown {
+  if (Array.isArray(value)) {
+    return value.map(s => convertSchemaValue(s, spec));
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return convertSchemaValue(value as SchemaObject | ReferenceObject, spec);
+}
 
-  for (const [, pathItem] of Object.entries(spec.paths)) {
+/**
+ * The schemas operations need beyond components.schemas:
+ *
+ * - `<base>PathParams` and `<base>QueryParams`, one per request location,
+ *   which is how Fastify validates them (`schema.params` and
+ *   `schema.querystring`). A single schema holding both validates neither
+ *   location: its required path parameters would be demanded of the query.
+ * - an inline request body, under the name types.ts gives it.
+ */
+function operationSchemas(spec: OpenAPISpec): Array<{ name: string; schema: SchemaObject }> {
+  const schemas: Array<{ name: string; schema: SchemaObject }> = [];
+  const names = new Set<string>();
+  const add = (name: string, schema: SchemaObject) => {
+    if (names.has(name)) return;
+    names.add(name);
+    schemas.push({ name, schema });
+  };
+
+  for (const [apiPath, pathItem] of Object.entries(spec.paths)) {
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[method];
       if (!operation) continue;
-      
-      const typeBase = getOperationTypeBase(operation);
 
-      // Generate combined params schema (path + query params)
-      const queryParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && p.in === 'query'
-      );
-      const pathParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && p.in === 'path'
-      );
-      const allParams = [...pathParams, ...queryParams];
+      const resolved = resolveOperation(spec, apiPath, method);
+      const { base, body } = operationTypeNames(operation, resolved);
 
-      if (allParams.length > 0) {
-        const schemaName = `${typeBase}Params`;
-        if (!generatedSchemas.has(schemaName)) {
-          generatedSchemas.add(schemaName);
-          lines.push(generateParamsSchema(schemaName, allParams, spec));
-          lines.push('');
+      for (const [location, suffix] of [['path', 'PathParams'], ['query', 'QueryParams']] as const) {
+        const params = resolved.parameters.filter(p => p.in === location);
+        if (params.length > 0) {
+          add(`${base}${suffix}`, parametersSchema(params));
         }
+      }
+
+      const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
+      if (body && bodySchema && !isReference(bodySchema)) {
+        add(body, bodySchema);
       }
     }
   }
 
-  return lines.join('\n');
+  return schemas;
 }
 
-/**
- * Generate parameter schema
- */
-function generateParamsSchema(
-  name: string,
-  params: ParameterObject[],
-  spec: OpenAPISpec
-): string {
-  const schema: Record<string, unknown> = {
-    $id: name,
+/** The object schema the parameters of one request location form. */
+function parametersSchema(params: ParameterObject[]): SchemaObject {
+  const required = params.filter(p => p.required).map(p => p.name);
+  return {
     type: 'object',
-    properties: {},
-    required: [] as string[],
+    properties: Object.fromEntries(params.map(p => [p.name, p.schema ?? { type: 'string' }])),
+    ...(required.length > 0 ? { required } : {}),
   };
-
-  for (const param of params) {
-    if (param.schema) {
-      (schema.properties as Record<string, unknown>)[param.name] = 
-        convertSchemaValue(param.schema, spec);
-    } else {
-      (schema.properties as Record<string, unknown>)[param.name] = { type: 'string' };
-    }
-    
-    if (param.required) {
-      (schema.required as string[]).push(param.name);
-    }
-  }
-
-  // Remove empty required array
-  if ((schema.required as string[]).length === 0) {
-    delete schema.required;
-  }
-
-  const schemaStr = JSON.stringify(schema, null, 2)
-    .split('\n')
-    .map((line, i) => i === 0 ? line : '  ' + line)
-    .join('\n');
-
-  return `export const ${name} = ${schemaStr} as const;`;
 }
-

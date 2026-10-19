@@ -54,6 +54,8 @@ export {
 // Manifest
 export {
   hashFile,
+  generatedFilesRule,
+  resolveManifestDir,
   getGeneratedFiles,
   generateManifest,
   writeManifest,
@@ -64,7 +66,7 @@ export {
   formatManifestResult,
 } from './manifest.js';
 
-export type { GenerateManifestResult } from './manifest.js';
+export type { GenerateManifestResult, GeneratedFilesRule } from './manifest.js';
 
 // Lint
 export { findOpenAPISpecs } from './lint.js';

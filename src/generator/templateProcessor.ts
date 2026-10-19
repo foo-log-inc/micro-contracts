@@ -8,10 +8,11 @@
 import fs from 'fs';
 import path from 'path';
 import Handlebars from 'handlebars';
-import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
+import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
 import { operationKey } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
-import { isReference, getRefName } from '../types.js';
+import { isReference, getRefName, parseComponentRef, resolveOperation } from '../types.js';
+import { operationTypeNames } from './typeGenerator.js';
 
 // =============================================================================
 // Types
@@ -334,11 +335,11 @@ function extractSchemaTypes(routes: RouteContext[]): string[] {
       }
     }
     // Add params type (path + query parameters) for templates that need it
-    if (route.pathParams.length > 0 || route.queryParams.length > 0) {
-      types.add(`${route.typeNameBase}Params`);
+    if (route.paramsType) {
+      types.add(route.paramsType);
     }
     // Add unified input type (for service-aligned templates)
-    types.add(`${route.typeNameBase}Input`);
+    types.add(route.inputType);
   }
   
   return Array.from(types).sort();
@@ -409,7 +410,9 @@ function extractRoutes(
       if (!service || !serviceMethod) continue;
 
       const operationId = operation.operationId || `${method}${apiPath.replace(/[^a-zA-Z0-9]/g, '')}`;
-      const typeNameBase = `${service}_${serviceMethod}`;
+      const resolved = resolveOperation(spec, apiPath, method);
+      const typeNames = operationTypeNames(operation, resolved);
+      const typeNameBase = typeNames.base;
       const fastifyPath = apiPath.replace(/\{([^}]+)\}/g, ':$1');
       const serviceKey = service.charAt(0).toLowerCase() + service.slice(1);
 
@@ -450,36 +453,24 @@ function extractRoutes(
       }
 
       // Extract parameters
-      const allParams = operation.parameters || [];
-      const queryParams = allParams
-        .filter((p): p is ParameterObject => !isReference(p) && p.in === 'query')
+      const queryParams = resolved.parameters
+        .filter(p => p.in === 'query')
         .map(p => ({ name: p.name, required: p.required || false }));
-      const pathParams = allParams
-        .filter((p): p is ParameterObject => !isReference(p) && p.in === 'path')
+      const pathParams = resolved.parameters
+        .filter(p => p.in === 'path')
         .map(p => ({ name: p.name, required: true }));
 
-      // Extract request body
+      // Extract request body, under the name types.ts and validators.ts give it
       let requestBody: RouteContext['requestBody'];
-      if (operation.requestBody) {
-        const reqBody = isReference(operation.requestBody)
-          ? null  // Simplified - would need to resolve
-          : operation.requestBody;
-        
-        if (reqBody?.content?.['application/json']?.schema) {
-          const schema = reqBody.content['application/json'].schema;
-          const schemaName = isReference(schema) 
-            ? getRefName(schema.$ref)
-            : operationId + 'Body';
-          requestBody = { schemaName, required: reqBody.required || false };
-        }
+      if (resolved.requestBody && typeNames.body) {
+        requestBody = { schemaName: typeNames.body, required: resolved.requestBody.required || false };
       }
 
       // Extract responses
       const responses: ResponseContext[] = [];
-      for (const [statusCode, response] of Object.entries(operation.responses)) {
-        const resp = isReference(response) ? null : response;
-        if (resp?.content?.['application/json']?.schema) {
-          const schema = resp.content['application/json'].schema;
+      for (const [statusCode, response] of Object.entries(resolved.responses)) {
+        const schema = response.content?.['application/json']?.schema;
+        if (schema) {
           const schemaName = isReference(schema) ? getRefName(schema.$ref) : undefined;
           responses.push({ statusCode, schemaName });
         } else {
@@ -498,9 +489,9 @@ function extractRoutes(
         : 'void';
       const requestType = requestBody?.schemaName;
       // Params type combines both path and query parameters
-      const paramsType = (pathParams.length > 0 || queryParams.length > 0) ? `${typeNameBase}Params` : undefined;
+      const paramsType = typeNames.params;
       // Unified input type name (matches contract service API)
-      const inputType = `${typeNameBase}Input`;
+      const inputType = typeNames.input;
       
       routes.push({
         path: apiPath,
@@ -621,15 +612,17 @@ function resolveInlineEvent(
 
   if (typeof raw === 'object' && '$ref' in raw && typeof raw.$ref === 'string') {
     const ref = raw.$ref;
-    if (!ref.startsWith('#/components/x-event-defs/')) {
+    const parsed = parseComponentRef(ref);
+    if (parsed?.section !== 'x-event-defs') {
       return { name: ref, type: defaultType };
     }
-    const defName = ref.split('/').pop()!;
-    const resolved = eventDefs[defName];
-    if (!resolved) {
+    const defName = parsed.name;
+    const resolved = defName === undefined ? undefined : eventDefs[defName];
+    if (defName === undefined || !resolved) {
       // Using the ref name as the event name would turn a typo into an event.
       throw new Error(
-        `x-event references '${ref}' but components.x-event-defs has no '${defName}'. ` +
+        `x-event references '${ref}' but components.x-event-defs has no ` +
+        `${defName === undefined ? 'entry by that reference' : `'${defName}'`}. ` +
         `Defined: ${Object.keys(eventDefs).join(', ') || '(none)'}.`
       );
     }
@@ -671,16 +664,9 @@ function deriveEventParams(
 /**
  * Extract schema $ref name from a mutation operation's request body.
  */
-function extractSchemaRef(operation: OperationObject): string {
-  if (!operation.requestBody) return '';
-  if (isReference(operation.requestBody)) {
-    return getRefName(operation.requestBody.$ref);
-  }
-  const jsonContent = operation.requestBody.content?.['application/json'];
-  if (jsonContent?.schema && isReference(jsonContent.schema)) {
-    return getRefName(jsonContent.schema.$ref);
-  }
-  return '';
+function extractSchemaRef(resolved: ResolvedOperation): string {
+  const schema = resolved.requestBody?.content?.['application/json']?.schema;
+  return schema && isReference(schema) ? getRefName(schema.$ref) : '';
 }
 
 /**
@@ -722,22 +708,20 @@ function extractScreens(spec: OpenAPISpec): ScreenContext[] {
       ? operation.security.length > 0 && operation.security.some(s => Object.keys(s).length > 0)
       : false;
 
+    const response200 = resolveOperation(spec, apiPath, 'get').responses['200'];
+
     let viewModelSchema = operation['x-view-model'] || '';
     if (!viewModelSchema) {
-      const response200 = operation.responses?.['200'];
-      if (response200 && !isReference(response200)) {
-        const jsonContent = response200.content?.['application/json'];
-        if (jsonContent?.schema && isReference(jsonContent.schema)) {
-          viewModelSchema = getRefName(jsonContent.schema.$ref);
-        }
+      const jsonContent = response200?.content?.['application/json'];
+      if (jsonContent?.schema && isReference(jsonContent.schema)) {
+        viewModelSchema = getRefName(jsonContent.schema.$ref);
       }
     }
 
     // Navigation links from 200 response (with optional inline x-event)
     const links: ScreenLink[] = [];
-    const response200 = operation.responses?.['200'];
-    if (response200 && !isReference(response200)) {
-      const responseLinks = (response200 as ResponseObject).links;
+    if (response200) {
+      const responseLinks = response200.links;
       if (responseLinks) {
         for (const [linkName, linkObj] of Object.entries(responseLinks)) {
           if (linkObj.operationId) {
@@ -776,7 +760,7 @@ function extractScreens(spec: OpenAPISpec): ScreenContext[] {
         method,
         operationId: mutationOp.operationId ?? '',
         summary: mutationOp.summary ?? '',
-        schemaRef: extractSchemaRef(mutationOp),
+        schemaRef: extractSchemaRef(resolveOperation(spec, apiPath, method)),
         event: actionEvent,
       });
     }
@@ -865,9 +849,9 @@ Handlebars.registerHelper('snakeCase', (str: string) => {
   return str?.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/-/g, '_').toLowerCase();
 });
 
-// Ref helper
+// Ref helper: the component name of a reference; no reference, no name
 Handlebars.registerHelper('refName', (ref: string) => {
-  return typeof ref === 'string' ? ref.split('/').pop() : '';
+  return typeof ref === 'string' && ref ? getRefName(ref) : '';
 });
 
 // JSON helper

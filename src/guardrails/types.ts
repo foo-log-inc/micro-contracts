@@ -64,7 +64,7 @@ export interface CheckCommandConfig {
    * - {cwd} - current working directory
    * 
    * @example
-   * command: "npx @stoplight/spectral-cli lint {files} --ruleset spec/spectral.yaml"
+   * command: "npx @redocly/cli lint {files} --config spec/redocly.yaml"
    */
   command: string;
 
@@ -179,6 +179,8 @@ export interface CheckOptions {
   guardrailsPath?: string;
   /** Path to generated files directory */
   generatedDir?: string;
+  /** The project config the run read (--config); otherwise the one found from the working directory */
+  configPath?: string;
   /** File containing list of changed files (for CI) */
   changedFilesPath?: string;
   /** Callback called when each check completes (for streaming output) */

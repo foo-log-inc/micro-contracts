@@ -13,8 +13,10 @@ import type {
   ParameterObject,
   ServiceInfo,
   ServiceMethodInfo,
+  HttpMethod,
 } from '../types.js';
-import { isReference, getRefName } from '../types.js';
+import { isReference, getRefName, resolveOperation } from '../types.js';
+import { operationTypeNames } from './typeGenerator.js';
 
 interface ServiceGeneratorOptions {
   /** Only include public endpoints (x-public: true) */
@@ -128,79 +130,37 @@ function extractServiceInfo(spec: OpenAPISpec, publicOnly: boolean): ServiceInfo
  */
 function extractMethodInfo(
   path: string,
-  httpMethod: string,
+  httpMethod: HttpMethod,
   operation: OperationObject,
   spec: OpenAPISpec
 ): ServiceMethodInfo | null {
   // Canonical extension names only
-  const serviceName = operation['x-micro-contracts-service'];
   const serviceMethod = operation['x-micro-contracts-method'];
   if (!serviceMethod) return null;
   
   const operationId = operation.operationId || serviceMethod;
-  // Use service + _ + method for type names (clearer separation)
-  const typeNameBase = serviceName && serviceMethod 
-    ? `${serviceName}_${serviceMethod}`
-    : operationId.replace(/[^a-zA-Z0-9]/g, '_');
   const isPublished = operation['x-micro-contracts-published'] === true;
-  
-  // Get request body type
-  let requestType: string | undefined;
-  if (operation.requestBody) {
-    const reqBody = isReference(operation.requestBody)
-      ? spec.components?.requestBodies?.[getRefName(operation.requestBody.$ref)]
-      : operation.requestBody;
-    
-    if (reqBody) {
-      const content = reqBody.content?.['application/json'];
-      if (content?.schema) {
-        requestType = isReference(content.schema)
-          ? getRefName(content.schema.$ref)
-          : undefined;
-      }
-    }
-  }
-  
+  const resolved = resolveOperation(spec, path, httpMethod);
+  const typeNames = operationTypeNames(operation, resolved);
+
+  // Request body schema name
+  const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
+  const requestType = bodySchema && isReference(bodySchema) ? getRefName(bodySchema.$ref) : undefined;
+
   // Get response type
   let responseType: string | undefined;
-  const successResponse = operation.responses['200'] || operation.responses['201'];
-  if (successResponse) {
-    const resp = isReference(successResponse)
-      ? spec.components?.responses?.[getRefName(successResponse.$ref)]
-      : successResponse;
-    
-    if (resp?.content?.['application/json']?.schema) {
-      const schema = resp.content['application/json'].schema;
-      responseType = isReference(schema) ? getRefName(schema.$ref) : undefined;
-    }
+  const successResponse = resolved.responses['200'] || resolved.responses['201'];
+  const responseSchema = successResponse?.content?.['application/json']?.schema;
+  if (responseSchema) {
+    responseType = isReference(responseSchema) ? getRefName(responseSchema.$ref) : undefined;
   }
-  
+
   // Check for 204 (void response)
-  if (operation.responses['204'] && !responseType) {
+  if (resolved.responses['204'] && !responseType) {
     responseType = 'void';
   }
-  
-  // Get all params (path + query combined)
-  const allParams = (operation.parameters || []).filter(
-    (p): p is ParameterObject => !isReference(p)
-  );
-  const queryParams = allParams.filter(p => p.in === 'query');
-  const pathParams = allParams.filter(p => p.in === 'path');
-  const hasParams = queryParams.length > 0 || pathParams.length > 0;
-  const paramsType = hasParams ? `${typeNameBase}Params` : undefined;
-  
-  // Request body schema name
-  let requestBodySchema: string | undefined;
-  if (operation.requestBody) {
-    const reqBody = isReference(operation.requestBody)
-      ? spec.components?.requestBodies?.[getRefName(operation.requestBody.$ref)]
-      : operation.requestBody;
-    if (reqBody?.content?.['application/json']?.schema) {
-      const schema = reqBody.content['application/json'].schema;
-      requestBodySchema = isReference(schema) ? getRefName(schema.$ref) : undefined;
-    }
-  }
-  
+
+
   // Collect all x-* extensions from the operation
   const extensions: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(operation as unknown as Record<string, unknown>)) {
@@ -217,9 +177,10 @@ function extractMethodInfo(
     isPublished,
     requestType,
     responseType,
-    paramsType,
-    parameters: allParams,
-    requestBodySchema,
+    inputType: typeNames.input,
+    paramsType: typeNames.params,
+    parameters: resolved.parameters,
+    requestBodySchema: requestType,
     extensions,
   };
 }
@@ -241,8 +202,7 @@ function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): str
   const types = new Set<string>();
   for (const method of service.methods) {
     // Always use Input type (even for parameterless operations)
-    const inputTypeName = `${service.name}_${method.name}Input`;
-    types.add(inputTypeName);
+    types.add(method.inputType);
     if (method.responseType && method.responseType !== 'void') types.add(method.responseType);
   }
   
@@ -268,7 +228,7 @@ function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): str
     lines.push('   */');
     
     // Method signature with single Input parameter (always present)
-    const inputTypeName = `${service.name}_${method.name}Input`;
+    const inputTypeName = method.inputType;
     const returnType = method.responseType || 'void';
     const returnTypeStr = returnType === 'void' ? 'Promise<void>' : `Promise<${returnType}>`;
     
@@ -292,7 +252,7 @@ function generateServiceInterfaceFromTemplate(
   const imports = collectImportsForService(service);
   
   const methods: ServiceMethodTemplateContext[] = service.methods.map(method => {
-    const inputType = `${service.name}_${method.name}Input`;
+    const inputType = method.inputType;
     const returnType = method.responseType || 'void';
     const returnTypeStr = returnType === 'void' ? 'Promise<void>' : `Promise<${returnType}>`;
     
@@ -327,7 +287,7 @@ function generateServiceInterfaceFromTemplate(
 function collectImportsForService(service: ServiceInfo): string[] {
   const types = new Set<string>();
   for (const method of service.methods) {
-    types.add(`${service.name}_${method.name}Input`);
+    types.add(method.inputType);
     if (method.responseType && method.responseType !== 'void') {
       types.add(method.responseType);
     }

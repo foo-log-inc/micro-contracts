@@ -10,8 +10,16 @@ import * as types from '@project/contract/core/schemas/types.js';
 import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
+  // A component referenced from a shared file is a schema of every module that
+  // references it: the first module registers it, and a module defining a
+  // different schema under the same id is an error.
   for (const schema of allSchemas) {
-    fastify.addSchema(schema);
+    const registered = fastify.getSchema(schema.$id);
+    if (registered === undefined) {
+      fastify.addSchema(schema);
+    } else if (JSON.stringify(registered) !== JSON.stringify(schema)) {
+      throw new Error(`Schema '${schema.$id}' is already registered with a different definition`);
+    }
   }
 
   const { admin, health, tenant, user } = fastify.services.core;
@@ -20,7 +28,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/users [PUBLISHED]
   fastify.get('/api/users', {
     schema: {
-      querystring: { $ref: 'User_getUsersParams#' },
+      querystring: { $ref: 'User_getUsersQueryParams#' },
       response: { 200: { $ref: 'UserListResponse#' },  },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -52,7 +60,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/users/{id} [PUBLISHED]
   fastify.get('/api/users/:id', {
     schema: {
-      params: { $ref: 'User_getUserByIdParams#' },
+      params: { $ref: 'User_getUserByIdPathParams#' },
       response: { 200: { $ref: 'User#' },  },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -68,7 +76,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/users/{id}
   fastify.put('/api/users/:id', {
     schema: {
-      params: { $ref: 'User_updateUserParams#' },
+      params: { $ref: 'User_updateUserPathParams#' },
       body: { $ref: 'UpdateUserRequest#' },
       response: { 200: { $ref: 'User#' },  },
     },
@@ -86,7 +94,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // DELETE /api/users/{id}
   fastify.delete('/api/users/:id', {
     schema: {
-      params: { $ref: 'User_deleteUserParams#' },
+      params: { $ref: 'User_deleteUserPathParams#' },
       response: {  },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -146,7 +154,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/admin/users/{id}/suspend
   fastify.post('/api/admin/users/:id/suspend', {
     schema: {
-      params: { $ref: 'Admin_suspendUserParams#' },
+      params: { $ref: 'Admin_suspendUserPathParams#' },
       body: { $ref: 'SuspendUserRequest#' },
       response: { 200: { $ref: 'User#' },  },
     },

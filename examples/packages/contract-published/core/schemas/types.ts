@@ -68,6 +68,13 @@ export interface HealthStatus {
   timestamp?: string;
 }
 
+export interface ValidationError {
+  /** JSON Pointer to the invalid field */
+  pointer: string;
+  /** Error message for this field */
+  detail: string;
+}
+
 // Operation-specific types
 export interface User_getUsersParams {
   limit?: number;

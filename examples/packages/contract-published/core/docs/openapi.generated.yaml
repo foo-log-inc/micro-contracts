@@ -73,7 +73,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserListResponse'
         '401':
-          $ref: ../../../../spec/_shared/openapi/problem-details.yaml#/components/responses/Unauthorized
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags:
         - Users
@@ -103,9 +103,9 @@ paths:
           content:
             application/problem+json:
               schema:
-                $ref: ../../../../spec/_shared/openapi/problem-details.yaml#/components/schemas/ProblemDetails
+                $ref: '#/components/schemas/ProblemDetails'
         '401':
-          $ref: ../../../../spec/_shared/openapi/problem-details.yaml#/components/responses/Unauthorized
+          $ref: '#/components/responses/Unauthorized'
       parameters:
         - name: Authorization
           in: header
@@ -164,13 +164,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
         '401':
-          $ref: ../../../../spec/_shared/openapi/problem-details.yaml#/components/responses/Unauthorized
+          $ref: '#/components/responses/Unauthorized'
         '404':
           description: User not found
           content:
             application/problem+json:
               schema:
-                $ref: ../../../../spec/_shared/openapi/problem-details.yaml#/components/schemas/ProblemDetails
+                $ref: '#/components/schemas/ProblemDetails'
   /api/health:
     get:
       tags:
@@ -285,3 +285,65 @@ components:
         timestamp:
           type: string
           format: date-time
+    ValidationError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer to the invalid field
+          example: /email
+        detail:
+          type: string
+          description: Error message for this field
+          example: Must be a valid email address
+    ProblemDetails:
+      type: object
+      description: RFC 9457 Problem Details for HTTP APIs
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: A URI reference that identifies the problem type
+          example: /errors/validation
+        title:
+          type: string
+          description: A short, human-readable summary
+          example: Validation Error
+        status:
+          type: integer
+          description: The HTTP status code
+          example: 400
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence
+          example: The email field is invalid
+        instance:
+          type: string
+          format: uri
+          description: A URI reference to the specific occurrence
+        code:
+          type: string
+          description: Application-specific error code (SCREAMING_SNAKE_CASE)
+          example: VALIDATION_FAILED
+        traceId:
+          type: string
+          description: Request trace ID for debugging
+        errors:
+          type: array
+          description: Detailed validation errors
+          items:
+            $ref: '#/components/schemas/ValidationError'
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'

@@ -7,6 +7,13 @@
 export const User = {
     "$id": "User",
     "type": "object",
+    "required": [
+      "id",
+      "email",
+      "name",
+      "role",
+      "createdAt"
+    ],
     "properties": {
       "id": {
         "type": "string",
@@ -44,19 +51,16 @@ export const User = {
       "internalNotes": {
         "type": "string"
       }
-    },
-    "required": [
-      "id",
-      "email",
-      "name",
-      "role",
-      "createdAt"
-    ]
+    }
   } as const;
 
 export const UserListResponse = {
     "$id": "UserListResponse",
     "type": "object",
+    "required": [
+      "users",
+      "total"
+    ],
     "properties": {
       "users": {
         "type": "array",
@@ -70,16 +74,16 @@ export const UserListResponse = {
       "hasMore": {
         "type": "boolean"
       }
-    },
-    "required": [
-      "users",
-      "total"
-    ]
+    }
   } as const;
 
 export const CreateUserRequest = {
     "$id": "CreateUserRequest",
     "type": "object",
+    "required": [
+      "email",
+      "name"
+    ],
     "properties": {
       "email": {
         "type": "string",
@@ -98,16 +102,15 @@ export const CreateUserRequest = {
         ],
         "default": "user"
       }
-    },
-    "required": [
-      "email",
-      "name"
-    ]
+    }
   } as const;
 
 export const HealthStatus = {
     "$id": "HealthStatus",
     "type": "object",
+    "required": [
+      "status"
+    ],
     "properties": {
       "status": {
         "type": "string",
@@ -124,15 +127,81 @@ export const HealthStatus = {
         "type": "string",
         "format": "date-time"
       }
-    },
-    "required": [
-      "status"
-    ]
+    }
   } as const;
 
-// Parameter schemas
-export const User_getUsersParams = {
-    "$id": "User_getUsersParams",
+export const ValidationError = {
+    "$id": "ValidationError",
+    "type": "object",
+    "required": [
+      "pointer",
+      "detail"
+    ],
+    "properties": {
+      "pointer": {
+        "type": "string",
+        "description": "JSON Pointer to the invalid field"
+      },
+      "detail": {
+        "type": "string",
+        "description": "Error message for this field"
+      }
+    }
+  } as const;
+
+export const ProblemDetails = {
+    "$id": "ProblemDetails",
+    "type": "object",
+    "description": "RFC 9457 Problem Details for HTTP APIs",
+    "required": [
+      "type",
+      "title",
+      "status"
+    ],
+    "properties": {
+      "type": {
+        "type": "string",
+        "format": "uri-reference",
+        "description": "A URI reference that identifies the problem type"
+      },
+      "title": {
+        "type": "string",
+        "description": "A short, human-readable summary"
+      },
+      "status": {
+        "type": "integer",
+        "description": "The HTTP status code"
+      },
+      "detail": {
+        "type": "string",
+        "description": "A human-readable explanation specific to this occurrence"
+      },
+      "instance": {
+        "type": "string",
+        "format": "uri",
+        "description": "A URI reference to the specific occurrence"
+      },
+      "code": {
+        "type": "string",
+        "description": "Application-specific error code (SCREAMING_SNAKE_CASE)"
+      },
+      "traceId": {
+        "type": "string",
+        "description": "Request trace ID for debugging"
+      },
+      "errors": {
+        "type": "array",
+        "description": "Detailed validation errors",
+        "items": {
+          "$ref": "ValidationError#"
+        }
+      }
+    }
+  } as const;
+
+// Operation parameter and request body schemas
+export const User_getUsersQueryParams = {
+    "$id": "User_getUsersQueryParams",
     "type": "object",
     "properties": {
       "limit": {
@@ -147,8 +216,8 @@ export const User_getUsersParams = {
     }
   } as const;
 
-export const User_getUserByIdParams = {
-    "$id": "User_getUserByIdParams",
+export const User_getUserByIdPathParams = {
+    "$id": "User_getUserByIdPathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -168,6 +237,8 @@ export const allSchemas = [
   UserListResponse,
   CreateUserRequest,
   HealthStatus,
-  User_getUsersParams,
-  User_getUserByIdParams,
+  ValidationError,
+  ProblemDetails,
+  User_getUsersQueryParams,
+  User_getUserByIdPathParams,
 ] as const;

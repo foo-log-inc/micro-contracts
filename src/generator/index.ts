@@ -8,6 +8,7 @@ import yaml from 'js-yaml';
 import type {
   OpenAPISpec,
   OperationObject,
+  HttpMethod,
   GeneratorConfig,
   MultiModuleConfig,
   ResolvedModuleConfig,
@@ -17,6 +18,7 @@ import {
   isMultiModuleConfig,
   resolveModuleConfig,
   validateConfigKeys,
+  resolveOperation,
 } from '../types.js';
 import { generateTypes, operationTypeNames } from './typeGenerator.js';
 import { generateSchemas } from './schemaGenerator.js';
@@ -26,9 +28,9 @@ import {
   processOverlays, 
   generateExtensionInterfaces,
   formatOverlayLog,
-  rebaseRefs,
   type OverlayResult,
 } from './overlayProcessor.js';
+import { loadOpenAPISpec } from './specLoader.js';
 import {
   buildTemplateContext,
   renderTemplate,
@@ -45,6 +47,7 @@ export { processOverlays, generateExtensionInterfaces } from './overlayProcessor
 export { buildTemplateContext, renderTemplate } from './templateProcessor.js';
 export type { ScreenContext, ScreenLink, ScreenAction, ScreenInteraction, TemplateContext } from './templateProcessor.js';
 export { collectInputFiles, computeInputHash } from './inputHash.js';
+export { loadOpenAPISpec } from './specLoader.js';
 
 /**
  * Write file only if content has changed (ignoring timestamp in header).
@@ -95,21 +98,6 @@ export interface GenerateOptions {
 }
 
 /**
- * Load OpenAPI spec from file
- */
-export function loadOpenAPISpec(filePath: string): OpenAPISpec {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  
-  if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) {
-    return yaml.load(content) as OpenAPISpec;
-  } else if (filePath.endsWith('.json')) {
-    return JSON.parse(content) as OpenAPISpec;
-  } else {
-    throw new Error(`Unsupported file format: ${filePath}`);
-  }
-}
-
-/**
  * Config file names, in the order they are looked for.
  */
 const CONFIG_FILENAMES = [
@@ -147,6 +135,28 @@ export function loadConfig(configPath: string): MultiModuleConfig | GeneratorCon
 }
 
 /**
+ * The module of the project config whose spec is `specPath`, if one is.
+ *
+ * A spec linted on its own is checked under the rules of its module, as
+ * generation checks it: a screen spec is not linted as a service API.
+ */
+export function findSpecModule(specPath: string): ResolvedModuleConfig | undefined {
+  const configPath = findConfigFile();
+  if (!configPath) return undefined;
+
+  const config = loadConfig(configPath);
+  if (!isMultiModuleConfig(config)) return undefined;
+
+  const target = path.resolve(specPath);
+  for (const [moduleName, moduleConfig] of Object.entries(config.modules)) {
+    if (path.resolve(path.dirname(configPath), moduleConfig.openapi) === target) {
+      return resolveModuleConfig(moduleName, moduleConfig, config.defaults);
+    }
+  }
+  return undefined;
+}
+
+/**
  * Parse module filter from options
  */
 function parseListOption(value?: string | string[]): string[] | null {
@@ -175,6 +185,26 @@ export async function generate(
     'Please migrate to the multi-module format with a "modules:" section. ' +
     'See README.md for configuration examples.'
   );
+}
+
+/**
+ * Every location a full generation run writes to: each module's contract and
+ * published contract directories, its outputs, and its built-in server and
+ * frontend files.
+ */
+export function configuredOutputs(config: MultiModuleConfig): string[] {
+  return Object.entries(config.modules).flatMap(([moduleName, moduleConfig]) => {
+    const resolved = resolveModuleConfig(moduleName, moduleConfig, config.defaults);
+    return [
+      resolved.contractOutput,
+      resolved.contractPublicOutput,
+      ...resolved.outputs.filter(output => output.enabled).map(output => output.output),
+      ...(resolved.server ? [resolved.server.output] : []),
+      ...(resolved.frontend
+        ? [path.join(resolved.frontend.output, resolved.frontend.client), path.join(resolved.frontend.output, resolved.frontend.service)]
+        : []),
+    ];
+  });
 }
 
 /**
@@ -266,8 +296,7 @@ async function generateModule(
         collision: config.overlayCollision,
         files: config.overlays,
       },
-      process.cwd(),
-      openapiPath  // Pass spec path for $ref rebasing
+      process.cwd()
     );
     spec = overlayResult.spec;
     console.log(formatOverlayLog(overlayResult));
@@ -428,12 +457,10 @@ ${hasOverlays ? "export * from './overlays/index.js';" : ''}
 `;
   writeAndLog(path.join(outputDir, 'index.ts'), indexContent);
   
-  // Copy OpenAPI spec to docs with source info header
-  // Rebase $ref paths from source directory to output directory
-  const sourceDir = path.dirname(config.openapi);
+  // Copy OpenAPI spec to docs with source info header. The loaded spec holds
+  // every component it references, so the copy stands on its own.
   const docsDir = path.join(outputDir, 'docs');
-  const rebasedSpec = rebaseRefs(targetSpec, sourceDir, docsDir);
-  
+
   const specHeader = `# Auto-generated OpenAPI specification
 # DO NOT EDIT MANUALLY
 # 
@@ -441,7 +468,7 @@ ${hasOverlays ? "export * from './overlays/index.js';" : ''}
 # Regenerate: micro-contracts generate
 ${publicOnly ? '# Filtered for public endpoints only\n' : ''}
 `;
-  const yamlContent = specHeader + yaml.dump(rebasedSpec, { lineWidth: -1 });
+  const yamlContent = specHeader + yaml.dump(targetSpec, { lineWidth: -1 });
   writeAndLog(path.join(docsDir, 'openapi.generated.yaml'), yamlContent);
 }
 
@@ -621,9 +648,9 @@ function declaredDependencyTypes(
   const names = new Set<string>();
 
   for (const dep of deps) {
-    const operation = findOperation(targetSpec, dep.service, dep.method);
+    const found = findOperation(targetSpec, dep.service, dep.method);
 
-    if (!operation) {
+    if (!found) {
       throw new Error(
         `Module '${sourceModule}' depends on '${dep.raw}' but module '${targetModule}' ` +
         `has no operation with x-micro-contracts-service '${dep.service}' ` +
@@ -633,6 +660,7 @@ function declaredDependencyTypes(
 
     // deps/ re-exports from contract-published, which only carries published
     // operations: depending on an unpublished one cannot resolve.
+    const { apiPath, method, operation } = found;
     if (operation['x-micro-contracts-published'] !== true) {
       throw new Error(
         `Module '${sourceModule}' depends on '${dep.raw}' but that operation is not ` +
@@ -640,13 +668,14 @@ function declaredDependencyTypes(
       );
     }
 
-    const typeNames = operationTypeNames(operation);
+    const resolved = resolveOperation(targetSpec, apiPath, method);
+    const typeNames = operationTypeNames(operation, resolved);
     names.add(typeNames.input);
     if (typeNames.params) names.add(typeNames.params);
     if (typeNames.body) names.add(typeNames.body);
 
     // Schemas the operation reaches, named in the published types.
-    for (const pointer of collectReachableComponents(operation, targetSpec)) {
+    for (const pointer of collectReachableComponents(resolved, targetSpec)) {
       if (pointer.startsWith('schemas/')) {
         names.add(pointer.slice('schemas/'.length));
       }
@@ -661,15 +690,15 @@ function findOperation(
   spec: OpenAPISpec,
   service: string,
   method: string
-): OperationObject | undefined {
-  for (const pathItem of Object.values(spec.paths)) {
+): { apiPath: string; method: HttpMethod; operation: OperationObject } | undefined {
+  for (const [apiPath, pathItem] of Object.entries(spec.paths)) {
     for (const httpMethod of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[httpMethod];
       if (
         operation?.['x-micro-contracts-service'] === service &&
         operation['x-micro-contracts-method'] === method
       ) {
-        return operation;
+        return { apiPath, method: httpMethod, operation };
       }
     }
   }
@@ -852,7 +881,9 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
     components: {},
   };
 
-  const publicOperations: OperationObject[] = [];
+  // What the public operations reach from: themselves, and the parameters
+  // their path items declare for every operation under them.
+  const publicRoots: unknown[] = [];
   const usedTags = new Set<string>();
 
   // Filter paths to only include x-micro-contracts-published: true
@@ -865,7 +896,7 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
       if (operation?.['x-micro-contracts-published'] === true) {
         filteredPathItem[method] = operation;
         hasPublicOperation = true;
-        publicOperations.push(operation);
+        publicRoots.push(operation);
 
         for (const tag of operation.tags ?? []) {
           usedTags.add(tag);
@@ -874,6 +905,10 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
     }
 
     if (hasPublicOperation) {
+      if (pathItem.parameters) {
+        filteredPathItem.parameters = pathItem.parameters;
+        publicRoots.push(pathItem.parameters);
+      }
       filtered.paths[pathKey] = filteredPathItem;
     }
   }
@@ -881,7 +916,7 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
   // Keep exactly the components the public operations reach, in every section.
   // Copying a section wholesale left components that only private endpoints
   // used, referring to schemas this filter had dropped: a dangling $ref.
-  const reachable = collectReachableComponents(publicOperations, spec);
+  const reachable = collectReachableComponents(publicRoots, spec);
   const sourceComponents = spec.components as Record<string, Record<string, unknown>> | undefined;
   const targetComponents = filtered.components as Record<string, Record<string, unknown>>;
 

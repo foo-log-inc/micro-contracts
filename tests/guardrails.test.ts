@@ -21,6 +21,7 @@ import {
   runAllChecks,
   getAvailableChecks,
   checkUncommittedChanges,
+  generatedFilesRule,
   formatCheckResults,
   formatSingleCheckResult,
   findOpenAPISpecs,
@@ -107,7 +108,7 @@ describe('verifyAllowlist', () => {
       'docs/**/*.md',
     ],
     protected: [
-      'spec/spectral.yaml',
+      'spec/redocly.yaml',
       'guardrails.yaml',
       '.github/**',
     ],
@@ -248,6 +249,9 @@ describe('manifest', () => {
     expect(hash).toMatch(/^[a-f0-9]+$/);
   });
   
+  /** A rule calling every file in the directory generated. */
+  const everyFile = () => ({ patterns: ['**'], baseDir: tempDir });
+
   it('should generate and verify manifest', async () => {
     // Create some test files
     fs.writeFileSync(path.join(tempDir, 'file1.ts'), 'const a = 1;');
@@ -256,7 +260,7 @@ describe('manifest', () => {
     fs.writeFileSync(path.join(tempDir, 'sub', 'file3.ts'), 'const c = 3;');
     
     // Generate manifest
-    const { manifest, changed } = await generateManifest(tempDir, {
+    const { manifest, changed } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     
@@ -278,12 +282,12 @@ describe('manifest', () => {
     expect(loaded!.files['file1.ts'].sha256).toBe(manifest.files['file1.ts'].sha256);
     
     // Verify manifest (should pass)
-    const result = await verifyManifest(tempDir);
+    const result = await verifyManifest(tempDir, everyFile());
     expect(result.valid).toBe(true);
     expect(result.mismatches).toHaveLength(0);
     
     // Generate again without changes - should not be marked as changed
-    const { changed: changedAgain } = await generateManifest(tempDir, {
+    const { changed: changedAgain } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     expect(changedAgain).toBe(false);
@@ -294,7 +298,7 @@ describe('manifest', () => {
     const filePath = path.join(tempDir, 'file.ts');
     fs.writeFileSync(filePath, 'original content');
     
-    const { manifest } = await generateManifest(tempDir, {
+    const { manifest } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     writeManifest(manifest, tempDir);
@@ -303,7 +307,7 @@ describe('manifest', () => {
     fs.writeFileSync(filePath, 'modified content');
     
     // Verify (should fail)
-    const result = await verifyManifest(tempDir);
+    const result = await verifyManifest(tempDir, everyFile());
     expect(result.valid).toBe(false);
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0].reason).toBe('hash-mismatch');
@@ -314,7 +318,7 @@ describe('manifest', () => {
     const filePath = path.join(tempDir, 'file.ts');
     fs.writeFileSync(filePath, 'content');
     
-    const { manifest } = await generateManifest(tempDir, {
+    const { manifest } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     writeManifest(manifest, tempDir);
@@ -323,7 +327,7 @@ describe('manifest', () => {
     fs.unlinkSync(filePath);
     
     // Verify (should fail)
-    const result = await verifyManifest(tempDir);
+    const result = await verifyManifest(tempDir, everyFile());
     expect(result.valid).toBe(false);
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0].reason).toBe('missing');
@@ -333,7 +337,7 @@ describe('manifest', () => {
     // Create files and manifest
     fs.writeFileSync(path.join(tempDir, 'file.ts'), 'content');
     
-    const { manifest } = await generateManifest(tempDir, {
+    const { manifest } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     writeManifest(manifest, tempDir);
@@ -342,7 +346,7 @@ describe('manifest', () => {
     fs.writeFileSync(path.join(tempDir, 'extra.ts'), 'extra content');
     
     // Verify (should fail)
-    const result = await verifyManifest(tempDir);
+    const result = await verifyManifest(tempDir, everyFile());
     expect(result.valid).toBe(false);
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0].reason).toBe('extra');
@@ -383,7 +387,7 @@ describe('checkUncommittedChanges', () => {
   }
 
   it('reports a clean generated directory as valid', () => {
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.valid).toBe(true);
     expect(result.changedFiles).toEqual([]);
@@ -392,7 +396,7 @@ describe('checkUncommittedChanges', () => {
   it('detects an unstaged edit to a generated file', () => {
     fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// hand edit\n');
 
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.valid).toBe(false);
     expect(result.changedFiles).toContain('packages/types.ts');
@@ -404,7 +408,7 @@ describe('checkUncommittedChanges', () => {
     fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// hand edit\n');
     git('add', '-A');
 
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.valid).toBe(false);
     expect(result.changedFiles).toContain('packages/types.ts');
@@ -413,10 +417,20 @@ describe('checkUncommittedChanges', () => {
   it('detects an untracked generated file', () => {
     fs.writeFileSync(path.join(repo, 'packages/new.generated.ts'), 'export const x = 1;\n');
 
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.valid).toBe(false);
     expect(result.changedFiles).toContain('packages/new.generated.ts');
+  });
+
+  it('reports only generated files when the directory holds hand-written ones too', () => {
+    fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'src/app.ts'), 'export const app = 1;\n');
+
+    const result = inRepo(() => checkUncommittedChanges('.', generatedFilesRule()));
+
+    expect(result.changedFiles).not.toContain('src/app.ts');
+    expect(result.valid).toBe(true);
   });
 
   it('reports each changed file once', () => {
@@ -424,7 +438,7 @@ describe('checkUncommittedChanges', () => {
     git('add', '-A');
     fs.appendFileSync(path.join(repo, 'packages/types.ts'), '// more\n');
 
-    const result = inRepo(() => checkUncommittedChanges('packages/'));
+    const result = inRepo(() => checkUncommittedChanges('packages/', generatedFilesRule()));
 
     expect(result.changedFiles.filter(f => f === 'packages/types.ts')).toHaveLength(1);
   });
@@ -606,6 +620,35 @@ describe('custom command checks', () => {
       const result = summary.results.find(r => r.name === 'spec-lint');
       expect(result?.status).toBe('fail');
       expect(result?.message).toMatch(/Cannot expand \{files\}/);
+    } finally {
+      process.chdir(previous);
+    }
+  });
+
+  it('reports a failed command by its exit code, not by counting words in its output', async () => {
+    // One problem, reported the way linters do: the word "error" twice.
+    fs.writeFileSync(
+      path.join(projectDir, 'micro-contracts.guardrails.yaml'),
+      [
+        'allowed:',
+        '  - "**"',
+        'checks:',
+        '  spec-lint:',
+        '    command: "node -e \\"console.log(\'Error was generated by the spec rule.\\\\nValidation failed with 1 error.\'); process.exit(1)\\""',
+        '    gate: 2',
+        '',
+      ].join('\n'),
+    );
+
+    const previous = process.cwd();
+    process.chdir(projectDir);
+    try {
+      const summary = await runAllChecks({ only: ['spec-lint'] });
+      const result = summary.results.find(r => r.name === 'spec-lint');
+      expect(result?.status).toBe('fail');
+      expect(result?.message).not.toMatch(/\d+ error\(s\)/);
+      expect(result?.message).toContain('exit code: 1');
+      expect(result?.details).toContain('Validation failed with 1 error.');
     } finally {
       process.chdir(previous);
     }

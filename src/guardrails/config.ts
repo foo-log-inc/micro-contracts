@@ -46,7 +46,7 @@ export const DEFAULT_GUARDRAILS: GuardrailsConfig = {
     'tsconfig.json',
   ],
   protected: [
-    'spec/spectral.yaml',
+    'spec/redocly.yaml',
     'spec/_shared/overlays/**',
     ...GUARDRAILS_CONFIG_NAMES,
     '.github/**',
@@ -179,8 +179,8 @@ allowed:
 
 # Files that require special approval
 protected:
-  # Spectral lint rules
-  - spec/spectral.yaml
+  # Lint rules (Redocly)
+  - spec/redocly.yaml
   
   # Shared overlay definitions
   - spec/_shared/overlays/**

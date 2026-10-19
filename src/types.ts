@@ -34,15 +34,18 @@ export interface PathItem {
   put?: OperationObject;
   patch?: OperationObject;
   delete?: OperationObject;
-  parameters?: ParameterObject[];
+  parameters?: Array<ParameterObject | ReferenceObject>;
 }
+
+/** The keys of a path item that hold an operation. */
+export type HttpMethod = Exclude<keyof PathItem, 'parameters'>;
 
 export interface OperationObject {
   operationId?: string;
   summary?: string;
   description?: string;
   tags?: string[];
-  parameters?: ParameterObject[];
+  parameters?: Array<ParameterObject | ReferenceObject>;
   requestBody?: RequestBodyObject | ReferenceObject;
   responses: Record<string, ResponseObject | ReferenceObject>;
   security?: Array<Record<string, string[]>>;
@@ -175,31 +178,80 @@ export interface ReferenceObject {
 /** Primitive OpenAPI type names */
 export type OpenAPIType = 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object' | 'null';
 
+/**
+ * A schema: JSON Schema (2020-12 for OpenAPI 3.1, the OpenAPI 3.0 subset
+ * otherwise) plus OpenAPI's own keywords.
+ */
 export interface SchemaObject {
   /** OpenAPI 3.0: single type string. OpenAPI 3.1: may be an array (e.g. ['string', 'null']) */
   type?: OpenAPIType | OpenAPIType[];
   format?: string;
+  title?: string;
   description?: string;
-  enum?: Array<string | number | boolean>;
-  items?: SchemaObject | ReferenceObject;
-  properties?: Record<string, SchemaObject | ReferenceObject>;
-  additionalProperties?: boolean | SchemaObject | ReferenceObject;
-  required?: string[];
-  nullable?: boolean;
+  enum?: Array<string | number | boolean | null>;
+  const?: unknown;
   default?: unknown;
+  /** OpenAPI 3.0: widens `type` to admit null */
+  nullable?: boolean;
+  deprecated?: boolean;
+  readOnly?: boolean;
+  writeOnly?: boolean;
+
+  // Numbers
+  multipleOf?: number;
   minimum?: number;
   maximum?: number;
+  /** A number (JSON Schema), or OpenAPI 3.0's flag making `minimum` exclusive */
+  exclusiveMinimum?: number | boolean;
+  /** A number (JSON Schema), or OpenAPI 3.0's flag making `maximum` exclusive */
+  exclusiveMaximum?: number | boolean;
+
+  // Strings
   minLength?: number;
   maxLength?: number;
   pattern?: string;
+
+  // Arrays
+  items?: SchemaObject | ReferenceObject;
+  prefixItems?: Array<SchemaObject | ReferenceObject>;
+  contains?: SchemaObject | ReferenceObject;
+  minContains?: number;
+  maxContains?: number;
   minItems?: number;
   maxItems?: number;
+  uniqueItems?: boolean;
+
+  // Objects
+  properties?: Record<string, SchemaObject | ReferenceObject>;
+  patternProperties?: Record<string, SchemaObject | ReferenceObject>;
+  additionalProperties?: boolean | SchemaObject | ReferenceObject;
+  propertyNames?: SchemaObject | ReferenceObject;
+  required?: string[];
+  dependentRequired?: Record<string, string[]>;
+  dependentSchemas?: Record<string, SchemaObject | ReferenceObject>;
+  minProperties?: number;
+  maxProperties?: number;
+
+  // Composition
   oneOf?: Array<SchemaObject | ReferenceObject>;
   anyOf?: Array<SchemaObject | ReferenceObject>;
   allOf?: Array<SchemaObject | ReferenceObject>;
+  not?: SchemaObject | ReferenceObject;
+  if?: SchemaObject | ReferenceObject;
+  then?: SchemaObject | ReferenceObject;
+  else?: SchemaObject | ReferenceObject;
+
+  // OpenAPI annotations
+  example?: unknown;
+  examples?: unknown;
+  discriminator?: { propertyName: string; mapping?: Record<string, string> };
+  xml?: Record<string, unknown>;
+  externalDocs?: { url: string; description?: string };
+
   // Custom extensions
   'x-private'?: boolean;  // Mark as private (not allowed in public endpoints)
   'x-micro-contracts-non-exportable'?: boolean;  // Must not be reachable from a published endpoint
+  [extension: `x-${string}`]: unknown;
 }
 
 // =============================================================================
@@ -569,7 +621,7 @@ const CONFIG_KEYS: KeySpec = {
 /** Keys removed from the config format, with the replacement to use instead. */
 const REMOVED_KEYS: Record<string, string> = {
   'defaults.docs': 'documentation generation was removed; run @redocly/cli against the generated spec',
-  'defaults.spectral': 'declare a Spectral command under checks in guardrails.yaml',
+  'defaults.spectral': 'declare a lint command (e.g. npx @redocly/cli lint {files}) under checks in guardrails.yaml',
   'defaults.sharedModuleName': 'never had an effect',
   'spec': 'never had an effect; module spec paths come from modules.<name>.openapi',
   'defaults.templates': 'use defaults.server.template / defaults.frontend.template / defaults.contract.serviceTemplate',
@@ -797,7 +849,9 @@ export interface ServiceMethodInfo {
   isPublished: boolean;
   requestType?: string;
   responseType?: string;
-  /** Params type (path + query combined) */
+  /** Input type (see operationTypeNames) */
+  inputType: string;
+  /** Params type (path + query combined; see operationTypeNames) */
   paramsType?: string;
   /** All parameters (path, query, header) from the operation */
   parameters: ParameterObject[];
@@ -829,11 +883,22 @@ export function isTsIdentifier(name: string): boolean {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name);
 }
 
-// Extract schema name from $ref
+/**
+ * The component name a local reference points at:
+ * "#/components/schemas/EntryListResponse" -> "EntryListResponse".
+ *
+ * Anything else has no such name. A reference into another file is resolved
+ * when the spec is loaded (see loadOpenAPISpec); reading the name off its end
+ * would bind it to whatever this spec defines under that name.
+ */
 export function getRefName(ref: string): string {
-  // "#/components/schemas/EntryListResponse" -> "EntryListResponse"
-  const parts = ref.split('/');
-  return parts[parts.length - 1];
+  const parsed = parseComponentRef(ref);
+  if (parsed?.name === undefined) {
+    throw new Error(
+      `$ref '${ref}' does not point at a component of this spec ('#/components/<section>/<name>').`
+    );
+  }
+  return parsed.name;
 }
 
 /**
@@ -965,11 +1030,6 @@ export function hasPrivateProperties(
   return found;
 }
 
-/** Component sections a $ref can point into. */
-type ComponentSection = 'schemas' | 'responses' | 'parameters' | 'requestBodies';
-
-const COMPONENT_SECTIONS: ComponentSection[] = ['schemas', 'responses', 'parameters', 'requestBodies'];
-
 /**
  * Every component reachable from `root`, as "<section>/<name>".
  *
@@ -1003,7 +1063,7 @@ export function collectReachableComponents(
 
     if (typeof record.$ref === 'string') {
       const parsed = parseComponentRef(record.$ref);
-      if (parsed && !reached.has(`${parsed.section}/${parsed.name}`)) {
+      if (parsed?.name !== undefined && !reached.has(`${parsed.section}/${parsed.name}`)) {
         reached.add(`${parsed.section}/${parsed.name}`);
         const target = (spec.components as Record<string, Record<string, unknown>> | undefined)
           ?.[parsed.section]?.[parsed.name];
@@ -1017,13 +1077,136 @@ export function collectReachableComponents(
   return reached;
 }
 
-/** Parse "#/components/<section>/<name>" into its parts. */
-function parseComponentRef(ref: string): { section: ComponentSection; name: string } | null {
-  const match = ref.match(/^#\/components\/([^/]+)\/(.+)$/);
+/**
+ * Parse a reference to a component of this spec, "#/components/<section>/<name>",
+ * into its parts: the single reading of a component reference, whatever the
+ * section (schemas, responses, headers, examples, links and the rest).
+ *
+ * A reference into a section that does not go on to one name (".../homeView/",
+ * ".../homeView/extra", or nothing after the section) names no component: it
+ * comes back with its section and no `name`, so that a reader of that section
+ * rejects it rather than taking it for a reference somewhere else.
+ */
+export function parseComponentRef(ref: string): { section: string; name?: string } | null {
+  const match = ref.match(/^#\/components\/([^/]+)(?:\/(.*))?$/);
   if (!match) return null;
-  const section = match[1] as ComponentSection;
-  if (!COMPONENT_SECTIONS.includes(section)) return null;
-  return { section, name: match[2] };
+  const [, section, rest] = match;
+  return rest && !rest.includes('/') ? { section, name: rest } : { section };
+}
+
+/**
+ * The component `value` stands for: itself, or what its $ref (and any $ref
+ * that component holds in turn) points at in `section`.
+ *
+ * A reference that points elsewhere or at nothing is an error, never skipped:
+ * a skipped parameter, body or response silently vanishes from every artifact.
+ */
+function resolveComponent<T extends object>(
+  value: T | ReferenceObject,
+  section: string,
+  spec: OpenAPISpec,
+  location: string
+): T {
+  const seen = new Set<string>();
+  let current: unknown = value;
+
+  while (isReference(current)) {
+    const ref = current.$ref;
+    const parsed = parseComponentRef(ref);
+    if (parsed?.name === undefined || parsed.section !== section) {
+      throw new Error(`$ref '${ref}' at ${location} must point at #/components/${section}/<name>.`);
+    }
+    if (seen.has(ref)) {
+      throw new Error(`$ref '${ref}' at ${location} refers back to itself.`);
+    }
+    seen.add(ref);
+
+    const target = (spec.components as Record<string, Record<string, unknown> | undefined> | undefined)
+      ?.[section]?.[parsed.name];
+    if (target === undefined) {
+      throw new Error(`$ref '${ref}' at ${location} does not resolve: components.${section} has no '${parsed.name}'.`);
+    }
+    current = target;
+  }
+
+  return current as T;
+}
+
+/** A parameter, with its $ref resolved. */
+export function resolveParameter(
+  param: ParameterObject | ReferenceObject,
+  spec: OpenAPISpec,
+  location: string
+): ParameterObject {
+  return resolveComponent<ParameterObject>(param, 'parameters', spec, location);
+}
+
+/**
+ * What an operation takes and returns, with every $ref into
+ * components.parameters, components.requestBodies and components.responses
+ * resolved.
+ */
+export interface ResolvedOperation {
+  /**
+   * The path item's parameters and the operation's own, an operation parameter
+   * replacing the path item's parameter of the same name and location.
+   */
+  parameters: ParameterObject[];
+  requestBody?: RequestBodyObject;
+  responses: Record<string, ResponseObject>;
+}
+
+/**
+ * The single answer to "what does this operation take and return".
+ *
+ * Every generator and check reads parameters, request bodies and responses
+ * through here, so a parameter declared on the path item or a response held in
+ * components cannot reach one artifact while missing from another.
+ */
+export function resolveOperation(
+  spec: OpenAPISpec,
+  apiPath: string,
+  method: HttpMethod
+): ResolvedOperation {
+  const pathItem = spec.paths[apiPath];
+  const operation = pathItem?.[method];
+  if (!operation) {
+    throw new Error(`No ${method.toUpperCase()} operation at ${apiPath}.`);
+  }
+  const location = `${method.toUpperCase()} ${apiPath}`;
+
+  const parameters: ParameterObject[] = [];
+  for (const declared of [pathItem.parameters, operation.parameters]) {
+    const seen = new Set<string>();
+    for (const entry of declared ?? []) {
+      const param = resolveParameter(entry, spec, location);
+      const key = `${param.in} ${param.name}`;
+      if (seen.has(key)) {
+        throw new Error(`Parameter '${param.name}' (in: ${param.in}) is declared twice at ${location}.`);
+      }
+      seen.add(key);
+
+      const replaced = parameters.findIndex(p => p.name === param.name && p.in === param.in);
+      if (replaced >= 0) {
+        parameters[replaced] = param;
+      } else {
+        parameters.push(param);
+      }
+    }
+  }
+
+  const requestBody = operation.requestBody
+    ? resolveComponent<RequestBodyObject>(operation.requestBody, 'requestBodies', spec, `${location} requestBody`)
+    : undefined;
+
+  const responses: Record<string, ResponseObject> = {};
+  for (const [statusCode, response] of Object.entries(operation.responses ?? {})) {
+    responses[statusCode] = resolveComponent<ResponseObject>(
+      response, 'responses', spec, `${location} response ${statusCode}`
+    );
+  }
+
+  return { parameters, requestBody, responses };
 }
 
 // Collect all schemas referenced by a schema

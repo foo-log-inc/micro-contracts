@@ -10,6 +10,7 @@ import { matchWithNegation } from '../glob.js';
 import { execSync } from 'child_process';
 import type { GuardrailsConfig, AllowlistResult, AllowlistViolation, CheckResult, CheckOptions } from './types.js';
 import { loadGuardrailsConfigWithPath } from './config.js';
+import { isGeneratedFile } from './manifest.js';
 
 
 
@@ -226,7 +227,7 @@ export function verifyAllowlist(
     }
     
     // 2. Check if generated (allowed, but must pass drift/manifest checks)
-    if (matchWithNegation(config.generated, file)) {
+    if (isGeneratedFile(config.generated, file)) {
       // Generated files are allowed to change, but we don't add a violation
       // The drift/manifest checks will verify integrity
       continue;

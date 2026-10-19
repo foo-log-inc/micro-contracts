@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'yaml';
 import { createProgram, type CommandHandlers } from './generated/program.js';
-import { generate, loadConfig, findConfigFile, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash } from './generator/index.js';
+import { generate, loadConfig, findConfigFile, findSpecModule, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash, configuredOutputs } from './generator/index.js';
 import type { GeneratorConfig, MultiModuleConfig } from './types.js';
 import { isMultiModuleConfig } from './types.js';
 import { getStarterTemplates, getScreenStarterTemplates } from './cli/templates.js';
@@ -20,6 +20,8 @@ import {
   generateManifest,
   writeManifest,
   canSkipGeneration,
+  generatedFilesRule,
+  resolveManifestDir,
   GATE_DESCRIPTIONS,
   loadGuardrailsConfigWithPath,
 } from './guardrails/index.js';
@@ -86,8 +88,8 @@ const handlers: CommandHandlers = {
         inputHash = computeInputHash(config, configPath, VERSION);
 
         if (useCache) {
-          const manifestDir = opts.manifestDir || 'packages/';
-          const skipCheck = await canSkipGeneration(manifestDir, inputHash);
+          const rule = generatedFilesRule();
+          const skipCheck = await canSkipGeneration(resolveManifestDir(opts.manifestDir, rule, configPath), inputHash, rule);
           if (skipCheck.skip) {
             console.log(`No input changes detected, skipping generation (${skipCheck.reason})`);
             return;
@@ -108,13 +110,15 @@ const handlers: CommandHandlers = {
         const { config: guardrailsConfig } = loadGuardrailsConfigWithPath();
 
         if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
-          const manifestDir = opts.manifestDir || 'packages/';
+          const rule = generatedFilesRule();
+          const manifestDir = resolveManifestDir(opts.manifestDir, rule, configPath);
           if (fs.existsSync(manifestDir)) {
             const manifestInputHash =
               (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-            const { manifest, changed } = await generateManifest(manifestDir, {
+            const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
               generatorVersion: VERSION,
               inputHash: manifestInputHash,
+              outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
             });
             const fileCount = Object.keys(manifest.files).length;
 
@@ -123,6 +127,9 @@ const handlers: CommandHandlers = {
               console.log(`\nManifest updated: ${manifestPath} (${fileCount} files)`);
             } else {
               console.log(`\nManifest unchanged (${fileCount} files)`);
+            }
+            if (unrecordedOutput) {
+              console.log(`Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}, so the next run regenerates`);
             }
           }
         }
@@ -145,7 +152,7 @@ const handlers: CommandHandlers = {
 
       console.log(`Linting: ${specPath}\n`);
       const spec = loadOpenAPISpec(specPath);
-      const result = lintSpec(spec, { strict: opts.strict });
+      const result = lintSpec(spec, { strict: opts.strict, screen: findSpecModule(specPath)?.screen });
 
       console.log(formatLintResults(result));
 
@@ -205,10 +212,10 @@ const handlers: CommandHandlers = {
       console.log(`Created: ${problemDetailsPath}`);
     }
 
-    const spectralPath = 'spec/spectral.yaml';
-    if (!fs.existsSync(spectralPath)) {
-      fs.writeFileSync(spectralPath, generateSpectralRules());
-      console.log(`Created: ${spectralPath}`);
+    const lintRulesPath = 'spec/redocly.yaml';
+    if (!fs.existsSync(lintRulesPath)) {
+      fs.writeFileSync(lintRulesPath, generateLintRules());
+      console.log(`Created: ${lintRulesPath}`);
     }
 
     if (opts.screens) {
@@ -414,6 +421,7 @@ const handlers: CommandHandlers = {
         skip: skipChecks,
         guardrailsPath: opts.guardrails,
         generatedDir: opts.generatedDir,
+        configPath: opts.config ? path.resolve(opts.config) : undefined,
         onCheckStart: isStreaming ? (check: CheckDefinition) => {
           if (process.stdout.isTTY) {
             process.stdout.write(formatCheckStart(check) + '\r');
@@ -490,8 +498,8 @@ const handlers: CommandHandlers = {
             inputHash = computeInputHash(config, configPath, VERSION);
 
             if (useCache) {
-              const manifestDir = opts.generatedDir || 'packages/';
-              const skipCheck = await canSkipGeneration(manifestDir, inputHash);
+              const rule = generatedFilesRule(opts.guardrails);
+              const skipCheck = await canSkipGeneration(resolveManifestDir(opts.generatedDir, rule, configPath), inputHash, rule);
               if (skipCheck.skip) {
                 generationCacheSkipped = true;
                 generateSkipped = true;
@@ -521,13 +529,15 @@ const handlers: CommandHandlers = {
               if (opts.manifest !== false) {
                 const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
                 if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
-                  const manifestDir = opts.generatedDir || 'packages/';
+                  const rule = generatedFilesRule(opts.guardrails);
+                  const manifestDir = resolveManifestDir(opts.generatedDir, rule, configPath);
                   if (fs.existsSync(manifestDir)) {
                     const manifestInputHash =
                       (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-                    const { manifest, changed } = await generateManifest(manifestDir, {
+                    const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
                       generatorVersion: VERSION,
                       inputHash: manifestInputHash,
+                      outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
                     });
                     if (verbose) {
                       const fileCount = Object.keys(manifest.files).length;
@@ -536,6 +546,9 @@ const handlers: CommandHandlers = {
                         originalLog(`  Manifest updated: ${mPath} (${fileCount} files)`);
                       } else {
                         originalLog(`  Manifest unchanged (${fileCount} files)`);
+                      }
+                      if (unrecordedOutput) {
+                        originalLog(`  Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}`);
                       }
                     } else if (changed) {
                       writeManifest(manifest, manifestDir);
@@ -746,7 +759,8 @@ const handlers: CommandHandlers = {
   // ── manifest ──────────────────────────────────────────
   manifest: async (opts) => {
     try {
-      const baseDir = opts.dir ?? 'packages/';
+      const rule = generatedFilesRule();
+      const baseDir = resolveManifestDir(opts.dir, rule);
 
       if (!fs.existsSync(baseDir)) {
         console.error(`Directory not found: ${baseDir}`);
@@ -755,14 +769,14 @@ const handlers: CommandHandlers = {
 
       if (opts.verify) {
         const { verifyManifest, formatManifestResult } = await import('./guardrails/index.js');
-        const result = await verifyManifest(baseDir);
+        const result = await verifyManifest(baseDir, rule);
         console.log(formatManifestResult(result));
         if (!result.valid) {
           process.exit(1);
         }
       } else {
         console.log(`Generating manifest for: ${baseDir}`);
-        const { manifest, changed } = await generateManifest(baseDir, {
+        const { manifest, changed } = await generateManifest(baseDir, rule, {
           generatorVersion: VERSION,
         });
 
@@ -1102,50 +1116,69 @@ components:
 `;
 }
 
-function generateSpectralRules(): string {
-  return `extends: ["spectral:oas"]
+/** The Redocly lint rules `init` writes to spec/redocly.yaml. */
+function generateLintRules(): string {
+  return `# Redocly lint rules for micro-contracts specs
+#
+# Run with: npx @redocly/cli lint <spec files> --config spec/redocly.yaml
+# A rule at \`error\` fails the lint; a rule at \`warn\` is reported only.
+# The rules apply to OpenAPI 3.0 and 3.1 documents alike.
 
-rules:
-  operation-service:
-    description: "Operations must have x-micro-contracts-service"
+extends: []
+
+oas3_0Rules: &openapi
+  # OpenAPI structure
+  struct: error
+  no-unresolved-refs: error
+  operation-operationId-unique: error
+  path-parameters-defined: error
+  operation-parameters-unique: error
+  no-invalid-media-type-examples: error
+  no-invalid-schema-examples: error
+
+  # Every operation names the service and method it is generated into
+  rule/operation-service:
+    message: Operations must have x-micro-contracts-service
     severity: error
-    given: "$.paths[*][get,post,put,patch,delete]"
-    then:
-      field: x-micro-contracts-service
-      function: truthy
+    subject:
+      type: Operation
+      property: x-micro-contracts-service
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      defined: true
+      nonEmpty: true
 
-  operation-method:
-    description: "Operations must have x-micro-contracts-method"
+  rule/operation-method:
+    message: Operations must have x-micro-contracts-method
     severity: error
-    given: "$.paths[*][get,post,put,patch,delete]"
-    then:
-      field: x-micro-contracts-method
-      function: truthy
+    subject:
+      type: Operation
+      property: x-micro-contracts-method
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      defined: true
+      nonEmpty: true
 
-  operation-error-responses:
-    description: "Operations should have 5XX or default error response"
+  # Operations should answer a server error
+  rule/operation-error-responses:
+    message: Operations should have a 5XX or default error response
     severity: warn
-    given: "$.paths[*][get,post,put,patch,delete].responses"
-    then:
-      function: schema
-      functionOptions:
-        schema:
-          anyOf:
-            - required: ["500"]
-            - required: ["5XX"]
-            - required: ["default"]
+    subject:
+      type: Responses
+    assertions:
+      requireAny: ['500', '5XX', default]
 
-  canonical-extension-prefix:
-    description: "Use canonical x-micro-contracts-* extensions"
+  # The x-micro-contracts-* names, not their short forms
+  rule/canonical-extension-prefix:
+    message: Use x-micro-contracts-* extensions (not x-service, x-method, x-public)
     severity: warn
-    given: "$.paths[*][get,post,put,patch,delete]"
-    then:
-      - field: x-service
-        function: falsy
-      - field: x-method
-        function: falsy
-      - field: x-public
-        function: falsy
+    subject:
+      type: Operation
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      disallowed: [x-service, x-method, x-public]
+
+oas3_1Rules: *openapi
 `;
 }
 

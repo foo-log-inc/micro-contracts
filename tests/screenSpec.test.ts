@@ -562,6 +562,17 @@ describe('Screen Spec - Inline x-event parser', () => {
       /x-event references '#\/components\/x-event-defs\/itemTap'/
     );
   });
+
+  it('rejects an x-event $ref into x-event-defs that names no single entry', () => {
+    for (const ref of ['#/components/x-event-defs/itemTap/', '#/components/x-event-defs/itemTap/extra']) {
+      const spec = createInlineEventSpec();
+      spec.paths['/calendar/{yearMonth}'].get!['x-event'] = { $ref: ref };
+
+      const result = lintSpec(spec, { screen: true });
+      expect(result.errors.map(e => e.code), ref).toContain('SCREEN_UNKNOWN_EVENT_REF');
+      expect(() => buildTemplateContext(spec, 'test', { screen: true }), ref).toThrow(/x-event references/);
+    }
+  });
 });
 
 // =====================================================================

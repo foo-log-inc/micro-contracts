@@ -5,31 +5,38 @@
  */
 
 import fs from 'fs';
+import path from 'path';
 import { execSync } from 'child_process';
 import type { DriftResult, CheckResult, CheckOptions } from './types.js';
+import { generatedFilesRule, isGeneratedFile, resolveManifestDir, type GeneratedFilesRule } from './manifest.js';
 
 /**
- * Check for uncommitted changes (including untracked files)
+ * Check for uncommitted changes to generated files (including untracked ones)
+ * in `generatedDir`. Only what `rule` calls generated counts: the directory may
+ * hold hand-written files as well.
  */
-export function checkUncommittedChanges(generatedDir: string = 'packages/'): DriftResult {
+export function checkUncommittedChanges(generatedDir: string, rule: GeneratedFilesRule): DriftResult {
+  const git = (command: string) => execSync(command, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+
   try {
     // Against HEAD, not the index: `git diff <dir>` compares the worktree to the
     // index, so staging a hand-edited generated file hides it — which is exactly
     // what a pre-commit run does before invoking this check.
-    const modifiedOutput = execSync(`git diff --name-only HEAD -- "${generatedDir}"`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    const modifiedOutput = git(`git diff --name-only HEAD -- "${generatedDir}"`);
 
-    // Check for untracked files
-    const untrackedOutput = execSync(`git ls-files --others --exclude-standard "${generatedDir}"`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    // Check for untracked files (named from the repository root, as git diff names them)
+    const untrackedOutput = git(`git ls-files --others --exclude-standard --full-name "${generatedDir}"`);
+
+    // git names files from the repository root by their real path; the rule's
+    // directory is resolved the same way before the two are compared.
+    const gitRoot = git('git rev-parse --show-toplevel').trim();
+    const ruleBase = fs.realpathSync(path.resolve(rule.baseDir));
+    const generated = (file: string) =>
+      isGeneratedFile(rule.patterns, path.relative(ruleBase, path.resolve(gitRoot, file)).split(path.sep).join('/'));
 
     const modifiedFiles = modifiedOutput.trim().split('\n').filter(Boolean);
     const untrackedFiles = untrackedOutput.trim().split('\n').filter(Boolean);
-    const allChangedFiles = [...new Set([...modifiedFiles, ...untrackedFiles])];
+    const allChangedFiles = [...new Set([...modifiedFiles, ...untrackedFiles])].filter(generated);
     
     return {
       valid: allChangedFiles.length === 0,
@@ -49,7 +56,8 @@ export function checkUncommittedChanges(generatedDir: string = 'packages/'): Dri
  */
 export async function runDriftCheck(options: CheckOptions): Promise<CheckResult> {
   const start = Date.now();
-  const generatedDir = options.generatedDir || 'packages/';
+  const rule = generatedFilesRule(options.guardrailsPath);
+  const generatedDir = resolveManifestDir(options.generatedDir, rule, options.configPath);
 
   try {
     // `git diff` reports nothing for a path that does not exist, which would
@@ -63,7 +71,7 @@ export async function runDriftCheck(options: CheckOptions): Promise<CheckResult>
       };
     }
 
-    const result = checkUncommittedChanges(generatedDir);
+    const result = checkUncommittedChanges(generatedDir, rule);
     
     if (result.error) {
       return {
@@ -79,7 +87,7 @@ export async function runDriftCheck(options: CheckOptions): Promise<CheckResult>
         name: 'drift',
         status: 'pass',
         duration: Date.now() - start,
-        message: `No uncommitted changes in ${generatedDir}`,
+        message: `No uncommitted changes to generated files in ${generatedDir}`,
       };
     }
     

@@ -3,7 +3,7 @@ cli_contracts: 0.1.0
 
 info:
   title: micro-contracts CLI
-  version: 0.18.18
+  version: 0.19.0
   description: >-
     Contract-first OpenAPI toolchain for TypeScript Web/API systems.
     Generates contract packages, server routes, and frontend clients
@@ -54,9 +54,10 @@ command_sets:
       generate:
         summary: Generate code from OpenAPI specifications.
         description: >-
-          Loads the multi-module config, applies overlays, runs Spectral
-          linting (unless skipped), and generates contract packages, server
-          routes, frontend clients, and documentation from OpenAPI specs.
+          Loads the multi-module config, lints each spec with the rules of
+          the lint command (unless skipped), applies overlays, and generates
+          contract packages, server routes, frontend clients, and
+          documentation from OpenAPI specs.
           Supports input-hash caching to skip unnecessary regeneration.
         usage:
           - micro-contracts generate
@@ -117,7 +118,7 @@ command_sets:
               default: false
 
           - name: skip-lint
-            description: Skip Spectral linting before generation.
+            description: Skip linting (the rules of the lint command) before generation.
             schema:
               type: boolean
               default: false
@@ -131,11 +132,14 @@ command_sets:
               default: true
 
           - name: manifest-dir
-            description: Directory for manifest output.
+            description: >-
+              Directory for manifest output. Defaults to the deepest directory
+              holding every location the config generates to (contract,
+              published contract and outputs), so that the manifest can record
+              each output.
             value_name: path
             schema:
               type: string
-              default: packages/
 
           - name: force
             description: Bypass input hash cache and always regenerate.
@@ -187,8 +191,10 @@ command_sets:
       lint:
         summary: Lint OpenAPI specification.
         description: >-
-          Validates an OpenAPI specification for x-micro-contracts extension
-          violations and structural issues using Spectral rules.
+          Validates an OpenAPI specification against micro-contracts' own
+          rules: the x-micro-contracts-* extensions every operation needs,
+          screen spec consistency, and what a published endpoint may reach
+          (x-private, x-micro-contracts-non-exportable).
         usage:
           - micro-contracts lint spec/core/openapi/core.yaml
           - micro-contracts lint spec/core/openapi/core.yaml --strict
@@ -235,7 +241,7 @@ command_sets:
         summary: Initialize a new module structure with starter templates.
         description: >-
           Creates the directory structure, starter Handlebars templates,
-          shared schemas, Spectral rules, and optional config file for
+          shared schemas, Redocly lint rules, and optional config file for
           a new module. Can also process an existing OpenAPI spec to
           auto-add x-micro-contracts extensions.
         usage:
@@ -388,11 +394,13 @@ command_sets:
 
           - name: generated-dir
             aliases: [d]
-            description: Path to generated files directory.
+            description: >-
+              Directory holding the manifest of generated files. Defaults to
+              the directory generate writes the manifest to: the deepest
+              directory holding every location the config generates to.
             value_name: path
             schema:
               type: string
-              default: packages/
 
           - name: changed-files
             description: Path to file containing list of changed files (for CI).
@@ -499,11 +507,13 @@ command_sets:
 
           - name: generated-dir
             aliases: [d]
-            description: Path to generated files directory.
+            description: >-
+              Directory holding the manifest of generated files. Defaults to
+              the directory generate writes the manifest to: the deepest
+              directory holding every location the config generates to.
             value_name: path
             schema:
               type: string
-              default: packages/
 
           - name: manifest
             description: >-
@@ -514,7 +524,7 @@ command_sets:
               default: true
 
           - name: skip-lint
-            description: Skip Spectral linting before generation.
+            description: Skip linting (the rules of the lint command) before generation.
             schema:
               type: boolean
               default: false
@@ -769,11 +779,13 @@ command_sets:
         options:
           - name: dir
             aliases: [d]
-            description: Directory to scan.
+            description: >-
+              Directory to scan. Defaults to the directory generate writes the
+              manifest to: the deepest directory holding every location the
+              config generates to.
             value_name: path
             schema:
               type: string
-              default: packages/
 
           - name: verify
             description: Verify existing manifest instead of generating.

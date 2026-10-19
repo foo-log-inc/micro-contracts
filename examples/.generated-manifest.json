@@ -1,0 +1,167 @@
+{
+  "version": "1.0",
+  "generatorVersion": "0.19.0",
+  "files": {
+    "frontend/src/billing/api.generated.ts": {
+      "sha256": "8e3d5b75d6a30a1ea19f0c57135cb1c4913c8c344ae9ad83d9095db2e5bc4fea"
+    },
+    "frontend/src/core/api.generated.ts": {
+      "sha256": "51bf79523f6c621d4e78f871713c9843dfa1773f2922201c324d64aa83123c93"
+    },
+    "packages/contract-published/billing/docs/api-reference.html": {
+      "sha256": "5b69e88fc9f60578261a8231132678550a40a70eb52dfcc611f48937f448ca44"
+    },
+    "packages/contract-published/billing/docs/openapi.generated.yaml": {
+      "sha256": "753099378b2ee048f65f06df5038990772c8eeb7511a4620bbb6e4792dea1430"
+    },
+    "packages/contract-published/billing/errors/index.ts": {
+      "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
+    },
+    "packages/contract-published/billing/index.ts": {
+      "sha256": "ce83a2e3675107487642e178a8678e354b44d66448e784367a1d4d6dd5ca288f"
+    },
+    "packages/contract-published/billing/schemas/index.ts": {
+      "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
+    },
+    "packages/contract-published/billing/schemas/types.ts": {
+      "sha256": "ea571835e95b7dce8599046781526339405e69461473f5b139879f958fe6afdb"
+    },
+    "packages/contract-published/billing/schemas/validators.ts": {
+      "sha256": "42b59fd00f514b575a95bf0be89b8799e2a2ba4931fbedbb18c68230f4682221"
+    },
+    "packages/contract-published/billing/services/BillingServiceApi.ts": {
+      "sha256": "4230d7a55e19a117a1c696c6790f14a6ff5f08898a682ff2543804decab5888f"
+    },
+    "packages/contract-published/billing/services/index.ts": {
+      "sha256": "339f4801675fbca93f1f23c9fa36d7cf593c0f7872752ec0ba9f768a311c6d96"
+    },
+    "packages/contract-published/core/docs/api-reference.html": {
+      "sha256": "0c6ffe8d09a47c1c31933cf1359ef712b631cb30c61466b889f65bc6a3f3f05d"
+    },
+    "packages/contract-published/core/docs/openapi.generated.yaml": {
+      "sha256": "d241689b02f9edc096bf45306fac4fd675fe7a2862ad573ed421d2958918f19a"
+    },
+    "packages/contract-published/core/errors/index.ts": {
+      "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
+    },
+    "packages/contract-published/core/index.ts": {
+      "sha256": "ce83a2e3675107487642e178a8678e354b44d66448e784367a1d4d6dd5ca288f"
+    },
+    "packages/contract-published/core/schemas/index.ts": {
+      "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
+    },
+    "packages/contract-published/core/schemas/types.ts": {
+      "sha256": "f1d8435e1fdb2f7689103489aaaba4025cf29f78b68ea71b4f991d176d78450b"
+    },
+    "packages/contract-published/core/schemas/validators.ts": {
+      "sha256": "cba4e921b85f7b8f8e13575517e3d44961c40746683cebfc67de345834701002"
+    },
+    "packages/contract-published/core/services/HealthServiceApi.ts": {
+      "sha256": "97fe8b49940b4f82dc9ea43d077cb479195b8ba070ebff2457f926ec77550b95"
+    },
+    "packages/contract-published/core/services/UserServiceApi.ts": {
+      "sha256": "2ba147e31059e2f1c4c89f3377cd9a77af3297da548f296bb826e48be9267097"
+    },
+    "packages/contract-published/core/services/index.ts": {
+      "sha256": "4d797ecb41f67e51989d35c5db5d5d7cbb8e31ce36fb3c7e90d1958d3c72f8b8"
+    },
+    "packages/contract/_shared/overlays/index.ts": {
+      "sha256": "d3d9aae22cb401e08c770350f3939fd877b33a6ba957460a2e660cab85a170fc"
+    },
+    "packages/contract/billing/deps/core.ts": {
+      "sha256": "b6ff5629ca18cee82c497927d78b04c538ae4ce30167cbf19527192a60eba42b"
+    },
+    "packages/contract/billing/deps/index.ts": {
+      "sha256": "1c5cf52aba4b6ab7e4f26b4c4c34bd10ce037d3948cd08620143e0118add49a7"
+    },
+    "packages/contract/billing/docs/api-reference.html": {
+      "sha256": "5b69e88fc9f60578261a8231132678550a40a70eb52dfcc611f48937f448ca44"
+    },
+    "packages/contract/billing/docs/openapi.generated.yaml": {
+      "sha256": "d5e6459facf8efc168c0a60138aecf50dfbf597d09638fcf3155d2e079a20fac"
+    },
+    "packages/contract/billing/errors/index.ts": {
+      "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
+    },
+    "packages/contract/billing/index.ts": {
+      "sha256": "87af27a53854e7096b630cab46d96371456ca98854e65d5aaf8d30d273296240"
+    },
+    "packages/contract/billing/overlays/index.ts": {
+      "sha256": "67623ebaa031c8a9abb0ad1065b6140654ea55fd55fb142b547bf5c4bfe389a2"
+    },
+    "packages/contract/billing/schemas/index.ts": {
+      "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
+    },
+    "packages/contract/billing/schemas/types.ts": {
+      "sha256": "ea571835e95b7dce8599046781526339405e69461473f5b139879f958fe6afdb"
+    },
+    "packages/contract/billing/schemas/validators.ts": {
+      "sha256": "42b59fd00f514b575a95bf0be89b8799e2a2ba4931fbedbb18c68230f4682221"
+    },
+    "packages/contract/billing/services/BillingServiceApi.ts": {
+      "sha256": "4230d7a55e19a117a1c696c6790f14a6ff5f08898a682ff2543804decab5888f"
+    },
+    "packages/contract/billing/services/index.ts": {
+      "sha256": "339f4801675fbca93f1f23c9fa36d7cf593c0f7872752ec0ba9f768a311c6d96"
+    },
+    "packages/contract/core/docs/api-reference.html": {
+      "sha256": "e26ecf17dc435dc504900e6529e46016447f9998dc2f13b600092169746d3dc3"
+    },
+    "packages/contract/core/docs/openapi.generated.yaml": {
+      "sha256": "a20e72d13d80c7294c882022891322257b70947e924fdb7eb7753d2e6cbcf30a"
+    },
+    "packages/contract/core/errors/index.ts": {
+      "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
+    },
+    "packages/contract/core/index.ts": {
+      "sha256": "87af27a53854e7096b630cab46d96371456ca98854e65d5aaf8d30d273296240"
+    },
+    "packages/contract/core/overlays/index.ts": {
+      "sha256": "53722276a69e657324a70dc451c51854c71ffd9168f4672fb43bf02c708a4a52"
+    },
+    "packages/contract/core/schemas/index.ts": {
+      "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
+    },
+    "packages/contract/core/schemas/types.ts": {
+      "sha256": "96c0219d24c79baaeff2b1260bb35c17aacb6f46c72816a76b9557f33b5aca93"
+    },
+    "packages/contract/core/schemas/validators.ts": {
+      "sha256": "782f5b28fd38785cd7e943aecd4154801f215779abd13fc23d0da1feb1025d65"
+    },
+    "packages/contract/core/services/AdminServiceApi.ts": {
+      "sha256": "78370d2d66333978d5151ced3698aa1ef70dc6eb468e873838e44e0401b3f18f"
+    },
+    "packages/contract/core/services/HealthServiceApi.ts": {
+      "sha256": "97fe8b49940b4f82dc9ea43d077cb479195b8ba070ebff2457f926ec77550b95"
+    },
+    "packages/contract/core/services/TenantServiceApi.ts": {
+      "sha256": "ed09d2013f4f46493d95535a32f807bc3c7468147ce0982bbc60370d6ae790dd"
+    },
+    "packages/contract/core/services/UserServiceApi.ts": {
+      "sha256": "e666f2cd336e80f9e5fcdd234ac083099f4f27d7aca1116d96dcc76be7f381ab"
+    },
+    "packages/contract/core/services/index.ts": {
+      "sha256": "c1055c73f3c3ed15da852848663d20684218a3077c6ef172b96d8a6cb7d303e3"
+    },
+    "packages/contract/package.json": {
+      "sha256": "242b1236df3e76160d7b57ff5a60e62457a53aea6ab52a8c1c98cce9445637b8"
+    },
+    "packages/contract/tsconfig.json": {
+      "sha256": "d791f51b36215aba3e7cf7c5f69fc4b9fd6d4f2cf515718fdc93589fa05e2608"
+    },
+    "server/src/billing/overlayAdapter.generated.ts": {
+      "sha256": "64b73a56a7404caedc869de6b6b1ffea3f3526b4e484b7d67be0ad6bed9d8e1f"
+    },
+    "server/src/billing/routes.generated.ts": {
+      "sha256": "101370e96cebce5e26b59902731c2cc12294d406850db44a4c6c04f5d6edb059"
+    },
+    "server/src/core/overlayAdapter.generated.ts": {
+      "sha256": "84479d865b663348fb8e95ca72c14a9273acf66989ee061ef7c18e01b64b4098"
+    },
+    "server/src/core/routes.generated.ts": {
+      "sha256": "559bc0672d2c8a1eefdfa8b7750fa5d04a9e46a00c87dfca7bac0f29db8a5bda"
+    }
+  },
+  "inputHash": "69d82681793c3cbb106b1f1312263b90ef40c2319ebcc5744776a0c99aa99ab2",
+  "updatedAt": "2026-10-19T13:16:25.169Z"
+}

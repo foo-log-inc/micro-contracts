@@ -158,7 +158,7 @@ npx micro-contracts init myScreens --screens
 ```
 project/
 ├── spec/                              # ✅ Human-edited (contract source of truth)
-│   ├── spectral.yaml                  #    Global lint rules
+│   ├── redocly.yaml                   #    Global lint rules (Redocly)
 │   ├── default/templates/             #    Handlebars templates (customizable)
 │   ├── _shared/
 │   │   ├── openapi/                   #    Shared schemas (ProblemDetails, etc.)
@@ -250,6 +250,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserListResponse'
 ```
+
+### References into Other Files
+
+A `$ref` may point into another file, relative to the file that holds it, when it points at a component — for example `'../../_shared/openapi/problem-details.yaml#/components/responses/NotFound'`, or a screen spec's ViewModel referencing `'../orders/openapi.yaml#/components/schemas/Order'`. Generation brings the component, and everything it references, into the module's own `components`: types, validators, routes and `openapi.generated.yaml` all use it under its own name. A reference into another file that points at anything other than a component, `#/components/<section>/<name>`, is an error, and so is a component brought in under a name the module already uses for a different definition.
 
 ### Module Dependencies
 
@@ -388,13 +392,23 @@ Generate code from OpenAPI specifications.
 | `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
 | `--skip-lint` | Skip linting before generation |
 | `--no-manifest` | Skip manifest generation |
-| `--manifest-dir <path>` | Directory for manifest (default: `packages/`) |
+| `--manifest-dir <path>` | Directory for manifest (default: the deepest directory holding every configured output) |
 | `--force` | Bypass input hash cache and always regenerate |
 | `--no-cache` | Run without reading or writing input hash cache |
 
 A run that generates a subset (`--output`, `--module`, or any `--*-only`) does not
 record the input hash, so the next full run regenerates rather than reporting no
 changes.
+
+The manifest (`.generated-manifest.json`) lives in the deepest directory holding every
+location the config generates to — the project root when outputs sit both in
+`packages/` and next to the server code — and records the files there that the
+`generated:` patterns of `micro-contracts.guardrails.yaml` match. A full run records the input hash
+only when the manifest records every file of every configured output, so an output
+outside that directory or outside the `generated:` patterns leaves the hash out and
+generate names the file that did. The cache skips a run only when the manifest
+carries the input hash and finds each recorded file intact; without the hash, every
+run regenerates.
 
 ### init \<module\>
 
@@ -424,6 +438,10 @@ would be dropped from every artifact, so they are errors (`MISSING_X_SERVICE`,
 (`screen: true`) operations are consumed via `TemplateContext.screens` and these rules
 do not apply.
 
+`<input>` is linted under the rules of the module in `micro-contracts.config.yaml` whose
+`openapi` it is — the rules `generate` applies to it — and as a service API spec when no
+module declares it.
+
 ### check
 
 Run guardrail checks.
@@ -436,7 +454,7 @@ Run guardrail checks.
 | `-v, --verbose` | Enable verbose output |
 | `--fix` | Auto-fix issues where possible |
 | `-g, --guardrails <path>` | Path to `micro-contracts.guardrails.yaml` |
-| `-d, --generated-dir <path>` | Path to generated files directory (default: `packages/`) |
+| `-d, --generated-dir <path>` | Directory holding the manifest (default: the one `generate` writes it to) |
 | `--changed-files <path>` | Path to file containing changed files (for CI) |
 | `--list` | List available checks |
 | `--list-gates` | List available gates |
@@ -452,7 +470,7 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--skip <checks>` | Skip specific checks (comma-separated) |
 | `--continue-on-error` | Continue running even if a step fails |
 | `-g, --guardrails <path>` | Path to `micro-contracts.guardrails.yaml` |
-| `-d, --generated-dir <path>` | Path to generated files directory (default: `packages/`) |
+| `-d, --generated-dir <path>` | Directory holding the manifest (default: the one `generate` writes it to) |
 | `--no-manifest` | Skip manifest generation |
 | `--skip-lint` | Skip linting before generation |
 | `--contracts-only` | Generate contract packages only |
@@ -465,6 +483,8 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 A run that generates a subset (`--output`, `--module`, or any `--*-only`) does not
 record the input hash, so the next full run regenerates rather than reporting no
 changes.
+
+The cache reads the same manifest as `generate`, under the same conditions.
 
 > See **[Enforceable Guardrails](docs/development-guardrails.md)** for gate details and CI configuration.
 
@@ -495,7 +515,7 @@ Generate or verify manifest for generated artifacts.
 
 | Option | Description |
 |--------|-------------|
-| `-d, --dir <path>` | Directory to scan (default: `packages/`) |
+| `-d, --dir <path>` | Directory to scan (default: the one `generate` writes the manifest to) |
 | `--verify` | Verify existing manifest |
 | `-o, --output <path>` | Output manifest path |
 
@@ -587,6 +607,44 @@ export class UserService implements UserServiceApi {
     return { users: [...], total: 100 };
   }
 }
+```
+
+### Validators
+
+`schemas/validators.ts` holds every schema as the JSON Schema Fastify validates requests and
+serializes responses with, plus the path, query and inline request body schemas of each
+operation (`<Service>_<method>PathParams`, `…QueryParams`, `…Body`). Every validation keyword
+of the contract is kept. Only what JSON Schema spells differently is translated (`$ref`,
+`nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` / `exclusiveMaximum`), and what never
+validates is left out: `x-*` extensions, the annotations `example`, `examples`, `xml`,
+`externalDocs` and `discriminator`, and `$id` / `$schema` (each schema is named by its
+component name).
+
+Fastify validates with Ajv on JSON Schema draft-07. A contract using the keywords JSON Schema
+2019-09 / 2020-12 added — `prefixItems`, `dependentRequired`, `dependentSchemas`,
+`minContains` / `maxContains`, `unevaluatedProperties` / `unevaluatedItems` — stops Fastify
+from starting (`strict mode: unknown keyword`). To use them, validate with Ajv on the 2020-12
+dialect, with the options Fastify validates with by default (add `ajv` and `ajv-formats` to
+your dependencies). A validator set this way does not read `fastify.addSchema`, so it is given
+the generated schemas itself; the generated routes still register them with Fastify, which
+serializes responses with them.
+
+```typescript
+import Fastify from 'fastify';
+import { Ajv2020 } from 'ajv/dist/2020.js';
+import ajvFormats from 'ajv-formats';
+import { allSchemas } from '@project/contract/core/schemas/index.js';
+
+// The options Fastify validates with by default, on the 2020-12 dialect.
+const ajv = new Ajv2020({ coerceTypes: 'array', useDefaults: true, removeAdditional: true, allErrors: false });
+ajvFormats.default(ajv);
+// A custom validator does not read fastify.addSchema: give it every module's schemas, once each.
+for (const schema of allSchemas) {
+  if (!ajv.getSchema(schema.$id)) ajv.addSchema(schema);
+}
+
+const fastify = Fastify();
+fastify.setValidatorCompiler(({ schema }) => ajv.compile(schema));
 ```
 
 ---
