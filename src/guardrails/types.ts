@@ -64,7 +64,7 @@ export interface CheckCommandConfig {
    * - {cwd} - current working directory
    * 
    * @example
-   * command: "npx @stoplight/spectral-cli lint {files} --ruleset spec/spectral.yaml"
+   * command: "npx @redocly/cli lint {files} --config spec/redocly.yaml"
    */
   command: string;
 

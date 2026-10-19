@@ -159,7 +159,7 @@ Files are categorized into three groups:
 | Category | Examples | Who can edit |
 |----------|----------|--------------|
 | `allowed` | `spec/**/*.yaml`, `server/src/**/services/**` | Anyone (AI or human) |
-| `protected` | `.github/**`, `spec/spectral.yaml`, `server/src/_shared/overlays/**` | Anyone, once a maintainer approves the pull request (see below) |
+| `protected` | `.github/**`, `spec/redocly.yaml`, `server/src/_shared/overlays/**` | Anyone, once a maintainer approves the pull request (see below) |
 | `generated` | `packages/**`, `*.generated.*` | Only via `generate` command |
 
 Patterns are evaluated in order and the last match wins, so a negation (`!pattern`)
@@ -167,7 +167,7 @@ must come after the pattern it narrows.
 
 Protected files include:
 - CI/workflow definitions (`.github/**`) — guardrail bypass prevention
-- Spectral lint rules (`spec/spectral.yaml`) — security rule tampering
+- Lint rules (`spec/redocly.yaml`, and any rules file or plugin it loads) — security rule tampering
 - Shared overlay implementations (`server/src/_shared/overlays/**`) — security logic
 - The guardrails config itself, under every name it is loaded as
   (`micro-contracts.guardrails.yaml`/`.yml`, and the legacy `guardrails.yaml`/`.yml`)
@@ -532,7 +532,7 @@ what makes it usable as an approval at all.
 
 | Path | Owner | Reason |
 |------|-------|--------|
-| `spec/spectral.yaml` | security/platform | Lint rules |
+| `spec/redocly.yaml` | security/platform | Lint rules |
 | `server/src/_shared/overlays/**` | security/platform | Security logic |
 | `micro-contracts.guardrails.yaml` | security/platform | Guardrail config |
 | `.github/**` | infra/maintainer | CI definitions |

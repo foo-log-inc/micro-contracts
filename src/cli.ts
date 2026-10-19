@@ -212,10 +212,10 @@ const handlers: CommandHandlers = {
       console.log(`Created: ${problemDetailsPath}`);
     }
 
-    const spectralPath = 'spec/spectral.yaml';
-    if (!fs.existsSync(spectralPath)) {
-      fs.writeFileSync(spectralPath, generateSpectralRules());
-      console.log(`Created: ${spectralPath}`);
+    const lintRulesPath = 'spec/redocly.yaml';
+    if (!fs.existsSync(lintRulesPath)) {
+      fs.writeFileSync(lintRulesPath, generateLintRules());
+      console.log(`Created: ${lintRulesPath}`);
     }
 
     if (opts.screens) {
@@ -1116,50 +1116,69 @@ components:
 `;
 }
 
-function generateSpectralRules(): string {
-  return `extends: ["spectral:oas"]
+/** The Redocly lint rules `init` writes to spec/redocly.yaml. */
+function generateLintRules(): string {
+  return `# Redocly lint rules for micro-contracts specs
+#
+# Run with: npx @redocly/cli lint <spec files> --config spec/redocly.yaml
+# A rule at \`error\` fails the lint; a rule at \`warn\` is reported only.
+# The rules apply to OpenAPI 3.0 and 3.1 documents alike.
 
-rules:
-  operation-service:
-    description: "Operations must have x-micro-contracts-service"
+extends: []
+
+oas3_0Rules: &openapi
+  # OpenAPI structure
+  struct: error
+  no-unresolved-refs: error
+  operation-operationId-unique: error
+  path-parameters-defined: error
+  operation-parameters-unique: error
+  no-invalid-media-type-examples: error
+  no-invalid-schema-examples: error
+
+  # Every operation names the service and method it is generated into
+  rule/operation-service:
+    message: Operations must have x-micro-contracts-service
     severity: error
-    given: "$.paths[*][get,post,put,patch,delete]"
-    then:
-      field: x-micro-contracts-service
-      function: truthy
+    subject:
+      type: Operation
+      property: x-micro-contracts-service
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      defined: true
+      nonEmpty: true
 
-  operation-method:
-    description: "Operations must have x-micro-contracts-method"
+  rule/operation-method:
+    message: Operations must have x-micro-contracts-method
     severity: error
-    given: "$.paths[*][get,post,put,patch,delete]"
-    then:
-      field: x-micro-contracts-method
-      function: truthy
+    subject:
+      type: Operation
+      property: x-micro-contracts-method
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      defined: true
+      nonEmpty: true
 
-  operation-error-responses:
-    description: "Operations should have 5XX or default error response"
+  # Operations should answer a server error
+  rule/operation-error-responses:
+    message: Operations should have a 5XX or default error response
     severity: warn
-    given: "$.paths[*][get,post,put,patch,delete].responses"
-    then:
-      function: schema
-      functionOptions:
-        schema:
-          anyOf:
-            - required: ["500"]
-            - required: ["5XX"]
-            - required: ["default"]
+    subject:
+      type: Responses
+    assertions:
+      requireAny: ['500', '5XX', default]
 
-  canonical-extension-prefix:
-    description: "Use canonical x-micro-contracts-* extensions"
+  # The x-micro-contracts-* names, not their short forms
+  rule/canonical-extension-prefix:
+    message: Use x-micro-contracts-* extensions (not x-service, x-method, x-public)
     severity: warn
-    given: "$.paths[*][get,post,put,patch,delete]"
-    then:
-      - field: x-service
-        function: falsy
-      - field: x-method
-        function: falsy
-      - field: x-public
-        function: falsy
+    subject:
+      type: Operation
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      disallowed: [x-service, x-method, x-public]
+
+oas3_1Rules: *openapi
 `;
 }
 

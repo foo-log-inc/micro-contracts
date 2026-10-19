@@ -621,7 +621,7 @@ const CONFIG_KEYS: KeySpec = {
 /** Keys removed from the config format, with the replacement to use instead. */
 const REMOVED_KEYS: Record<string, string> = {
   'defaults.docs': 'documentation generation was removed; run @redocly/cli against the generated spec',
-  'defaults.spectral': 'declare a Spectral command under checks in guardrails.yaml',
+  'defaults.spectral': 'declare a lint command (e.g. npx @redocly/cli lint {files}) under checks in guardrails.yaml',
   'defaults.sharedModuleName': 'never had an effect',
   'spec': 'never had an effect; module spec paths come from modules.<name>.openapi',
   'defaults.templates': 'use defaults.server.template / defaults.frontend.template / defaults.contract.serviceTemplate',

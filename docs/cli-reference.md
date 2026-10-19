@@ -158,7 +158,7 @@ x-agent:
 
 Initialize a new module structure with starter templates.
 
-Creates the directory structure, starter Handlebars templates, shared schemas, Spectral rules, and optional config file for a new module. Can also process an existing OpenAPI spec to auto-add x-micro-contracts extensions.
+Creates the directory structure, starter Handlebars templates, shared schemas, Redocly lint rules, and optional config file for a new module. Can also process an existing OpenAPI spec to auto-add x-micro-contracts extensions.
 
 **Usage:**
 

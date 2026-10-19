@@ -158,7 +158,7 @@ npx micro-contracts init myScreens --screens
 ```
 project/
 ├── spec/                              # ✅ Human-edited (contract source of truth)
-│   ├── spectral.yaml                  #    Global lint rules
+│   ├── redocly.yaml                   #    Global lint rules (Redocly)
 │   ├── default/templates/             #    Handlebars templates (customizable)
 │   ├── _shared/
 │   │   ├── openapi/                   #    Shared schemas (ProblemDetails, etc.)

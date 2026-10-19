@@ -57,6 +57,7 @@ export async function findOpenAPISpecs(_options: CheckOptions): Promise<string[]
         '**/node_modules/**',
         '**/*.overlay.yaml',
         '**/spectral.yaml',
+        '**/redocly.yaml',
         '**/.generated-manifest.json',
         '**/_shared/**',  // Exclude shared schemas
       ],

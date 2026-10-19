@@ -108,7 +108,7 @@ describe('verifyAllowlist', () => {
       'docs/**/*.md',
     ],
     protected: [
-      'spec/spectral.yaml',
+      'spec/redocly.yaml',
       'guardrails.yaml',
       '.github/**',
     ],
