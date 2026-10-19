@@ -1,0 +1,207 @@
+# Redocly Lint Rules for micro-contracts
+# Global rules applied to all modules
+#
+# Run with: redocly lint <spec files> --config spec/redocly.yaml
+# A rule at `error` fails the lint; a rule at `warn` is reported only.
+# The OpenAPI rules apply to OpenAPI 3.0 and 3.1 documents alike
+# (`oas3_1Rules` reuses the `oas3_0Rules` list and adds the webhook rules).
+
+extends: []
+
+plugins:
+  - ./redocly-plugin.js
+
+oas3_0Rules: &openapi
+  # ==========================================================================
+  # OpenAPI structure
+  # ==========================================================================
+
+  struct: error
+  no-unresolved-refs: error
+  micro-contracts/no-ref-siblings: error
+  operation-operationId-unique: error
+  path-parameters-defined: error
+  operation-parameters-unique: error
+  rule/path-params-required:
+    message: 'Path parameters must be marked "required: true"'
+    severity: error
+    subject:
+      type: Parameter
+      property: required
+    where:
+      - subject:
+          type: Parameter
+          property: in
+        assertions:
+          const: path
+    assertions:
+      defined: true
+      const: true
+  no-duplicated-tag-names: error
+  rule/array-items:
+    message: 'Schemas with "type: array" require a sibling "items" field'
+    severity: error
+    subject:
+      type: Schema
+    where:
+      - subject:
+          type: Schema
+          property: type
+        assertions:
+          const: array
+    assertions:
+      required: [items]
+  no-invalid-media-type-examples: error
+  no-invalid-schema-examples: error
+  no-undefined-server-variable: error
+  no-server-variables-empty-enum: error
+
+  # ==========================================================================
+  # OpenAPI conventions (reported, not failing)
+  # ==========================================================================
+
+  micro-contracts/operation-success-response: warn
+  operation-tag-defined: warn
+  no-duplicated-enum-values: warn
+  info-contact: warn
+  rule/info-description:
+    message: OpenAPI object info `description` must be present and non-empty string
+    severity: warn
+    subject:
+      type: Info
+      property: description
+    assertions:
+      defined: true
+      nonEmpty: true
+  rule/no-eval-in-markdown:
+    message: Markdown descriptions must not have "eval("
+    severity: warn
+    subject:
+      type: any
+      property: [description, title]
+    assertions:
+      notPattern: /eval\(/
+  rule/no-script-tags-in-markdown:
+    message: Markdown descriptions must not have "<script>" tags
+    severity: warn
+    subject:
+      type: any
+      property: [description, title]
+    assertions:
+      notPattern: /<script/
+  operation-description: warn
+  operation-operationId: warn
+  operation-operationId-url-safe: warn
+  rule/operation-tags:
+    message: Operation must have non-empty "tags" array
+    severity: warn
+    subject:
+      type: Operation
+      property: tags
+    assertions:
+      defined: true
+      nonEmpty: true
+  path-declaration-must-exist: warn
+  no-path-trailing-slash: warn
+  path-not-include-query: warn
+  no-enum-type-mismatch: warn
+  no-empty-servers: warn
+  no-example-value-and-externalValue: warn
+  micro-contracts/security-defined: warn
+  no-server-trailing-slash: warn
+  no-unused-components: warn
+  rule/callbacks-in-callbacks:
+    message: Callbacks should not be defined within a callback
+    severity: warn
+    subject:
+      type: Operation
+      property: callbacks
+    where:
+      - subject:
+          type: Callback
+        assertions:
+          defined: true
+    assertions:
+      defined: false
+
+  # ==========================================================================
+  # micro-contracts specific rules
+  # ==========================================================================
+
+  # Require x-micro-contracts-service on all operations
+  rule/operation-service:
+    message: Operations must have x-micro-contracts-service
+    severity: error
+    subject:
+      type: Operation
+      property: x-micro-contracts-service
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      defined: true
+      nonEmpty: true
+
+  # Require x-micro-contracts-method on all operations
+  rule/operation-method:
+    message: Operations must have x-micro-contracts-method
+    severity: error
+    subject:
+      type: Operation
+      property: x-micro-contracts-method
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      defined: true
+      nonEmpty: true
+
+  # Enforce canonical extension prefix
+  rule/canonical-extension-prefix:
+    message: Use x-micro-contracts-* prefix (not x-service, x-method, etc.)
+    severity: error
+    subject:
+      type: Operation
+      filterInParentKeys: [get, post, put, patch, delete]
+    assertions:
+      disallowed: [x-service, x-method, x-public, x-private]
+
+oas3_1Rules:
+  <<: *openapi
+  rule/servers-in-webhook:
+    message: Servers should not be defined in a webhook
+    severity: warn
+    subject:
+      type: Operation
+      property: servers
+    where:
+      - subject:
+          type: WebhooksMap
+        assertions:
+          defined: true
+    assertions:
+      defined: false
+  rule/callbacks-in-webhook:
+    message: Callbacks should not be defined in a webhook
+    severity: warn
+    subject:
+      type: Operation
+      property: callbacks
+    where:
+      - subject:
+          type: WebhooksMap
+        assertions:
+          defined: true
+    assertions:
+      defined: false
+
+# ==========================================================================
+# Overlay target rules
+# ==========================================================================
+
+overlay1Rules:
+  # Overlay targets must be analyzable
+  rule/overlay-analyzable-target:
+    message: Overlay targets must be analyzable for Extension IF generation
+    severity: error
+    subject:
+      type: Action
+      property: target
+    assertions:
+      pattern: "/^\\$\\.paths\\[\\*\\]\\[\\*\\]\\[\\?\\(@\\.(x-[a-z-]+)(\\s+contains\\s+'[^']+')?\\)\\]$/"

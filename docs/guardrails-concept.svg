@@ -96,7 +96,7 @@
   <text x="285" y="352" text-anchor="middle" fill="#1e40af" font-size="13" font-weight="600">OpenAPI Spec Validation</text>
   
   <rect x="100" y="362" width="200" height="24" rx="4" fill="#dc2626"/>
-  <text x="200" y="378" text-anchor="middle" fill="white" font-size="9" font-weight="600">Spec Lint (Spectral)</text>
+  <text x="200" y="378" text-anchor="middle" fill="white" font-size="9" font-weight="600">Spec Lint (Redocly)</text>
   
   <rect x="320" y="362" width="180" height="24" rx="4" fill="#f59e0b"/>
   <text x="410" y="378" text-anchor="middle" fill="white" font-size="9" font-weight="600">Breaking Changes (oasdiff)</text>
@@ -133,7 +133,7 @@
   <text x="430" y="558" text-anchor="middle" fill="white" font-size="9" font-weight="600">Package Typecheck (tsc)</text>
   
   <rect x="60" y="577" width="180" height="24" rx="4" fill="#dc2626"/>
-  <text x="150" y="593" text-anchor="middle" fill="white" font-size="9" font-weight="600">Project Rules (Spectral)</text>
+  <text x="150" y="593" text-anchor="middle" fill="white" font-size="9" font-weight="600">Project Rules (Redocly)</text>
   
   <rect x="250" y="577" width="250" height="24" rx="4" fill="#dc2626"/>
   <text x="375" y="593" text-anchor="middle" fill="white" font-size="9" font-weight="600">Published Breaking Changes (oasdiff)</text>
