@@ -609,6 +609,44 @@ export class UserService implements UserServiceApi {
 }
 ```
 
+### Validators
+
+`schemas/validators.ts` holds every schema as the JSON Schema Fastify validates requests and
+serializes responses with, plus the path, query and inline request body schemas of each
+operation (`<Service>_<method>PathParams`, `…QueryParams`, `…Body`). Every validation keyword
+of the contract is kept. Only what JSON Schema spells differently is translated (`$ref`,
+`nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` / `exclusiveMaximum`), and what never
+validates is left out: `x-*` extensions, the annotations `example`, `examples`, `xml`,
+`externalDocs` and `discriminator`, and `$id` / `$schema` (each schema is named by its
+component name).
+
+Fastify validates with Ajv on JSON Schema draft-07. A contract using the keywords JSON Schema
+2019-09 / 2020-12 added — `prefixItems`, `dependentRequired`, `dependentSchemas`,
+`minContains` / `maxContains`, `unevaluatedProperties` / `unevaluatedItems` — stops Fastify
+from starting (`strict mode: unknown keyword`). To use them, validate with Ajv on the 2020-12
+dialect, with the options Fastify validates with by default (add `ajv` and `ajv-formats` to
+your dependencies). A validator set this way does not read `fastify.addSchema`, so it is given
+the generated schemas itself; the generated routes still register them with Fastify, which
+serializes responses with them.
+
+```typescript
+import Fastify from 'fastify';
+import { Ajv2020 } from 'ajv/dist/2020.js';
+import ajvFormats from 'ajv-formats';
+import { allSchemas } from '@project/contract/core/schemas/index.js';
+
+// The options Fastify validates with by default, on the 2020-12 dialect.
+const ajv = new Ajv2020({ coerceTypes: 'array', useDefaults: true, removeAdditional: true, allErrors: false });
+ajvFormats.default(ajv);
+// A custom validator does not read fastify.addSchema: give it every module's schemas, once each.
+for (const schema of allSchemas) {
+  if (!ajv.getSchema(schema.$id)) ajv.addSchema(schema);
+}
+
+const fastify = Fastify();
+fastify.setValidatorCompiler(({ schema }) => ajv.compile(schema));
+```
+
 ---
 
 ## Related Documentation
