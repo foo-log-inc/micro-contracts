@@ -401,6 +401,47 @@ generated:
       expect(runCli('generate --config conf/real.yaml').stdout).toContain('No input changes detected');
     });
 
+    it('generate --no-manifest writes no manifest, and --no-cache neither reads nor writes the cache', () => {
+      createMinimalConfig();
+      createMinimalSpec();
+      createGuardrailsConfig();
+      const manifestPath = path.join(tempDir, 'packages/.generated-manifest.json');
+
+      const noManifest = runCli('generate --no-manifest');
+      expect(noManifest.stdout).not.toMatch(/unknown option/);
+      expect(noManifest.exitCode).toBe(0);
+      expect(fs.existsSync(manifestPath)).toBe(false);
+
+      expect(runCli('generate').exitCode).toBe(0);
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeDefined();
+
+      const noCache = runCli('generate --no-cache');
+      expect(noCache.stdout).not.toMatch(/unknown option/);
+      expect(noCache.exitCode).toBe(0);
+      expect(noCache.stdout).not.toContain('No input changes detected');
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeUndefined();
+    });
+
+    it('pipeline --no-manifest writes no manifest, and --no-cache neither reads nor writes the cache', () => {
+      createMinimalConfig();
+      createMinimalSpec();
+      createGuardrailsConfig();
+      const manifestPath = path.join(tempDir, 'packages/.generated-manifest.json');
+
+      const noManifest = runCli('pipeline --no-manifest --skip drift,manifest');
+      expect(noManifest.stdout).not.toMatch(/unknown option/);
+      expect(noManifest.stdout).toMatch(/Generate\s+PASS/);
+      expect(fs.existsSync(manifestPath)).toBe(false);
+
+      runCli('pipeline --skip drift,manifest');
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeDefined();
+
+      const noCache = runCli('pipeline --no-cache --skip drift,manifest');
+      expect(noCache.stdout).not.toMatch(/unknown option/);
+      expect(noCache.stdout).toMatch(/Generate\s+PASS/);
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeUndefined();
+    });
+
     it('does not call a pipeline that ran nothing successful', () => {
       // #77 fixed this verdict for `check`; the pipeline printed its own.
       createGuardrailsConfig();

@@ -69,10 +69,10 @@ micro-contracts generate --force
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
-| `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable. |
+| `--manifest`, `--no-manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable. |
 | `--manifest-dir` |  | No |  | Directory for manifest output. Defaults to the deepest directory holding every location the config generates to (contract, published contract and outputs), so that the manifest can record each output. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
-| `--cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
+| `--cache`, `--no-cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
 
 #### Exit Codes
 
@@ -320,13 +320,13 @@ micro-contracts pipeline --contracts-only --skip-lint
 | `--continue-on-error` |  | No | `false` | Continue running even if a step fails. |
 | `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
 | `--generated-dir` | -d | No |  | Directory holding the manifest of generated files. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to. |
-| `--manifest` |  | No | `true` | Generate manifest after generation. Enabled by default. Use --no-manifest to disable. |
+| `--manifest`, `--no-manifest` |  | No | `true` | Generate manifest after generation. Enabled by default. Use --no-manifest to disable. |
 | `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
-| `--cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
+| `--cache`, `--no-cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
 
 #### Exit Codes
 
