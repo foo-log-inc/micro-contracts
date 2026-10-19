@@ -12,6 +12,7 @@ import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefini
 import { operationKey } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
 import { isReference, getRefName, resolveOperation } from '../types.js';
+import { operationTypeNames } from './typeGenerator.js';
 
 // =============================================================================
 // Types
@@ -459,14 +460,11 @@ function extractRoutes(
         .filter(p => p.in === 'path')
         .map(p => ({ name: p.name, required: true }));
 
-      // Extract request body
+      // Extract request body, under the name types.ts and validators.ts give it
       let requestBody: RouteContext['requestBody'];
-      const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
-      if (resolved.requestBody && bodySchema) {
-        const schemaName = isReference(bodySchema)
-          ? getRefName(bodySchema.$ref)
-          : operationId + 'Body';
-        requestBody = { schemaName, required: resolved.requestBody.required || false };
+      const { body: bodyType } = operationTypeNames(operation, resolved);
+      if (resolved.requestBody && bodyType) {
+        requestBody = { schemaName: bodyType, required: resolved.requestBody.required || false };
       }
 
       // Extract responses

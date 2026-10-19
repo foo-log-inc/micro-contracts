@@ -1485,6 +1485,32 @@ components:
 
     const read = (relative: string) => fs.readFileSync(path.join(tmpDir, relative), 'utf-8');
 
+    /**
+     * Generate with the starter Fastify route template and register the routes
+     * on a Fastify instance whose services return the input they receive.
+     */
+    async function serveWithStarterRoutes(
+      config: MultiModuleConfig,
+      services: Record<string, Record<string, unknown>>,
+    ) {
+      fs.writeFileSync(path.join(tmpDir, 'fastify-routes.hbs'), getStarterTemplates()['fastify-routes.hbs']);
+      config.defaults!.outputs = {
+        'server-routes': {
+          output: path.join(tmpDir, 'server/routes.generated.ts'),
+          template: path.join(tmpDir, 'fastify-routes.hbs'),
+          config: { contractPackage: '../contracts/{module}', servicesPath: 'fastify.services.{module}' },
+        },
+      };
+
+      await generate(config);
+
+      const { registerRoutes } = await import(path.join(tmpDir, 'server/routes.generated.ts'));
+      const app = Fastify();
+      app.decorate('services', { core: services });
+      await registerRoutes(app);
+      return app;
+    }
+
     it('takes parameters from components.parameters and from the path item', async () => {
       const { specPath, config } = setupSpec(`
 openapi: 3.0.3
@@ -1637,21 +1663,9 @@ paths:
       responses:
         '200': { description: ok }
 `);
-      fs.writeFileSync(path.join(tmpDir, 'fastify-routes.hbs'), getStarterTemplates()['fastify-routes.hbs']);
-      config.defaults!.outputs = {
-        'server-routes': {
-          output: path.join(tmpDir, 'server/routes.generated.ts'),
-          template: path.join(tmpDir, 'fastify-routes.hbs'),
-          config: { contractPackage: '../contracts/{module}', servicesPath: 'fastify.services.{module}' },
-        },
-      };
-
-      await generate(config);
-
-      const { registerRoutes } = await import(path.join(tmpDir, 'server/routes.generated.ts'));
-      const app = Fastify();
-      app.decorate('services', { core: { patient: { getPatient: async (input: unknown) => input } } });
-      await registerRoutes(app);
+      const app = await serveWithStarterRoutes(config, {
+        patient: { getPatient: async (input: unknown) => input },
+      });
 
       try {
         const invalid = await app.inject({ method: 'GET', url: '/patients/p1?phrPeriod=X' });
@@ -1660,6 +1674,44 @@ paths:
         const valid = await app.inject({ method: 'GET', url: '/patients/p1?phrPeriod=1W' });
         expect(valid.statusCode).toBe(200);
         expect(valid.json()).toEqual({ patientId: 'p1', phrPeriod: '1W' });
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('validates an inline request body (starter Fastify routes)', async () => {
+      const { config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qty]
+              properties:
+                qty: { type: integer }
+      responses:
+        '201': { description: created }
+`);
+      const app = await serveWithStarterRoutes(config, {
+        order: { createOrder: async (input: unknown) => input },
+      });
+
+      try {
+        const invalid = await app.inject({ method: 'POST', url: '/orders', payload: { qty: 'many' } });
+        expect(invalid.statusCode).toBe(400);
+
+        const valid = await app.inject({ method: 'POST', url: '/orders', payload: { qty: 2 } });
+        expect(valid.statusCode).toBe(200);
+        expect(valid.json()).toEqual({ data: { qty: 2 } });
       } finally {
         await app.close();
       }

@@ -33,12 +33,12 @@ export function generateSchemas(spec: OpenAPISpec): string {
     }
   }
 
-  // Generate query/path parameter schemas from paths
-  const paramSchemas = parameterSchemas(spec);
-  if (paramSchemas.length > 0) {
-    lines.push('// Parameter schemas');
-    for (const { name, params } of paramSchemas) {
-      lines.push(generateParamsSchema(name, params, spec));
+  // Generate the parameter and inline request body schemas of operations
+  const opSchemas = operationSchemas(spec);
+  if (opSchemas.length > 0) {
+    lines.push('// Operation parameter and request body schemas');
+    for (const { name, schema } of opSchemas) {
+      lines.push(generateSchemaExport(name, schema, spec));
       lines.push('');
     }
   }
@@ -54,7 +54,7 @@ export function generateSchemas(spec: OpenAPISpec): string {
     }
   }
 
-  for (const { name } of paramSchemas) {
+  for (const { name } of opSchemas) {
     lines.push(`  ${name},`);
   }
 
@@ -160,15 +160,22 @@ function convertSchemaValue(
 }
 
 /**
- * The parameter schemas of every operation: `<base>PathParams` and
- * `<base>QueryParams`, one per request location, which is how Fastify
- * validates them (`schema.params` and `schema.querystring`). A single schema
- * holding both validates neither location: its required path parameters would
- * be demanded of the query string.
+ * The schemas operations need beyond components.schemas:
+ *
+ * - `<base>PathParams` and `<base>QueryParams`, one per request location,
+ *   which is how Fastify validates them (`schema.params` and
+ *   `schema.querystring`). A single schema holding both validates neither
+ *   location: its required path parameters would be demanded of the query.
+ * - an inline request body, under the name types.ts gives it.
  */
-function parameterSchemas(spec: OpenAPISpec): Array<{ name: string; params: ParameterObject[] }> {
-  const schemas: Array<{ name: string; params: ParameterObject[] }> = [];
+function operationSchemas(spec: OpenAPISpec): Array<{ name: string; schema: SchemaObject }> {
+  const schemas: Array<{ name: string; schema: SchemaObject }> = [];
   const names = new Set<string>();
+  const add = (name: string, schema: SchemaObject) => {
+    if (names.has(name)) return;
+    names.add(name);
+    schemas.push({ name, schema });
+  };
 
   for (const [apiPath, pathItem] of Object.entries(spec.paths)) {
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
@@ -176,15 +183,18 @@ function parameterSchemas(spec: OpenAPISpec): Array<{ name: string; params: Para
       if (!operation) continue;
 
       const resolved = resolveOperation(spec, apiPath, method);
-      const { base } = operationTypeNames(operation, resolved);
+      const { base, body } = operationTypeNames(operation, resolved);
 
       for (const [location, suffix] of [['path', 'PathParams'], ['query', 'QueryParams']] as const) {
         const params = resolved.parameters.filter(p => p.in === location);
-        const name = `${base}${suffix}`;
-        if (params.length > 0 && !names.has(name)) {
-          names.add(name);
-          schemas.push({ name, params });
+        if (params.length > 0) {
+          add(`${base}${suffix}`, parametersSchema(params));
         }
+      }
+
+      const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
+      if (body && bodySchema && !isReference(bodySchema)) {
+        add(body, bodySchema);
       }
     }
   }
@@ -192,44 +202,12 @@ function parameterSchemas(spec: OpenAPISpec): Array<{ name: string; params: Para
   return schemas;
 }
 
-/**
- * Generate parameter schema
- */
-function generateParamsSchema(
-  name: string,
-  params: ParameterObject[],
-  spec: OpenAPISpec
-): string {
-  const schema: Record<string, unknown> = {
-    $id: name,
+/** The object schema the parameters of one request location form. */
+function parametersSchema(params: ParameterObject[]): SchemaObject {
+  const required = params.filter(p => p.required).map(p => p.name);
+  return {
     type: 'object',
-    properties: {},
-    required: [] as string[],
+    properties: Object.fromEntries(params.map(p => [p.name, p.schema ?? { type: 'string' }])),
+    ...(required.length > 0 ? { required } : {}),
   };
-
-  for (const param of params) {
-    if (param.schema) {
-      (schema.properties as Record<string, unknown>)[param.name] = 
-        convertSchemaValue(param.schema, spec);
-    } else {
-      (schema.properties as Record<string, unknown>)[param.name] = { type: 'string' };
-    }
-    
-    if (param.required) {
-      (schema.required as string[]).push(param.name);
-    }
-  }
-
-  // Remove empty required array
-  if ((schema.required as string[]).length === 0) {
-    delete schema.required;
-  }
-
-  const schemaStr = JSON.stringify(schema, null, 2)
-    .split('\n')
-    .map((line, i) => i === 0 ? line : '  ' + line)
-    .join('\n');
-
-  return `export const ${name} = ${schemaStr} as const;`;
 }
-
