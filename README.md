@@ -401,9 +401,12 @@ record the input hash, so the next full run regenerates rather than reporting no
 changes.
 
 The manifest records the files in its directory that the `generated:` patterns of
-`micro-contracts.guardrails.yaml` match. The cache skips a run only when every
-configured output lies in that directory and the manifest finds each recorded file
-intact; while any output lies elsewhere, every run regenerates.
+`micro-contracts.guardrails.yaml` match. A full run records the input hash
+only when the manifest records every file of every configured output, so an output
+outside that directory or outside the `generated:` patterns leaves the hash out and
+generate names the file that did. The cache skips a run only when the manifest
+carries the input hash and finds each recorded file intact; without the hash, every
+run regenerates.
 
 ### init \<module\>
 
