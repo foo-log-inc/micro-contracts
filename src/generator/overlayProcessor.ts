@@ -101,13 +101,11 @@ export interface OverlayConfig {
  * @param spec - Source OpenAPI spec
  * @param overlayConfig - Overlay configuration
  * @param basePath - Base path for resolving overlay file paths
- * @param _specPath - Not read: an overlay's references resolve against the overlay file
  */
 export function processOverlays(
   spec: OpenAPISpec,
   overlayConfig: OverlayConfig,
-  basePath: string = process.cwd(),
-  _specPath?: string
+  basePath: string = process.cwd()
 ): OverlayResult {
   const result: OverlayResult = {
     spec: JSON.parse(JSON.stringify(spec)),  // Deep clone
