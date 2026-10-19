@@ -19,8 +19,16 @@ import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generate
 {{/if}}
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
+  // A component referenced from a shared file is a schema of every module that
+  // references it: the first module registers it, and a module defining a
+  // different schema under the same id is an error.
   for (const schema of allSchemas) {
-    fastify.addSchema(schema);
+    const registered = fastify.getSchema(schema.$id);
+    if (registered === undefined) {
+      fastify.addSchema(schema);
+    } else if (JSON.stringify(registered) !== JSON.stringify(schema)) {
+      throw new Error(\`Schema '\${schema.$id}' is already registered with a different definition\`);
+    }
   }
 
   const { {{#each services}}{{key}}{{#unless @last}}, {{/unless}}{{/each}} } = {{servicesPath}};
