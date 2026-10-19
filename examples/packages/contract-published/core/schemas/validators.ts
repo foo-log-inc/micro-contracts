@@ -7,6 +7,13 @@
 export const User = {
     "$id": "User",
     "type": "object",
+    "required": [
+      "id",
+      "email",
+      "name",
+      "role",
+      "createdAt"
+    ],
     "properties": {
       "id": {
         "type": "string",
@@ -44,19 +51,16 @@ export const User = {
       "internalNotes": {
         "type": "string"
       }
-    },
-    "required": [
-      "id",
-      "email",
-      "name",
-      "role",
-      "createdAt"
-    ]
+    }
   } as const;
 
 export const UserListResponse = {
     "$id": "UserListResponse",
     "type": "object",
+    "required": [
+      "users",
+      "total"
+    ],
     "properties": {
       "users": {
         "type": "array",
@@ -70,16 +74,16 @@ export const UserListResponse = {
       "hasMore": {
         "type": "boolean"
       }
-    },
-    "required": [
-      "users",
-      "total"
-    ]
+    }
   } as const;
 
 export const CreateUserRequest = {
     "$id": "CreateUserRequest",
     "type": "object",
+    "required": [
+      "email",
+      "name"
+    ],
     "properties": {
       "email": {
         "type": "string",
@@ -98,16 +102,15 @@ export const CreateUserRequest = {
         ],
         "default": "user"
       }
-    },
-    "required": [
-      "email",
-      "name"
-    ]
+    }
   } as const;
 
 export const HealthStatus = {
     "$id": "HealthStatus",
     "type": "object",
+    "required": [
+      "status"
+    ],
     "properties": {
       "status": {
         "type": "string",
@@ -124,15 +127,16 @@ export const HealthStatus = {
         "type": "string",
         "format": "date-time"
       }
-    },
-    "required": [
-      "status"
-    ]
+    }
   } as const;
 
 export const ValidationError = {
     "$id": "ValidationError",
     "type": "object",
+    "required": [
+      "pointer",
+      "detail"
+    ],
     "properties": {
       "pointer": {
         "type": "string",
@@ -142,22 +146,23 @@ export const ValidationError = {
         "type": "string",
         "description": "Error message for this field"
       }
-    },
-    "required": [
-      "pointer",
-      "detail"
-    ]
+    }
   } as const;
 
 export const ProblemDetails = {
     "$id": "ProblemDetails",
     "type": "object",
     "description": "RFC 9457 Problem Details for HTTP APIs",
+    "required": [
+      "type",
+      "title",
+      "status"
+    ],
     "properties": {
       "type": {
         "type": "string",
-        "description": "A URI reference that identifies the problem type",
-        "format": "uri-reference"
+        "format": "uri-reference",
+        "description": "A URI reference that identifies the problem type"
       },
       "title": {
         "type": "string",
@@ -173,8 +178,8 @@ export const ProblemDetails = {
       },
       "instance": {
         "type": "string",
-        "description": "A URI reference to the specific occurrence",
-        "format": "uri"
+        "format": "uri",
+        "description": "A URI reference to the specific occurrence"
       },
       "code": {
         "type": "string",
@@ -191,12 +196,7 @@ export const ProblemDetails = {
           "$ref": "ValidationError#"
         }
       }
-    },
-    "required": [
-      "type",
-      "title",
-      "status"
-    ]
+    }
   } as const;
 
 // Operation parameter and request body schemas

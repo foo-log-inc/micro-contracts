@@ -202,11 +202,12 @@ function schemaToTypeString(
     return `(${ts})${nullSuffix}`;
   }
 
-  // Handle enum
+  // Handle const and enum
+  if (schema.const !== undefined) {
+    return `${literalType(schema.const)}${nullSuffix}`;
+  }
   if (schema.enum) {
-    const enumValues = schema.enum.map(v => 
-      typeof v === 'string' ? `'${v}'` : String(v)
-    ).join(' | ');
+    const enumValues = schema.enum.map(literalType).join(' | ');
     return `(${enumValues})${nullSuffix}`;
   }
 
@@ -493,7 +494,14 @@ function generateParamsType(
  * identifiers are emitted as quoted keys.
  */
 function formatPropertyKey(name: string): string {
-  if (isTsIdentifier(name)) return name;
-  return `'${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  return isTsIdentifier(name) ? name : literalType(name);
+}
+
+/** A JSON value as the TypeScript literal type admitting exactly that value. */
+function literalType(value: unknown): string {
+  if (typeof value === 'string') {
+    return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  }
+  return JSON.stringify(value);
 }
 

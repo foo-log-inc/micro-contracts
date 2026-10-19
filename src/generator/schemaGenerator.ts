@@ -81,68 +81,71 @@ function generateSchemaExport(
 }
 
 /**
+ * Keywords a validator leaves out: OpenAPI annotations that are not JSON
+ * Schema, or are shaped differently from the JSON Schema keyword of the same
+ * name. None of them takes part in validation, and Ajv — strict, as Fastify
+ * runs it — refuses a schema carrying one.
+ */
+const ANNOTATION_KEYWORDS = new Set(['example', 'examples', 'xml', 'externalDocs', 'discriminator']);
+
+/** Keywords whose value is a schema (or, for `items`, a list of them). */
+const SUBSCHEMA_KEYWORDS = new Set([
+  'items', 'additionalItems', 'additionalProperties', 'not', 'contains', 'propertyNames',
+  'if', 'then', 'else', 'unevaluatedItems', 'unevaluatedProperties', 'contentSchema',
+]);
+
+/** Keywords whose value is a list of schemas. */
+const SUBSCHEMA_LIST_KEYWORDS = new Set(['allOf', 'oneOf', 'anyOf', 'prefixItems']);
+
+/** Keywords whose value maps names to schemas. */
+const SUBSCHEMA_MAP_KEYWORDS = new Set(['properties', 'patternProperties', 'dependentSchemas', '$defs', 'definitions']);
+
+/**
  * Convert an OpenAPI schema to the JSON Schema Fastify validates (Ajv) and
  * serializes (fast-json-stringify) with.
  *
- * Each keyword is translated on its own, so a keyword beside `$ref` or a
- * composition is kept rather than dropped.
+ * Every keyword is kept as written, so whatever the contract constrains, the
+ * validator constrains. Only what JSON Schema spells differently is
+ * translated: `$ref`, `nullable`, the boolean `exclusiveMinimum` /
+ * `exclusiveMaximum` of OpenAPI 3.0, and the schemas nested in other keywords.
+ * Extensions (`x-*`) and the annotations above are left out.
  */
 function convertSchemaValue(
   schema: SchemaObject | ReferenceObject,
   spec: OpenAPISpec
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-
-  if (isReference(schema)) {
-    result.$ref = `${getRefName(schema.$ref)}#`;
-  }
   // A reference may carry schema keywords beside it (OpenAPI 3.1).
-  const node = schema as SchemaObject;
+  const node = schema as SchemaObject & Partial<ReferenceObject>;
 
-  if (node.allOf) result.allOf = node.allOf.map(s => convertSchemaValue(s, spec));
-  if (node.oneOf) result.oneOf = node.oneOf.map(s => convertSchemaValue(s, spec));
-  if (node.anyOf) result.anyOf = node.anyOf.map(s => convertSchemaValue(s, spec));
+  for (const [keyword, value] of Object.entries(node)) {
+    if (keyword.startsWith('x-') || ANNOTATION_KEYWORDS.has(keyword)) continue;
 
-  // Copy basic properties
-  if (node.type) result.type = node.type;
-  if (node.description) result.description = node.description;
-  if (node.enum) result.enum = node.enum;
-  if (node.format) result.format = node.format;
-  if (node.default !== undefined) result.default = node.default;
-  if (node.nullable) result.nullable = node.nullable;
-
-  // Number constraints
-  if (node.minimum !== undefined) result.minimum = node.minimum;
-  if (node.maximum !== undefined) result.maximum = node.maximum;
-
-  // String constraints
-  if (node.minLength !== undefined) result.minLength = node.minLength;
-  if (node.maxLength !== undefined) result.maxLength = node.maxLength;
-  if (node.pattern) result.pattern = node.pattern;
-
-  // Array constraints
-  if (node.minItems !== undefined) result.minItems = node.minItems;
-  if (node.maxItems !== undefined) result.maxItems = node.maxItems;
-  if (node.items) {
-    result.items = convertSchemaValue(node.items, spec);
-  }
-
-  // Object properties
-  if (node.properties) {
-    result.properties = {};
-    for (const [propName, propSchema] of Object.entries(node.properties)) {
-      (result.properties as Record<string, unknown>)[propName] = 
-        convertSchemaValue(propSchema, spec);
+    if (keyword === '$ref') {
+      result.$ref = `${getRefName(value as string)}#`;
+    } else if (keyword === 'nullable') {
+      if (value === true) result.nullable = true;
+    } else if (keyword === 'exclusiveMinimum' || keyword === 'exclusiveMaximum') {
+      // OpenAPI 3.0 flags `minimum` / `maximum` as exclusive; JSON Schema
+      // states the exclusive bound itself.
+      if (typeof value !== 'boolean') result[keyword] = value;
+    } else if (SUBSCHEMA_KEYWORDS.has(keyword)) {
+      result[keyword] = convertSubschema(value, spec);
+    } else if (SUBSCHEMA_LIST_KEYWORDS.has(keyword)) {
+      result[keyword] = (value as Array<SchemaObject | ReferenceObject>).map(s => convertSchemaValue(s, spec));
+    } else if (SUBSCHEMA_MAP_KEYWORDS.has(keyword)) {
+      result[keyword] = Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([name, s]) => [name, convertSubschema(s, spec)])
+      );
+    } else {
+      result[keyword] = value;
     }
   }
-  if (node.required && node.required.length > 0) {
-    result.required = node.required;
-  }
-  if (node.additionalProperties !== undefined) {
-    if (typeof node.additionalProperties === 'boolean') {
-      result.additionalProperties = node.additionalProperties;
-    } else {
-      result.additionalProperties = convertSchemaValue(node.additionalProperties, spec);
+
+  for (const [flag, bound] of [['exclusiveMinimum', 'minimum'], ['exclusiveMaximum', 'maximum']] as const) {
+    if (node[flag] === true && node[bound] !== undefined) {
+      result[flag] = node[bound];
+      delete result[bound];
     }
   }
 
@@ -157,6 +160,17 @@ function convertSchemaValue(
   }
 
   return result;
+}
+
+/** A keyword's schema value: a schema, a boolean schema, or a list of schemas. */
+function convertSubschema(value: unknown, spec: OpenAPISpec): unknown {
+  if (Array.isArray(value)) {
+    return value.map(s => convertSchemaValue(s, spec));
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return convertSchemaValue(value as SchemaObject | ReferenceObject, spec);
 }
 
 /**

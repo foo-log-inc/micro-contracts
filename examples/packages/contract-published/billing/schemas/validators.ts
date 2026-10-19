@@ -7,6 +7,13 @@
 export const Invoice = {
     "$id": "Invoice",
     "type": "object",
+    "required": [
+      "id",
+      "userId",
+      "amount",
+      "status",
+      "createdAt"
+    ],
     "properties": {
       "id": {
         "type": "string"
@@ -43,19 +50,16 @@ export const Invoice = {
         "type": "string",
         "format": "date-time"
       }
-    },
-    "required": [
-      "id",
-      "userId",
-      "amount",
-      "status",
-      "createdAt"
-    ]
+    }
   } as const;
 
 export const InvoiceListResponse = {
     "$id": "InvoiceListResponse",
     "type": "object",
+    "required": [
+      "invoices",
+      "total"
+    ],
     "properties": {
       "invoices": {
         "type": "array",
@@ -66,16 +70,16 @@ export const InvoiceListResponse = {
       "total": {
         "type": "integer"
       }
-    },
-    "required": [
-      "invoices",
-      "total"
-    ]
+    }
   } as const;
 
 export const CreateInvoiceRequest = {
     "$id": "CreateInvoiceRequest",
     "type": "object",
+    "required": [
+      "userId",
+      "amount"
+    ],
     "properties": {
       "userId": {
         "type": "string",
@@ -92,16 +96,15 @@ export const CreateInvoiceRequest = {
       "description": {
         "type": "string"
       }
-    },
-    "required": [
-      "userId",
-      "amount"
-    ]
+    }
   } as const;
 
 export const PayInvoiceRequest = {
     "$id": "PayInvoiceRequest",
     "type": "object",
+    "required": [
+      "paymentMethodId"
+    ],
     "properties": {
       "paymentMethodId": {
         "type": "string"
@@ -110,15 +113,16 @@ export const PayInvoiceRequest = {
         "type": "boolean",
         "default": false
       }
-    },
-    "required": [
-      "paymentMethodId"
-    ]
+    }
   } as const;
 
 export const PaymentResult = {
     "$id": "PaymentResult",
     "type": "object",
+    "required": [
+      "success",
+      "transactionId"
+    ],
     "properties": {
       "success": {
         "type": "boolean"
@@ -130,16 +134,16 @@ export const PaymentResult = {
         "type": "string",
         "format": "date-time"
       }
-    },
-    "required": [
-      "success",
-      "transactionId"
-    ]
+    }
   } as const;
 
 export const ValidationError = {
     "$id": "ValidationError",
     "type": "object",
+    "required": [
+      "pointer",
+      "detail"
+    ],
     "properties": {
       "pointer": {
         "type": "string",
@@ -149,22 +153,23 @@ export const ValidationError = {
         "type": "string",
         "description": "Error message for this field"
       }
-    },
-    "required": [
-      "pointer",
-      "detail"
-    ]
+    }
   } as const;
 
 export const ProblemDetails = {
     "$id": "ProblemDetails",
     "type": "object",
     "description": "RFC 9457 Problem Details for HTTP APIs",
+    "required": [
+      "type",
+      "title",
+      "status"
+    ],
     "properties": {
       "type": {
         "type": "string",
-        "description": "A URI reference that identifies the problem type",
-        "format": "uri-reference"
+        "format": "uri-reference",
+        "description": "A URI reference that identifies the problem type"
       },
       "title": {
         "type": "string",
@@ -180,8 +185,8 @@ export const ProblemDetails = {
       },
       "instance": {
         "type": "string",
-        "description": "A URI reference to the specific occurrence",
-        "format": "uri"
+        "format": "uri",
+        "description": "A URI reference to the specific occurrence"
       },
       "code": {
         "type": "string",
@@ -198,12 +203,7 @@ export const ProblemDetails = {
           "$ref": "ValidationError#"
         }
       }
-    },
-    "required": [
-      "type",
-      "title",
-      "status"
-    ]
+    }
   } as const;
 
 // Operation parameter and request body schemas

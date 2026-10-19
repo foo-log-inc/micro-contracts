@@ -95,3 +95,82 @@ describe('nullable composed and referenced properties', () => {
     }
   });
 });
+
+describe('validation keywords', () => {
+  const keywordSpec = {
+    openapi: '3.1.0',
+    info: { title: 'Test', version: '1.0.0' },
+    paths: {},
+    components: {
+      schemas: {
+        Order: {
+          type: 'object',
+          required: ['orderId', 'quantity', 'tags'],
+          properties: {
+            orderId: { type: 'string' },
+            quantity: { type: 'integer', minimum: 1, multipleOf: 5 },
+            price: { type: 'number', exclusiveMinimum: 0 },
+            discount: { type: 'number', maximum: 1, exclusiveMaximum: true },
+            tags: { type: 'array', items: { type: 'string' }, uniqueItems: true },
+            kind: { const: 'order' },
+            note: { type: 'string', example: 'shown in docs', 'x-internal': true },
+          },
+        },
+        CreateOrderRequest: {
+          type: 'object',
+          minProperties: 1,
+          maxProperties: 3,
+          properties: {
+            quantity: { type: 'integer', multipleOf: 5 },
+            note: { type: 'string' },
+          },
+        },
+      },
+    },
+  } as unknown as OpenAPISpec;
+
+  let keywordDir: string;
+  let keywordApp: FastifyInstance;
+
+  beforeAll(async () => {
+    keywordDir = fs.mkdtempSync(path.join(os.tmpdir(), 'schema-keywords-test-'));
+    const validatorsPath = path.join(keywordDir, 'validators.ts');
+    fs.writeFileSync(validatorsPath, generateSchemas(keywordSpec));
+    const { allSchemas } = await import(validatorsPath);
+
+    keywordApp = Fastify();
+    for (const schema of allSchemas) {
+      keywordApp.addSchema(schema);
+    }
+    keywordApp.post('/order', { schema: { body: { $ref: 'Order#' } } }, async (request) => request.body);
+    keywordApp.post('/create', { schema: { body: { $ref: 'CreateOrderRequest#' } } }, async (request) => request.body);
+    await keywordApp.ready();
+  });
+
+  afterAll(async () => {
+    await keywordApp?.close();
+    fs.rmSync(keywordDir, { recursive: true, force: true });
+  });
+
+  const post = (url: string, payload: Record<string, unknown>) => keywordApp.inject({ method: 'POST', url, payload });
+  const valid = { orderId: 'o1', quantity: 5, tags: ['a'], kind: 'order', price: 1, discount: 0.5 };
+
+  it('accepts a value within every declared constraint', async () => {
+    expect((await post('/order', valid)).statusCode).toBe(200);
+    expect((await post('/create', { quantity: 10 })).statusCode).toBe(200);
+  });
+
+  it('rejects a value breaking any declared constraint', async () => {
+    for (const payload of [
+      { ...valid, quantity: 7 },
+      { ...valid, price: 0 },
+      { ...valid, discount: 1 },
+      { ...valid, tags: ['a', 'a'] },
+      { ...valid, kind: 'other' },
+    ]) {
+      expect((await post('/order', payload)).statusCode, JSON.stringify(payload)).toBe(400);
+    }
+    expect((await post('/create', {})).statusCode).toBe(400);
+    expect((await post('/create', { quantity: 5, note: 'n', a: 1, b: 2 })).statusCode).toBe(400);
+  });
+});

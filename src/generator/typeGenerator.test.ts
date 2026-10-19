@@ -229,3 +229,20 @@ describe('OpenAPI 3.1 type array nullable syntax', () => {
     expect(generateTypes(spec)).toContain('export type Names = (string | null)[];');
   });
 });
+
+describe('const', () => {
+  it('types a const as its literal value', () => {
+    const output = generateTypes(minimalSpec({
+      Order: {
+        type: 'object',
+        properties: {
+          kind: { const: 'order' },
+          version: { type: 'integer', const: 2 },
+        },
+      },
+    }));
+    const iface = extractInterface(output, 'Order');
+    expect(iface).toContain("kind?: 'order';");
+    expect(iface).toContain('version?: 2;');
+  });
+});

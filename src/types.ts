@@ -178,31 +178,80 @@ export interface ReferenceObject {
 /** Primitive OpenAPI type names */
 export type OpenAPIType = 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object' | 'null';
 
+/**
+ * A schema: JSON Schema (2020-12 for OpenAPI 3.1, the OpenAPI 3.0 subset
+ * otherwise) plus OpenAPI's own keywords.
+ */
 export interface SchemaObject {
   /** OpenAPI 3.0: single type string. OpenAPI 3.1: may be an array (e.g. ['string', 'null']) */
   type?: OpenAPIType | OpenAPIType[];
   format?: string;
+  title?: string;
   description?: string;
-  enum?: Array<string | number | boolean>;
-  items?: SchemaObject | ReferenceObject;
-  properties?: Record<string, SchemaObject | ReferenceObject>;
-  additionalProperties?: boolean | SchemaObject | ReferenceObject;
-  required?: string[];
-  nullable?: boolean;
+  enum?: Array<string | number | boolean | null>;
+  const?: unknown;
   default?: unknown;
+  /** OpenAPI 3.0: widens `type` to admit null */
+  nullable?: boolean;
+  deprecated?: boolean;
+  readOnly?: boolean;
+  writeOnly?: boolean;
+
+  // Numbers
+  multipleOf?: number;
   minimum?: number;
   maximum?: number;
+  /** A number (JSON Schema), or OpenAPI 3.0's flag making `minimum` exclusive */
+  exclusiveMinimum?: number | boolean;
+  /** A number (JSON Schema), or OpenAPI 3.0's flag making `maximum` exclusive */
+  exclusiveMaximum?: number | boolean;
+
+  // Strings
   minLength?: number;
   maxLength?: number;
   pattern?: string;
+
+  // Arrays
+  items?: SchemaObject | ReferenceObject;
+  prefixItems?: Array<SchemaObject | ReferenceObject>;
+  contains?: SchemaObject | ReferenceObject;
+  minContains?: number;
+  maxContains?: number;
   minItems?: number;
   maxItems?: number;
+  uniqueItems?: boolean;
+
+  // Objects
+  properties?: Record<string, SchemaObject | ReferenceObject>;
+  patternProperties?: Record<string, SchemaObject | ReferenceObject>;
+  additionalProperties?: boolean | SchemaObject | ReferenceObject;
+  propertyNames?: SchemaObject | ReferenceObject;
+  required?: string[];
+  dependentRequired?: Record<string, string[]>;
+  dependentSchemas?: Record<string, SchemaObject | ReferenceObject>;
+  minProperties?: number;
+  maxProperties?: number;
+
+  // Composition
   oneOf?: Array<SchemaObject | ReferenceObject>;
   anyOf?: Array<SchemaObject | ReferenceObject>;
   allOf?: Array<SchemaObject | ReferenceObject>;
+  not?: SchemaObject | ReferenceObject;
+  if?: SchemaObject | ReferenceObject;
+  then?: SchemaObject | ReferenceObject;
+  else?: SchemaObject | ReferenceObject;
+
+  // OpenAPI annotations
+  example?: unknown;
+  examples?: unknown;
+  discriminator?: { propertyName: string; mapping?: Record<string, string> };
+  xml?: Record<string, unknown>;
+  externalDocs?: { url: string; description?: string };
+
   // Custom extensions
   'x-private'?: boolean;  // Mark as private (not allowed in public endpoints)
   'x-micro-contracts-non-exportable'?: boolean;  // Must not be reachable from a published endpoint
+  [extension: `x-${string}`]: unknown;
 }
 
 // =============================================================================
