@@ -10,6 +10,8 @@ import crypto from 'crypto';
 import { glob } from 'glob';
 import { matchWithNegation } from '../glob.js';
 import { loadGuardrailsConfigWithPath } from './config.js';
+import { findConfigFile, loadConfig, configuredOutputs } from '../generator/index.js';
+import { isMultiModuleConfig } from '../types.js';
 import type { 
   GeneratedManifest, 
   GeneratedFileInfo, 
@@ -364,6 +366,19 @@ export async function verifyManifest(baseDir: string, rule: GeneratedFilesRule):
   };
 }
 
+/** The configured generation outputs (see configuredOutputs) that lie outside `dir`. */
+function outputsOutside(dir: string): string[] {
+  const configPath = findConfigFile();
+  if (!configPath) return [];
+  const config = loadConfig(configPath);
+  if (!isMultiModuleConfig(config)) return [];
+
+  return configuredOutputs(config).filter(output => {
+    const relative = path.relative(path.resolve(dir), path.resolve(output));
+    return relative.startsWith('..') || path.isAbsolute(relative);
+  });
+}
+
 /**
  * Run manifest verification check
  */
@@ -392,11 +407,16 @@ export async function runManifestCheck(options: CheckOptions): Promise<CheckResu
       // over zero files says the generated artifacts are intact when none are
       // being tracked at all.
       if (fileCount === 0) {
+        const elsewhere = outputsOutside(generatedDir);
         return {
           name: 'manifest',
           status: 'fail',
           duration: Date.now() - start,
-          message: `Manifest in ${generatedDir} records no files. Run generate before verifying.`,
+          message: elsewhere.length > 0
+            ? `Manifest in ${generatedDir} records no files: the configured outputs ${elsewhere.join(', ')} ` +
+              `lie outside ${generatedDir}. Pass the directory holding them as --manifest-dir to generate ` +
+              `and as --generated-dir to pipeline and check.`
+            : `Manifest in ${generatedDir} records no files. Run generate before verifying.`,
         };
       }
 

@@ -233,7 +233,12 @@ generated:
       expect(fs.existsSync(path.join(tempDir, 'contracts/orders/index.ts'))).toBe(true);
 
       fs.writeFileSync(path.join(tempDir, 'packages/app/src/index.ts'), 'export const handWritten = 2;\n');
-      expect(runCli('check --only manifest').stdout).not.toContain('app/src/index.ts');
+      const check = runCli('check --only manifest');
+      expect(check.stdout).not.toContain('app/src/index.ts');
+      // Generating again cannot help: the outputs are elsewhere.
+      expect(check.stdout).not.toContain('Run generate before verifying');
+      expect(check.stdout).toContain('contracts/orders');
+      expect(check.stdout).toContain('--manifest-dir');
     });
 
     it('regenerates an output in the manifest directory that the generated patterns leave out', () => {
