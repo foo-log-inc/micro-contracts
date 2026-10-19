@@ -355,6 +355,52 @@ generated:
       expect(fs.existsSync(path.join(tempDir, 'packages/server/orders/routes.ts'))).toBe(true);
     });
 
+    it('places the manifest by the config passed with --config, not the one in the working directory', () => {
+      fs.mkdirSync(path.join(tempDir, 'api'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'conf'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'api/core.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Core',
+          '  version: 1.0.0',
+          'paths:',
+          '  /items:',
+          '    get:',
+          '      operationId: getItems',
+          '      x-micro-contracts-service: Item',
+          '      x-micro-contracts-method: getItems',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          '',
+        ].join('\n'),
+      );
+      const configFor = (dir: string) => [
+        'defaults:',
+        '  contract:',
+        `    output: ${dir}/contract/{module}`,
+        '  contractPublic:',
+        `    output: ${dir}/published/{module}`,
+        'modules:',
+        '  core:',
+        '    openapi: api/core.yaml',
+        '',
+      ].join('\n');
+      // The working directory's own config generates elsewhere.
+      fs.writeFileSync(path.join(tempDir, 'micro-contracts.config.yaml'), configFor('other'));
+      fs.writeFileSync(path.join(tempDir, 'conf/real.yaml'), configFor('gen'));
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.guardrails.yaml'),
+        'generated:\n  - "gen/**"\n  - "other/**"\n',
+      );
+
+      expect(runCli('generate --config conf/real.yaml').exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, 'gen/.generated-manifest.json'))).toBe(true);
+      expect(runCli('generate --config conf/real.yaml').stdout).toContain('No input changes detected');
+    });
+
     it('does not call a pipeline that ran nothing successful', () => {
       // #77 fixed this verdict for `check`; the pipeline printed its own.
       createGuardrailsConfig();

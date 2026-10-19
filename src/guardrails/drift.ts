@@ -57,7 +57,7 @@ export function checkUncommittedChanges(generatedDir: string, rule: GeneratedFil
 export async function runDriftCheck(options: CheckOptions): Promise<CheckResult> {
   const start = Date.now();
   const rule = generatedFilesRule(options.guardrailsPath);
-  const generatedDir = resolveManifestDir(options.generatedDir, rule);
+  const generatedDir = resolveManifestDir(options.generatedDir, rule, options.configPath);
 
   try {
     // `git diff` reports nothing for a path that does not exist, which would

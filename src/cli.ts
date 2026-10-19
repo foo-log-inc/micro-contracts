@@ -89,7 +89,7 @@ const handlers: CommandHandlers = {
 
         if (useCache) {
           const rule = generatedFilesRule();
-          const skipCheck = await canSkipGeneration(resolveManifestDir(opts.manifestDir, rule), inputHash, rule);
+          const skipCheck = await canSkipGeneration(resolveManifestDir(opts.manifestDir, rule, configPath), inputHash, rule);
           if (skipCheck.skip) {
             console.log(`No input changes detected, skipping generation (${skipCheck.reason})`);
             return;
@@ -111,7 +111,7 @@ const handlers: CommandHandlers = {
 
         if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
           const rule = generatedFilesRule();
-          const manifestDir = resolveManifestDir(opts.manifestDir, rule);
+          const manifestDir = resolveManifestDir(opts.manifestDir, rule, configPath);
           if (fs.existsSync(manifestDir)) {
             const manifestInputHash =
               (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
@@ -421,6 +421,7 @@ const handlers: CommandHandlers = {
         skip: skipChecks,
         guardrailsPath: opts.guardrails,
         generatedDir: opts.generatedDir,
+        configPath: opts.config ? path.resolve(opts.config) : undefined,
         onCheckStart: isStreaming ? (check: CheckDefinition) => {
           if (process.stdout.isTTY) {
             process.stdout.write(formatCheckStart(check) + '\r');
@@ -498,7 +499,7 @@ const handlers: CommandHandlers = {
 
             if (useCache) {
               const rule = generatedFilesRule(opts.guardrails);
-              const skipCheck = await canSkipGeneration(resolveManifestDir(opts.generatedDir, rule), inputHash, rule);
+              const skipCheck = await canSkipGeneration(resolveManifestDir(opts.generatedDir, rule, configPath), inputHash, rule);
               if (skipCheck.skip) {
                 generationCacheSkipped = true;
                 generateSkipped = true;
@@ -529,7 +530,7 @@ const handlers: CommandHandlers = {
                 const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
                 if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
                   const rule = generatedFilesRule(opts.guardrails);
-                  const manifestDir = resolveManifestDir(opts.generatedDir, rule);
+                  const manifestDir = resolveManifestDir(opts.generatedDir, rule, configPath);
                   if (fs.existsSync(manifestDir)) {
                     const manifestInputHash =
                       (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;

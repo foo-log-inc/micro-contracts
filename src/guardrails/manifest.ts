@@ -62,11 +62,15 @@ export function isGeneratedFile(patterns: string[] | undefined, file: string): b
   return path.basename(file) === MANIFEST_FILENAME || matchWithNegation(patterns, file);
 }
 
-/** The locations the project config generates to, or undefined without a project config. */
-function projectOutputs(): string[] | undefined {
-  const configPath = findConfigFile();
-  if (!configPath) return undefined;
-  const config = loadConfig(configPath);
+/**
+ * The locations the project config generates to: the config at `configPath`
+ * (the one the run read), or the one found from the working directory.
+ * Undefined without a project config.
+ */
+function projectOutputs(configPath?: string | null): string[] | undefined {
+  const file = configPath ?? findConfigFile();
+  if (!file) return undefined;
+  const config = loadConfig(file);
   return isMultiModuleConfig(config) ? configuredOutputs(config) : undefined;
 }
 
@@ -85,14 +89,19 @@ function commonAncestor(dirs: string[]): string {
  * pipeline, check and manifest read it from.
  *
  * `explicit` (--manifest-dir, --generated-dir, --dir) when given. Otherwise the
- * deepest directory holding every location the project config generates to,
+ * deepest directory holding every location the project config generates to —
+ * the config at `configPath` when the run read one given with --config —
  * so that the manifest can record each output; with no project config, the
  * deepest directory holding everything the generated: patterns can match.
  */
-export function resolveManifestDir(explicit: string | undefined, rule: GeneratedFilesRule): string {
+export function resolveManifestDir(
+  explicit: string | undefined,
+  rule: GeneratedFilesRule,
+  configPath?: string | null
+): string {
   if (explicit) return explicit;
 
-  const outputs = projectOutputs();
+  const outputs = projectOutputs(configPath);
   const dirs = outputs && outputs.length > 0
     ? outputs.map(output => path.dirname(path.resolve(output)))
     : rule.patterns
@@ -426,8 +435,8 @@ export async function verifyManifest(baseDir: string, rule: GeneratedFilesRule):
 }
 
 /** The configured generation outputs (see configuredOutputs) that lie outside `dir`. */
-function outputsOutside(dir: string): string[] {
-  return (projectOutputs() ?? []).filter(output => {
+function outputsOutside(dir: string, configPath?: string): string[] {
+  return (projectOutputs(configPath) ?? []).filter(output => {
     const relative = path.relative(path.resolve(dir), path.resolve(output));
     return relative.startsWith('..') || path.isAbsolute(relative);
   });
@@ -439,7 +448,7 @@ function outputsOutside(dir: string): string[] {
 export async function runManifestCheck(options: CheckOptions): Promise<CheckResult> {
   const start = Date.now();
   const rule = generatedFilesRule(options.guardrailsPath);
-  const generatedDir = resolveManifestDir(options.generatedDir, rule);
+  const generatedDir = resolveManifestDir(options.generatedDir, rule, options.configPath);
   
   try {
     // Nothing to verify is not the same as verified.
@@ -462,7 +471,7 @@ export async function runManifestCheck(options: CheckOptions): Promise<CheckResu
       // over zero files says the generated artifacts are intact when none are
       // being tracked at all.
       if (fileCount === 0) {
-        const elsewhere = outputsOutside(generatedDir);
+        const elsewhere = outputsOutside(generatedDir, options.configPath);
         return {
           name: 'manifest',
           status: 'fail',
