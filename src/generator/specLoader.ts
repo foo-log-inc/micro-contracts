@@ -88,9 +88,8 @@ class ExternalRefBundler {
    * a different component is an error: either binding would be a silent guess.
    */
   mergeInto(spec: OpenAPISpec): void {
-    const components = (spec.components ??= {}) as Record<string, Record<string, unknown>>;
-
     for (const component of this.imported.values()) {
+      const components = (spec.components ??= {}) as Record<string, Record<string, unknown>>;
       const section = (components[component.section] ??= {});
       const existing = section[component.name];
 

@@ -1497,6 +1497,13 @@ paths:
       }
     });
 
+    it('adds no components to a spec that references nothing in another file', () => {
+      const specPath = path.join(tmpDir, 'plain.yaml');
+      fs.writeFileSync(specPath, 'openapi: 3.0.3\ninfo: { title: T, version: 1.0.0 }\npaths: {}\n');
+
+      expect(loadOpenAPISpec(specPath)).not.toHaveProperty('components');
+    });
+
     it('fails on a reference to another file that does not name a component', () => {
       const specPath = path.join(tmpDir, 'spec.yaml');
       fs.writeFileSync(path.join(tmpDir, 'order.yaml'), 'type: object\n');
