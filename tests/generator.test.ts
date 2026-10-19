@@ -1447,6 +1447,56 @@ ${screenSchemas}`);
         .rejects.toThrow(/components\.schemas\.Order/);
     });
 
+    it('brings in components of every kind, and keeps them in the published contract', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'shared'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'shared/common.yaml'), `
+components:
+  headers:
+    RateLimit: { description: limit, schema: { type: integer } }
+  examples:
+    OrderEx: { value: { orderId: '1' } }
+`);
+      const specPath = path.join(tmpDir, 'core.yaml');
+      fs.writeFileSync(specPath, `
+openapi: 3.0.3
+info: { title: core, version: 1.0.0 }
+paths:
+  /orders:
+    get:
+      operationId: listOrders
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: listOrders
+      x-micro-contracts-published: true
+      responses:
+        '200':
+          description: ok
+          headers:
+            X-RateLimit-Limit: { $ref: './shared/common.yaml#/components/headers/RateLimit' }
+          content:
+            application/json:
+              schema: { type: object, properties: { orderId: { type: string } } }
+              examples:
+                one: { $ref: './shared/common.yaml#/components/examples/OrderEx' }
+`);
+      const config: MultiModuleConfig = {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'contracts/{module}') },
+          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+        },
+        modules: { core: { openapi: specPath } },
+      };
+
+      await generate(config, { contractsOnly: true });
+
+      for (const docs of ['contracts/core', 'contracts-published/core']) {
+        const generated = yaml.load(
+          fs.readFileSync(path.join(tmpDir, docs, 'docs/openapi.generated.yaml'), 'utf-8'),
+        ) as { components?: Record<string, Record<string, unknown>> };
+        expect(Object.keys(generated.components?.headers ?? {}), docs).toEqual(['RateLimit']);
+        expect(Object.keys(generated.components?.examples ?? {}), docs).toEqual(['OrderEx']);
+      }
+    });
+
     it('fails on a reference to another file that does not name a component', () => {
       const specPath = path.join(tmpDir, 'spec.yaml');
       fs.writeFileSync(path.join(tmpDir, 'order.yaml'), 'type: object\n');

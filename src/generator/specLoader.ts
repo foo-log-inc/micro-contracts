@@ -17,9 +17,7 @@ import path from 'path';
 import { isDeepStrictEqual } from 'util';
 import yaml from 'js-yaml';
 import type { OpenAPISpec } from '../types.js';
-
-/** Component sections a reference into another file may point at. */
-const IMPORTABLE_SECTIONS = ['schemas', 'responses', 'parameters', 'requestBodies'];
+import { parseComponentRef } from '../types.js';
 
 /** Parse a YAML or JSON document. */
 function readDocument(filePath: string): unknown {
@@ -118,15 +116,15 @@ class ExternalRefBundler {
     }
 
     const targetFile = filePart ? path.resolve(path.dirname(file), filePart) : file;
-    const match = pointer.match(/^\/components\/([^/]+)\/([^/]+)$/);
-    if (!match || !IMPORTABLE_SECTIONS.includes(match[1])) {
+    const localRef = `#${pointer}`;
+    const parsed = parseComponentRef(localRef);
+    if (!parsed) {
       throw new Error(
         `Unsupported $ref '${ref}' in ${display(file)}: a reference into another file must point at ` +
-        `#/components/{${IMPORTABLE_SECTIONS.join(',')}}/<name>.`
+        `a component, #/components/<section>/<name>.`
       );
     }
-    const [, section, name] = match;
-    const localRef = `#${pointer}`;
+    const { section, name } = parsed;
 
     const key = `${targetFile}#${pointer}`;
     if (this.reached.has(key)) {

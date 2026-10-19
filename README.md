@@ -253,7 +253,7 @@ paths:
 
 ### References into Other Files
 
-A `$ref` may point into another file, relative to the file that holds it, when it points at a component — for example `'../../_shared/openapi/problem-details.yaml#/components/responses/NotFound'`, or a screen spec's ViewModel referencing `'../orders/openapi.yaml#/components/schemas/Order'`. Generation brings the component, and everything it references, into the module's own `components`: types, validators, routes and `openapi.generated.yaml` all use it under its own name. A reference into another file that points at anything other than `#/components/{schemas,responses,parameters,requestBodies}/<name>` is an error, and so is a component brought in under a name the module already uses for a different definition.
+A `$ref` may point into another file, relative to the file that holds it, when it points at a component — for example `'../../_shared/openapi/problem-details.yaml#/components/responses/NotFound'`, or a screen spec's ViewModel referencing `'../orders/openapi.yaml#/components/schemas/Order'`. Generation brings the component, and everything it references, into the module's own `components`: types, validators, routes and `openapi.generated.yaml` all use it under its own name. A reference into another file that points at anything other than a component, `#/components/<section>/<name>`, is an error, and so is a component brought in under a name the module already uses for a different definition.
 
 ### Module Dependencies
 

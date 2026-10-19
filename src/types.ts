@@ -890,13 +890,13 @@ export function isTsIdentifier(name: string): boolean {
  * would bind it to whatever this spec defines under that name.
  */
 export function getRefName(ref: string): string {
-  const match = ref.match(/^#\/components\/[^/]+\/([^/]+)$/);
-  if (!match) {
+  const parsed = parseComponentRef(ref);
+  if (!parsed) {
     throw new Error(
       `$ref '${ref}' does not point at a component of this spec ('#/components/<section>/<name>').`
     );
   }
-  return match[1];
+  return parsed.name;
 }
 
 /**
@@ -1028,11 +1028,6 @@ export function hasPrivateProperties(
   return found;
 }
 
-/** Component sections a $ref can point into. */
-type ComponentSection = 'schemas' | 'responses' | 'parameters' | 'requestBodies';
-
-const COMPONENT_SECTIONS: ComponentSection[] = ['schemas', 'responses', 'parameters', 'requestBodies'];
-
 /**
  * Every component reachable from `root`, as "<section>/<name>".
  *
@@ -1080,13 +1075,14 @@ export function collectReachableComponents(
   return reached;
 }
 
-/** Parse "#/components/<section>/<name>" into its parts. */
-function parseComponentRef(ref: string): { section: ComponentSection; name: string } | null {
-  const match = ref.match(/^#\/components\/([^/]+)\/(.+)$/);
-  if (!match) return null;
-  const section = match[1] as ComponentSection;
-  if (!COMPONENT_SECTIONS.includes(section)) return null;
-  return { section, name: match[2] };
+/**
+ * Parse a reference to a component of this spec, "#/components/<section>/<name>",
+ * into its parts: the single reading of a component reference, whatever the
+ * section (schemas, responses, headers, examples, links and the rest).
+ */
+export function parseComponentRef(ref: string): { section: string; name: string } | null {
+  const match = ref.match(/^#\/components\/([^/]+)\/([^/]+)$/);
+  return match ? { section: match[1], name: match[2] } : null;
 }
 
 /**
@@ -1098,7 +1094,7 @@ function parseComponentRef(ref: string): { section: ComponentSection; name: stri
  */
 function resolveComponent<T extends object>(
   value: T | ReferenceObject,
-  section: ComponentSection,
+  section: string,
   spec: OpenAPISpec,
   location: string
 ): T {
