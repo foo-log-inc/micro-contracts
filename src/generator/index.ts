@@ -135,6 +135,28 @@ export function loadConfig(configPath: string): MultiModuleConfig | GeneratorCon
 }
 
 /**
+ * The module of the project config whose spec is `specPath`, if one is.
+ *
+ * A spec linted on its own is checked under the rules of its module, as
+ * generation checks it: a screen spec is not linted as a service API.
+ */
+export function findSpecModule(specPath: string): ResolvedModuleConfig | undefined {
+  const configPath = findConfigFile();
+  if (!configPath) return undefined;
+
+  const config = loadConfig(configPath);
+  if (!isMultiModuleConfig(config)) return undefined;
+
+  const target = path.resolve(specPath);
+  for (const [moduleName, moduleConfig] of Object.entries(config.modules)) {
+    if (path.resolve(path.dirname(configPath), moduleConfig.openapi) === target) {
+      return resolveModuleConfig(moduleName, moduleConfig, config.defaults);
+    }
+  }
+  return undefined;
+}
+
+/**
  * Parse module filter from options
  */
 function parseListOption(value?: string | string[]): string[] | null {

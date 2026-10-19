@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'yaml';
 import { createProgram, type CommandHandlers } from './generated/program.js';
-import { generate, loadConfig, findConfigFile, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash, configuredOutputs } from './generator/index.js';
+import { generate, loadConfig, findConfigFile, findSpecModule, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash, configuredOutputs } from './generator/index.js';
 import type { GeneratorConfig, MultiModuleConfig } from './types.js';
 import { isMultiModuleConfig } from './types.js';
 import { getStarterTemplates, getScreenStarterTemplates } from './cli/templates.js';
@@ -148,7 +148,7 @@ const handlers: CommandHandlers = {
 
       console.log(`Linting: ${specPath}\n`);
       const spec = loadOpenAPISpec(specPath);
-      const result = lintSpec(spec, { strict: opts.strict });
+      const result = lintSpec(spec, { strict: opts.strict, screen: findSpecModule(specPath)?.screen });
 
       console.log(formatLintResults(result));
 

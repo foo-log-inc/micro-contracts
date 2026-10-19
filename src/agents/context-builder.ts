@@ -2,13 +2,15 @@ import fs from "fs";
 import path from "path";
 import { loadConfig, loadOpenAPISpec, lintSpec, formatLintResults } from "../generator/index.js";
 import type { MultiModuleConfig, OpenAPISpec } from "../types.js";
-import { isMultiModuleConfig } from "../types.js";
+import { isMultiModuleConfig, resolveModuleConfig } from "../types.js";
 import { loadGuardrailsConfigWithPath } from "../guardrails/index.js";
 
 interface ModuleEntry {
   name: string;
   spec: OpenAPISpec;
   specPath: string;
+  /** Screen spec: linted under the screen rules, as generation lints it */
+  screen: boolean;
 }
 
 function findConfigFile(): string | null {
@@ -51,7 +53,7 @@ function loadModules(
     const specPath = path.resolve(path.dirname(resolved), modConfig.openapi);
     if (!fs.existsSync(specPath)) continue;
     const spec = loadOpenAPISpec(specPath);
-    modules.push({ name, spec, specPath });
+    modules.push({ name, spec, specPath, screen: resolveModuleConfig(name, modConfig, config.defaults).screen });
   }
 
   return { config, configPath: resolved, modules };
@@ -130,7 +132,7 @@ export async function buildAuditOpenapiContext(
       `\`\`\`yaml\n${formatSpec(mod.spec, mod.specPath)}\n\`\`\``,
     );
 
-    const lintResult = lintSpec(mod.spec, { strict: false });
+    const lintResult = lintSpec(mod.spec, { strict: false, screen: mod.screen });
     if (!lintResult.valid || lintResult.warnings.length > 0) {
       sections.push(`### Lint Results\n\n${formatLintResults(lintResult)}`);
     }

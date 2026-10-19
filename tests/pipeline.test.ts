@@ -399,6 +399,14 @@ generated:
       expect(fs.existsSync(path.join(tempDir, 'frontend/src/screens/events.generated.ts'))).toBe(true);
     });
 
+    it('lints a screen spec on its own under the rules generate applies to it', () => {
+      expect(runCli('init home --screens').exitCode).toBe(0);
+
+      const lint = runCli('lint spec/home/openapi/home.yaml --strict');
+      expect(lint.stdout).not.toContain('MISSING_X_SERVICE');
+      expect(lint.exitCode).toBe(0);
+    });
+
     it('honors lint --strict', () => {
       // The flag was declared and implemented, but the handler passed
       // strict: false unconditionally.

@@ -433,6 +433,10 @@ would be dropped from every artifact, so they are errors (`MISSING_X_SERVICE`,
 (`screen: true`) operations are consumed via `TemplateContext.screens` and these rules
 do not apply.
 
+`<input>` is linted under the rules of the module in `micro-contracts.config.yaml` whose
+`openapi` it is — the rules `generate` applies to it — and as a service API spec when no
+module declares it.
+
 ### check
 
 Run guardrail checks.
