@@ -301,8 +301,8 @@ export const ProblemDetails = {
   } as const;
 
 // Parameter schemas
-export const User_getUsersParams = {
-    "$id": "User_getUsersParams",
+export const User_getUsersQueryParams = {
+    "$id": "User_getUsersQueryParams",
     "type": "object",
     "properties": {
       "limit": {
@@ -317,8 +317,8 @@ export const User_getUsersParams = {
     }
   } as const;
 
-export const User_getUserByIdParams = {
-    "$id": "User_getUserByIdParams",
+export const User_getUserByIdPathParams = {
+    "$id": "User_getUserByIdPathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -331,8 +331,8 @@ export const User_getUserByIdParams = {
     ]
   } as const;
 
-export const User_updateUserParams = {
-    "$id": "User_updateUserParams",
+export const User_updateUserPathParams = {
+    "$id": "User_updateUserPathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -345,8 +345,8 @@ export const User_updateUserParams = {
     ]
   } as const;
 
-export const User_deleteUserParams = {
-    "$id": "User_deleteUserParams",
+export const User_deleteUserPathParams = {
+    "$id": "User_deleteUserPathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -359,8 +359,8 @@ export const User_deleteUserParams = {
     ]
   } as const;
 
-export const Admin_suspendUserParams = {
-    "$id": "Admin_suspendUserParams",
+export const Admin_suspendUserPathParams = {
+    "$id": "Admin_suspendUserPathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -387,9 +387,9 @@ export const allSchemas = [
   HealthStatus,
   ValidationError,
   ProblemDetails,
-  User_getUsersParams,
-  User_getUserByIdParams,
-  User_updateUserParams,
-  User_deleteUserParams,
-  Admin_suspendUserParams,
+  User_getUsersQueryParams,
+  User_getUserByIdPathParams,
+  User_updateUserPathParams,
+  User_deleteUserPathParams,
+  Admin_suspendUserPathParams,
 ] as const;

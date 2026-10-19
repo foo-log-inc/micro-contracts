@@ -34,15 +34,18 @@ export interface PathItem {
   put?: OperationObject;
   patch?: OperationObject;
   delete?: OperationObject;
-  parameters?: ParameterObject[];
+  parameters?: Array<ParameterObject | ReferenceObject>;
 }
+
+/** The keys of a path item that hold an operation. */
+export type HttpMethod = Exclude<keyof PathItem, 'parameters'>;
 
 export interface OperationObject {
   operationId?: string;
   summary?: string;
   description?: string;
   tags?: string[];
-  parameters?: ParameterObject[];
+  parameters?: Array<ParameterObject | ReferenceObject>;
   requestBody?: RequestBodyObject | ReferenceObject;
   responses: Record<string, ResponseObject | ReferenceObject>;
   security?: Array<Record<string, string[]>>;
@@ -1035,6 +1038,121 @@ function parseComponentRef(ref: string): { section: ComponentSection; name: stri
   const section = match[1] as ComponentSection;
   if (!COMPONENT_SECTIONS.includes(section)) return null;
   return { section, name: match[2] };
+}
+
+/**
+ * The component `value` stands for: itself, or what its $ref (and any $ref
+ * that component holds in turn) points at in `section`.
+ *
+ * A reference that points elsewhere or at nothing is an error, never skipped:
+ * a skipped parameter, body or response silently vanishes from every artifact.
+ */
+function resolveComponent<T extends object>(
+  value: T | ReferenceObject,
+  section: ComponentSection,
+  spec: OpenAPISpec,
+  location: string
+): T {
+  const seen = new Set<string>();
+  let current: unknown = value;
+
+  while (isReference(current)) {
+    const ref = current.$ref;
+    const parsed = parseComponentRef(ref);
+    if (!parsed || parsed.section !== section) {
+      throw new Error(`$ref '${ref}' at ${location} must point at #/components/${section}/<name>.`);
+    }
+    if (seen.has(ref)) {
+      throw new Error(`$ref '${ref}' at ${location} refers back to itself.`);
+    }
+    seen.add(ref);
+
+    const target = (spec.components as Record<string, Record<string, unknown> | undefined> | undefined)
+      ?.[section]?.[parsed.name];
+    if (target === undefined) {
+      throw new Error(`$ref '${ref}' at ${location} does not resolve: components.${section} has no '${parsed.name}'.`);
+    }
+    current = target;
+  }
+
+  return current as T;
+}
+
+/** A parameter, with its $ref resolved. */
+export function resolveParameter(
+  param: ParameterObject | ReferenceObject,
+  spec: OpenAPISpec,
+  location: string
+): ParameterObject {
+  return resolveComponent<ParameterObject>(param, 'parameters', spec, location);
+}
+
+/**
+ * What an operation takes and returns, with every $ref into
+ * components.parameters, components.requestBodies and components.responses
+ * resolved.
+ */
+export interface ResolvedOperation {
+  /**
+   * The path item's parameters and the operation's own, an operation parameter
+   * replacing the path item's parameter of the same name and location.
+   */
+  parameters: ParameterObject[];
+  requestBody?: RequestBodyObject;
+  responses: Record<string, ResponseObject>;
+}
+
+/**
+ * The single answer to "what does this operation take and return".
+ *
+ * Every generator and check reads parameters, request bodies and responses
+ * through here, so a parameter declared on the path item or a response held in
+ * components cannot reach one artifact while missing from another.
+ */
+export function resolveOperation(
+  spec: OpenAPISpec,
+  apiPath: string,
+  method: HttpMethod
+): ResolvedOperation {
+  const pathItem = spec.paths[apiPath];
+  const operation = pathItem?.[method];
+  if (!operation) {
+    throw new Error(`No ${method.toUpperCase()} operation at ${apiPath}.`);
+  }
+  const location = `${method.toUpperCase()} ${apiPath}`;
+
+  const parameters: ParameterObject[] = [];
+  for (const declared of [pathItem.parameters, operation.parameters]) {
+    const seen = new Set<string>();
+    for (const entry of declared ?? []) {
+      const param = resolveParameter(entry, spec, location);
+      const key = `${param.in} ${param.name}`;
+      if (seen.has(key)) {
+        throw new Error(`Parameter '${param.name}' (in: ${param.in}) is declared twice at ${location}.`);
+      }
+      seen.add(key);
+
+      const replaced = parameters.findIndex(p => p.name === param.name && p.in === param.in);
+      if (replaced >= 0) {
+        parameters[replaced] = param;
+      } else {
+        parameters.push(param);
+      }
+    }
+  }
+
+  const requestBody = operation.requestBody
+    ? resolveComponent<RequestBodyObject>(operation.requestBody, 'requestBodies', spec, `${location} requestBody`)
+    : undefined;
+
+  const responses: Record<string, ResponseObject> = {};
+  for (const [statusCode, response] of Object.entries(operation.responses ?? {})) {
+    responses[statusCode] = resolveComponent<ResponseObject>(
+      response, 'responses', spec, `${location} response ${statusCode}`
+    );
+  }
+
+  return { parameters, requestBody, responses };
 }
 
 // Collect all schemas referenced by a schema

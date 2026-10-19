@@ -9,9 +9,9 @@ import type {
   OperationObject,
   SchemaObject,
   LintError,
-  ResponseObject,
+  ResolvedOperation,
 } from '../types.js';
-import { isReference, getRefName, hasPrivateProperties, collectReferencedSchemas, collectReachableComponents, isTsIdentifier } from '../types.js';
+import { isReference, hasPrivateProperties, collectReferencedSchemas, collectReachableComponents, isTsIdentifier, resolveOperation } from '../types.js';
 
 export interface LintOptions {
   /** Treat warnings as errors */
@@ -41,6 +41,7 @@ export function lintSpec(spec: OpenAPISpec, options: LintOptions = {}): LintResu
       if (!operation) continue;
       
       const location = `${method.toUpperCase()} ${path}`;
+      const resolved = resolveOperation(spec, path, method);
       
       // Routes, service interfaces and template contexts are all keyed by these
       // extensions: an operation without them is dropped from every artifact.
@@ -169,9 +170,9 @@ export function lintSpec(spec: OpenAPISpec, options: LintOptions = {}): LintResu
 
       // Validate x-event on links (200 response only, GET operations)
       if (method === 'get') {
-        const resp200 = operation.responses?.['200'];
-        if (resp200 && !isReference(resp200)) {
-          const responseLinks = (resp200 as ResponseObject).links;
+        const resp200 = resolved.responses['200'];
+        if (resp200) {
+          const responseLinks = resp200.links;
           if (responseLinks) {
             for (const [linkName, linkObj] of Object.entries(responseLinks)) {
               if (linkObj['x-event'] != null) {
@@ -225,11 +226,11 @@ export function lintSpec(spec: OpenAPISpec, options: LintOptions = {}): LintResu
 
       // Check public endpoints for private schema references
       if (operation['x-micro-contracts-published'] === true) {
-        const privateErrors = checkPublicEndpointForPrivate(path, method, operation, spec);
+        const privateErrors = checkPublicEndpointForPrivate(path, method, operation, resolved, spec);
         errors.push(...privateErrors);
         
         // Check for allOf/oneOf/anyOf in public endpoint schemas
-        const compositionWarnings = checkPublicEndpointComposition(path, method, operation, spec);
+        const compositionWarnings = checkPublicEndpointComposition(path, method, resolved, spec);
         warnings.push(...compositionWarnings);
       }
     }
@@ -257,6 +258,7 @@ function checkPublicEndpointForPrivate(
   path: string,
   method: string,
   operation: OperationObject,
+  resolved: ResolvedOperation,
   spec: OpenAPISpec
 ): LintError[] {
   const errors: LintError[] = [];
@@ -266,9 +268,9 @@ function checkPublicEndpointForPrivate(
   // $ref into any component section, and for every status code: whatever the
   // published contract pulls in must be visible here.
   const sections: Array<{ code: string; label: string; root: unknown }> = [
-    { code: 'PUBLIC_ENDPOINT_PRIVATE_REQUEST', label: 'request', root: operation.requestBody },
-    { code: 'PUBLIC_ENDPOINT_PRIVATE_RESPONSE', label: 'response', root: operation.responses },
-    { code: 'PUBLIC_ENDPOINT_PRIVATE_PARAMETER', label: 'parameter', root: operation.parameters },
+    { code: 'PUBLIC_ENDPOINT_PRIVATE_REQUEST', label: 'request', root: resolved.requestBody },
+    { code: 'PUBLIC_ENDPOINT_PRIVATE_RESPONSE', label: 'response', root: resolved.responses },
+    { code: 'PUBLIC_ENDPOINT_PRIVATE_PARAMETER', label: 'parameter', root: resolved.parameters },
   ];
 
   // An operation cannot be both published and non-exportable.
@@ -377,7 +379,7 @@ function collectInlineSchemas(root: unknown): SchemaObject[] {
 function checkPublicEndpointComposition(
   path: string,
   method: string,
-  operation: OperationObject,
+  resolved: ResolvedOperation,
   spec: OpenAPISpec
 ): LintError[] {
   const warnings: LintError[] = [];
@@ -386,20 +388,15 @@ function checkPublicEndpointComposition(
   // Collect all referenced schemas
   const referencedSchemas = new Set<string>();
   
-  if (operation.requestBody && !isReference(operation.requestBody)) {
-    const content = operation.requestBody.content?.['application/json'];
-    if (content?.schema) {
-      collectReferencedSchemas(content.schema, spec, referencedSchemas);
-    }
+  const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
+  if (bodySchema) {
+    collectReferencedSchemas(bodySchema, spec, referencedSchemas);
   }
   
-  for (const response of Object.values(operation.responses)) {
-    const resp = isReference(response)
-      ? spec.components?.responses?.[getRefName(response.$ref)]
-      : response;
-    
-    if (resp?.content?.['application/json']?.schema) {
-      collectReferencedSchemas(resp.content['application/json'].schema, spec, referencedSchemas);
+  for (const response of Object.values(resolved.responses)) {
+    const schema = response.content?.['application/json']?.schema;
+    if (schema) {
+      collectReferencedSchemas(schema, spec, referencedSchemas);
     }
   }
   

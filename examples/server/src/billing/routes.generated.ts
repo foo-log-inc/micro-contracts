@@ -20,7 +20,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/billing/invoices [PUBLISHED]
   fastify.get('/api/billing/invoices', {
     schema: {
-      params: { $ref: 'Billing_getInvoicesParams#' },
+      querystring: { $ref: 'Billing_getInvoicesQueryParams#' },
       response: { 200: { $ref: 'InvoiceListResponse#' },  },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -52,7 +52,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/billing/invoices/{id} [PUBLISHED]
   fastify.get('/api/billing/invoices/:id', {
     schema: {
-      params: { $ref: 'Billing_getInvoiceByIdParams#' },
+      params: { $ref: 'Billing_getInvoiceByIdPathParams#' },
       response: { 200: { $ref: 'Invoice#' },  },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -68,7 +68,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/billing/invoices/{id}/pay [PUBLISHED]
   fastify.post('/api/billing/invoices/:id/pay', {
     schema: {
-      params: { $ref: 'Billing_payInvoiceParams#' },
+      params: { $ref: 'Billing_payInvoicePathParams#' },
       body: { $ref: 'PayInvoiceRequest#' },
       response: { 200: { $ref: 'PaymentResult#' },  },
     },

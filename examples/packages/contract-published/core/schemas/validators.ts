@@ -200,8 +200,8 @@ export const ProblemDetails = {
   } as const;
 
 // Parameter schemas
-export const User_getUsersParams = {
-    "$id": "User_getUsersParams",
+export const User_getUsersQueryParams = {
+    "$id": "User_getUsersQueryParams",
     "type": "object",
     "properties": {
       "limit": {
@@ -216,8 +216,8 @@ export const User_getUsersParams = {
     }
   } as const;
 
-export const User_getUserByIdParams = {
-    "$id": "User_getUserByIdParams",
+export const User_getUserByIdPathParams = {
+    "$id": "User_getUserByIdPathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -239,6 +239,6 @@ export const allSchemas = [
   HealthStatus,
   ValidationError,
   ProblemDetails,
-  User_getUsersParams,
-  User_getUserByIdParams,
+  User_getUsersQueryParams,
+  User_getUserByIdPathParams,
 ] as const;

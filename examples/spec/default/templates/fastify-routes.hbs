@@ -25,8 +25,11 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // {{uppercase method}} {{path}}{{#if isPublished}} [PUBLISHED]{{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
-{{#if paramsType}}
-      params: { $ref: '{{typeNameBase}}Params#' },
+{{#if pathParams.length}}
+      params: { $ref: '{{typeNameBase}}PathParams#' },
+{{/if}}
+{{#if queryParams.length}}
+      querystring: { $ref: '{{typeNameBase}}QueryParams#' },
 {{/if}}
 {{#if requestBody}}
       body: { $ref: '{{requestBody.schemaName}}#' },

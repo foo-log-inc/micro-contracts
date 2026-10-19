@@ -8,28 +8,9 @@ import type {
   SchemaObject, 
   ReferenceObject,
   ParameterObject,
-  OperationObject,
 } from '../types.js';
-import { isReference, getRefName } from '../types.js';
-
-/**
- * Get a valid TypeScript identifier from service and method
- * e.g., "User" + "getSchema" -> "User_getSchema"
- */
-function getOperationTypeBase(operation: OperationObject): string {
-  const service = operation['x-micro-contracts-service'] as string | undefined;
-  const method = operation['x-micro-contracts-method'] as string | undefined;
-  
-  if (service && method) {
-    return `${service}_${method}`;
-  }
-  
-  if (operation.operationId) {
-    return operation.operationId.replace(/[^a-zA-Z0-9]/g, '_');
-  }
-  
-  return 'Unknown';
-}
+import { isReference, getRefName, resolveOperation } from '../types.js';
+import { operationTypeNames } from './typeGenerator.js';
 
 /**
  * Generate JSON Schema TypeScript file from OpenAPI spec
@@ -53,10 +34,13 @@ export function generateSchemas(spec: OpenAPISpec): string {
   }
 
   // Generate query/path parameter schemas from paths
-  const paramSchemas = generateParameterSchemas(spec);
-  if (paramSchemas) {
+  const paramSchemas = parameterSchemas(spec);
+  if (paramSchemas.length > 0) {
     lines.push('// Parameter schemas');
-    lines.push(paramSchemas);
+    for (const { name, params } of paramSchemas) {
+      lines.push(generateParamsSchema(name, params, spec));
+      lines.push('');
+    }
   }
 
   // Export all schema names for registration
@@ -69,29 +53,11 @@ export function generateSchemas(spec: OpenAPISpec): string {
       lines.push(`  ${name},`);
     }
   }
-  
-  // Add parameter schemas
-  for (const [, pathItem] of Object.entries(spec.paths)) {
-    for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
-      const operation = pathItem[method];
-      if (!operation) continue;
-      
-      const typeBase = getOperationTypeBase(operation);
 
-      // Combine query and path params into a single Params schema
-      const queryParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && p.in === 'query'
-      );
-      const pathParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && p.in === 'path'
-      );
-      const allParams = [...pathParams, ...queryParams];
-      if (allParams.length > 0) {
-        lines.push(`  ${typeBase}Params,`);
-      }
-    }
+  for (const { name } of paramSchemas) {
+    lines.push(`  ${name},`);
   }
-  
+
   lines.push('] as const;');
 
   return lines.join('\n');
@@ -194,40 +160,36 @@ function convertSchemaValue(
 }
 
 /**
- * Generate parameter schemas from paths
+ * The parameter schemas of every operation: `<base>PathParams` and
+ * `<base>QueryParams`, one per request location, which is how Fastify
+ * validates them (`schema.params` and `schema.querystring`). A single schema
+ * holding both validates neither location: its required path parameters would
+ * be demanded of the query string.
  */
-function generateParameterSchemas(spec: OpenAPISpec): string {
-  const lines: string[] = [];
-  const generatedSchemas = new Set<string>();
+function parameterSchemas(spec: OpenAPISpec): Array<{ name: string; params: ParameterObject[] }> {
+  const schemas: Array<{ name: string; params: ParameterObject[] }> = [];
+  const names = new Set<string>();
 
-  for (const [, pathItem] of Object.entries(spec.paths)) {
+  for (const [apiPath, pathItem] of Object.entries(spec.paths)) {
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[method];
       if (!operation) continue;
-      
-      const typeBase = getOperationTypeBase(operation);
 
-      // Generate combined params schema (path + query params)
-      const queryParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && p.in === 'query'
-      );
-      const pathParams = (operation.parameters || []).filter(
-        (p): p is ParameterObject => !isReference(p) && p.in === 'path'
-      );
-      const allParams = [...pathParams, ...queryParams];
+      const resolved = resolveOperation(spec, apiPath, method);
+      const { base } = operationTypeNames(operation, resolved);
 
-      if (allParams.length > 0) {
-        const schemaName = `${typeBase}Params`;
-        if (!generatedSchemas.has(schemaName)) {
-          generatedSchemas.add(schemaName);
-          lines.push(generateParamsSchema(schemaName, allParams, spec));
-          lines.push('');
+      for (const [location, suffix] of [['path', 'PathParams'], ['query', 'QueryParams']] as const) {
+        const params = resolved.parameters.filter(p => p.in === location);
+        const name = `${base}${suffix}`;
+        if (params.length > 0 && !names.has(name)) {
+          names.add(name);
+          schemas.push({ name, params });
         }
       }
     }
   }
 
-  return lines.join('\n');
+  return schemas;
 }
 
 /**

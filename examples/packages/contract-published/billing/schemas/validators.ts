@@ -207,8 +207,8 @@ export const ProblemDetails = {
   } as const;
 
 // Parameter schemas
-export const Billing_getInvoicesParams = {
-    "$id": "Billing_getInvoicesParams",
+export const Billing_getInvoicesQueryParams = {
+    "$id": "Billing_getInvoicesQueryParams",
     "type": "object",
     "properties": {
       "userId": {
@@ -226,8 +226,8 @@ export const Billing_getInvoicesParams = {
     }
   } as const;
 
-export const Billing_getInvoiceByIdParams = {
-    "$id": "Billing_getInvoiceByIdParams",
+export const Billing_getInvoiceByIdPathParams = {
+    "$id": "Billing_getInvoiceByIdPathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -239,8 +239,8 @@ export const Billing_getInvoiceByIdParams = {
     ]
   } as const;
 
-export const Billing_payInvoiceParams = {
-    "$id": "Billing_payInvoiceParams",
+export const Billing_payInvoicePathParams = {
+    "$id": "Billing_payInvoicePathParams",
     "type": "object",
     "properties": {
       "id": {
@@ -262,7 +262,7 @@ export const allSchemas = [
   PaymentResult,
   ValidationError,
   ProblemDetails,
-  Billing_getInvoicesParams,
-  Billing_getInvoiceByIdParams,
-  Billing_payInvoiceParams,
+  Billing_getInvoicesQueryParams,
+  Billing_getInvoiceByIdPathParams,
+  Billing_payInvoicePathParams,
 ] as const;

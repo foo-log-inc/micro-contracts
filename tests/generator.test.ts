@@ -7,12 +7,15 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import yaml from 'js-yaml';
+import Fastify from 'fastify';
 import {
   loadOpenAPISpec,
   loadConfig,
   generate,
   collectInputFiles,
+  buildTemplateContext,
 } from '../src/generator/index.js';
+import { getStarterTemplates } from '../src/cli/templates.js';
 import type { MultiModuleConfig } from '../src/types.js';
 
 describe('generator', () => {
@@ -1460,6 +1463,206 @@ components:
 `);
 
       expect(() => loadOpenAPISpec(specPath)).toThrow(/\.\/order\.yaml/);
+    });
+  });
+
+  describe('operation parameters, request bodies and responses', () => {
+    /** Write `spec` and return a config generating its contract under tmpDir. */
+    function setupSpec(spec: string): { specPath: string; config: MultiModuleConfig } {
+      const specPath = path.join(tmpDir, 'spec.yaml');
+      fs.writeFileSync(specPath, spec);
+      return {
+        specPath,
+        config: {
+          defaults: {
+            contract: { output: path.join(tmpDir, 'contracts/{module}') },
+            contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+          },
+          modules: { core: { openapi: specPath } },
+        },
+      };
+    }
+
+    const read = (relative: string) => fs.readFileSync(path.join(tmpDir, relative), 'utf-8');
+
+    it('takes parameters from components.parameters and from the path item', async () => {
+      const { specPath, config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /users/{userId}/orders/{orderId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getOrder
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: getOrder
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+components:
+  parameters:
+    UserId:  { name: userId,  in: path, required: true, schema: { type: string, minLength: 1 } }
+    OrderId: { name: orderId, in: path, required: true, schema: { type: string, minLength: 1 } }
+  schemas:
+    Order: { type: object, properties: { orderId: { type: string } } }
+`);
+
+      await generate(config, { contractsOnly: true });
+
+      const types = read('contracts/core/schemas/types.ts');
+      expect(types).toMatch(/export interface Order_getOrderParams \{\n {2}userId: string;\n {2}orderId: string;\n\}/);
+      expect(types).toContain('export type Order_getOrderInput = Order_getOrderParams;');
+      expect(read('contracts/core/schemas/validators.ts')).toMatch(/"\$id": "Order_getOrderPathParams"[\s\S]*"userId"[\s\S]*"orderId"/);
+
+      const [route] = buildTemplateContext(loadOpenAPISpec(specPath), 'core').routes;
+      expect(route.pathParams.map(p => p.name)).toEqual(['userId', 'orderId']);
+      expect(route.paramsType).toBe('Order_getOrderParams');
+    });
+
+    it('fails on a parameter $ref that does not resolve', async () => {
+      const { config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: getOrder
+      parameters:
+        - $ref: '#/components/parameters/Missing'
+      responses:
+        '200': { description: ok }
+`);
+
+      await expect(generate(config, { contractsOnly: true }))
+        .rejects.toThrow(/#\/components\/parameters\/Missing/);
+    });
+
+    it('resolves responses and request bodies held in components', async () => {
+      const { specPath, config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: createOrder
+      requestBody: { $ref: '#/components/requestBodies/CreateOrderBody' }
+      responses:
+        '201': { $ref: '#/components/responses/OrderResponse' }
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: getOrder
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/OrderResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  requestBodies:
+    CreateOrderBody:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/CreateOrderRequest' } } }
+  responses:
+    OrderResponse:
+      description: the order
+      content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+    NotFound:
+      description: not found
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    Order: { type: object, properties: { orderId: { type: string } } }
+    CreateOrderRequest: { type: object, properties: { quantity: { type: integer } } }
+    Error: { type: object, required: [message], properties: { message: { type: string } } }
+`);
+
+      await generate(config, { contractsOnly: true });
+      expect(read('contracts/core/schemas/types.ts'))
+        .toContain('export type Order_createOrderInput = { data: CreateOrderRequest };');
+
+      const { routes } = buildTemplateContext(loadOpenAPISpec(specPath), 'core');
+      const getOrder = routes.find(r => r.operationId === 'getOrder')!;
+      expect(getOrder.responseType).toBe('Order');
+      expect(getOrder.responses).toEqual([
+        { statusCode: '200', schemaName: 'Order' },
+        { statusCode: '404', schemaName: 'Error' },
+      ]);
+      const createOrder = routes.find(r => r.operationId === 'createOrder')!;
+      expect(createOrder.requestBody).toEqual({ schemaName: 'CreateOrderRequest', required: true });
+      expect(createOrder.requestType).toBe('CreateOrderRequest');
+      expect(createOrder.responseType).toBe('Order');
+    });
+
+    it('fails on a response $ref that does not resolve', async () => {
+      const { config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /orders:
+    get:
+      operationId: getOrders
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: getOrders
+      responses:
+        '200': { $ref: '#/components/responses/Missing' }
+`);
+
+      await expect(generate(config, { contractsOnly: true }))
+        .rejects.toThrow(/#\/components\/responses\/Missing/);
+    });
+
+    it('validates the query of an operation that also has path parameters (starter Fastify routes)', async () => {
+      const { config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /patients/{patientId}:
+    get:
+      operationId: getPatient
+      x-micro-contracts-service: Patient
+      x-micro-contracts-method: getPatient
+      parameters:
+        - { name: patientId, in: path, required: true, schema: { type: string } }
+        - { name: phrPeriod, in: query, required: false, schema: { type: string, enum: [1W, 1M, 3M] } }
+      responses:
+        '200': { description: ok }
+`);
+      fs.writeFileSync(path.join(tmpDir, 'fastify-routes.hbs'), getStarterTemplates()['fastify-routes.hbs']);
+      config.defaults!.outputs = {
+        'server-routes': {
+          output: path.join(tmpDir, 'server/routes.generated.ts'),
+          template: path.join(tmpDir, 'fastify-routes.hbs'),
+          config: { contractPackage: '../contracts/{module}', servicesPath: 'fastify.services.{module}' },
+        },
+      };
+
+      await generate(config);
+
+      const { registerRoutes } = await import(path.join(tmpDir, 'server/routes.generated.ts'));
+      const app = Fastify();
+      app.decorate('services', { core: { patient: { getPatient: async (input: unknown) => input } } });
+      await registerRoutes(app);
+
+      try {
+        const invalid = await app.inject({ method: 'GET', url: '/patients/p1?phrPeriod=X' });
+        expect(invalid.statusCode).toBe(400);
+
+        const valid = await app.inject({ method: 'GET', url: '/patients/p1?phrPeriod=1W' });
+        expect(valid.statusCode).toBe(200);
+        expect(valid.json()).toEqual({ patientId: 'p1', phrPeriod: '1W' });
+      } finally {
+        await app.close();
+      }
     });
   });
 });

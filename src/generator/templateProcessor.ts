@@ -8,10 +8,10 @@
 import fs from 'fs';
 import path from 'path';
 import Handlebars from 'handlebars';
-import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
+import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
 import { operationKey } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
-import { isReference, getRefName } from '../types.js';
+import { isReference, getRefName, resolveOperation } from '../types.js';
 
 // =============================================================================
 // Types
@@ -449,37 +449,31 @@ function extractRoutes(
         }
       }
 
+      const resolved = resolveOperation(spec, apiPath, method);
+
       // Extract parameters
-      const allParams = operation.parameters || [];
-      const queryParams = allParams
-        .filter((p): p is ParameterObject => !isReference(p) && p.in === 'query')
+      const queryParams = resolved.parameters
+        .filter(p => p.in === 'query')
         .map(p => ({ name: p.name, required: p.required || false }));
-      const pathParams = allParams
-        .filter((p): p is ParameterObject => !isReference(p) && p.in === 'path')
+      const pathParams = resolved.parameters
+        .filter(p => p.in === 'path')
         .map(p => ({ name: p.name, required: true }));
 
       // Extract request body
       let requestBody: RouteContext['requestBody'];
-      if (operation.requestBody) {
-        const reqBody = isReference(operation.requestBody)
-          ? null  // Simplified - would need to resolve
-          : operation.requestBody;
-        
-        if (reqBody?.content?.['application/json']?.schema) {
-          const schema = reqBody.content['application/json'].schema;
-          const schemaName = isReference(schema) 
-            ? getRefName(schema.$ref)
-            : operationId + 'Body';
-          requestBody = { schemaName, required: reqBody.required || false };
-        }
+      const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
+      if (resolved.requestBody && bodySchema) {
+        const schemaName = isReference(bodySchema)
+          ? getRefName(bodySchema.$ref)
+          : operationId + 'Body';
+        requestBody = { schemaName, required: resolved.requestBody.required || false };
       }
 
       // Extract responses
       const responses: ResponseContext[] = [];
-      for (const [statusCode, response] of Object.entries(operation.responses)) {
-        const resp = isReference(response) ? null : response;
-        if (resp?.content?.['application/json']?.schema) {
-          const schema = resp.content['application/json'].schema;
+      for (const [statusCode, response] of Object.entries(resolved.responses)) {
+        const schema = response.content?.['application/json']?.schema;
+        if (schema) {
           const schemaName = isReference(schema) ? getRefName(schema.$ref) : undefined;
           responses.push({ statusCode, schemaName });
         } else {
@@ -671,16 +665,9 @@ function deriveEventParams(
 /**
  * Extract schema $ref name from a mutation operation's request body.
  */
-function extractSchemaRef(operation: OperationObject): string {
-  if (!operation.requestBody) return '';
-  if (isReference(operation.requestBody)) {
-    return getRefName(operation.requestBody.$ref);
-  }
-  const jsonContent = operation.requestBody.content?.['application/json'];
-  if (jsonContent?.schema && isReference(jsonContent.schema)) {
-    return getRefName(jsonContent.schema.$ref);
-  }
-  return '';
+function extractSchemaRef(resolved: ResolvedOperation): string {
+  const schema = resolved.requestBody?.content?.['application/json']?.schema;
+  return schema && isReference(schema) ? getRefName(schema.$ref) : '';
 }
 
 /**
@@ -722,22 +709,20 @@ function extractScreens(spec: OpenAPISpec): ScreenContext[] {
       ? operation.security.length > 0 && operation.security.some(s => Object.keys(s).length > 0)
       : false;
 
+    const response200 = resolveOperation(spec, apiPath, 'get').responses['200'];
+
     let viewModelSchema = operation['x-view-model'] || '';
     if (!viewModelSchema) {
-      const response200 = operation.responses?.['200'];
-      if (response200 && !isReference(response200)) {
-        const jsonContent = response200.content?.['application/json'];
-        if (jsonContent?.schema && isReference(jsonContent.schema)) {
-          viewModelSchema = getRefName(jsonContent.schema.$ref);
-        }
+      const jsonContent = response200?.content?.['application/json'];
+      if (jsonContent?.schema && isReference(jsonContent.schema)) {
+        viewModelSchema = getRefName(jsonContent.schema.$ref);
       }
     }
 
     // Navigation links from 200 response (with optional inline x-event)
     const links: ScreenLink[] = [];
-    const response200 = operation.responses?.['200'];
-    if (response200 && !isReference(response200)) {
-      const responseLinks = (response200 as ResponseObject).links;
+    if (response200) {
+      const responseLinks = response200.links;
       if (responseLinks) {
         for (const [linkName, linkObj] of Object.entries(responseLinks)) {
           if (linkObj.operationId) {
@@ -776,7 +761,7 @@ function extractScreens(spec: OpenAPISpec): ScreenContext[] {
         method,
         operationId: mutationOp.operationId ?? '',
         summary: mutationOp.summary ?? '',
-        schemaRef: extractSchemaRef(mutationOp),
+        schemaRef: extractSchemaRef(resolveOperation(spec, apiPath, method)),
         event: actionEvent,
       });
     }

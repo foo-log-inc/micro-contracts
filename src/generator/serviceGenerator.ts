@@ -13,8 +13,9 @@ import type {
   ParameterObject,
   ServiceInfo,
   ServiceMethodInfo,
+  HttpMethod,
 } from '../types.js';
-import { isReference, getRefName } from '../types.js';
+import { isReference, getRefName, resolveOperation } from '../types.js';
 
 interface ServiceGeneratorOptions {
   /** Only include public endpoints (x-public: true) */
@@ -128,7 +129,7 @@ function extractServiceInfo(spec: OpenAPISpec, publicOnly: boolean): ServiceInfo
  */
 function extractMethodInfo(
   path: string,
-  httpMethod: string,
+  httpMethod: HttpMethod,
   operation: OperationObject,
   spec: OpenAPISpec
 ): ServiceMethodInfo | null {
@@ -143,64 +144,31 @@ function extractMethodInfo(
     ? `${serviceName}_${serviceMethod}`
     : operationId.replace(/[^a-zA-Z0-9]/g, '_');
   const isPublished = operation['x-micro-contracts-published'] === true;
-  
-  // Get request body type
-  let requestType: string | undefined;
-  if (operation.requestBody) {
-    const reqBody = isReference(operation.requestBody)
-      ? spec.components?.requestBodies?.[getRefName(operation.requestBody.$ref)]
-      : operation.requestBody;
-    
-    if (reqBody) {
-      const content = reqBody.content?.['application/json'];
-      if (content?.schema) {
-        requestType = isReference(content.schema)
-          ? getRefName(content.schema.$ref)
-          : undefined;
-      }
-    }
-  }
-  
+  const resolved = resolveOperation(spec, path, httpMethod);
+
+  // Request body schema name
+  const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
+  const requestType = bodySchema && isReference(bodySchema) ? getRefName(bodySchema.$ref) : undefined;
+
   // Get response type
   let responseType: string | undefined;
-  const successResponse = operation.responses['200'] || operation.responses['201'];
-  if (successResponse) {
-    const resp = isReference(successResponse)
-      ? spec.components?.responses?.[getRefName(successResponse.$ref)]
-      : successResponse;
-    
-    if (resp?.content?.['application/json']?.schema) {
-      const schema = resp.content['application/json'].schema;
-      responseType = isReference(schema) ? getRefName(schema.$ref) : undefined;
-    }
+  const successResponse = resolved.responses['200'] || resolved.responses['201'];
+  const responseSchema = successResponse?.content?.['application/json']?.schema;
+  if (responseSchema) {
+    responseType = isReference(responseSchema) ? getRefName(responseSchema.$ref) : undefined;
   }
-  
+
   // Check for 204 (void response)
-  if (operation.responses['204'] && !responseType) {
+  if (resolved.responses['204'] && !responseType) {
     responseType = 'void';
   }
-  
-  // Get all params (path + query combined)
-  const allParams = (operation.parameters || []).filter(
-    (p): p is ParameterObject => !isReference(p)
-  );
-  const queryParams = allParams.filter(p => p.in === 'query');
-  const pathParams = allParams.filter(p => p.in === 'path');
-  const hasParams = queryParams.length > 0 || pathParams.length > 0;
+
+  // Params type (path + query combined)
+  const allParams: ParameterObject[] = resolved.parameters;
+  const hasParams = allParams.some(p => p.in === 'query' || p.in === 'path');
   const paramsType = hasParams ? `${typeNameBase}Params` : undefined;
-  
-  // Request body schema name
-  let requestBodySchema: string | undefined;
-  if (operation.requestBody) {
-    const reqBody = isReference(operation.requestBody)
-      ? spec.components?.requestBodies?.[getRefName(operation.requestBody.$ref)]
-      : operation.requestBody;
-    if (reqBody?.content?.['application/json']?.schema) {
-      const schema = reqBody.content['application/json'].schema;
-      requestBodySchema = isReference(schema) ? getRefName(schema.$ref) : undefined;
-    }
-  }
-  
+
+
   // Collect all x-* extensions from the operation
   const extensions: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(operation as unknown as Record<string, unknown>)) {
@@ -219,7 +187,7 @@ function extractMethodInfo(
     responseType,
     paramsType,
     parameters: allParams,
-    requestBodySchema,
+    requestBodySchema: requestType,
     extensions,
   };
 }

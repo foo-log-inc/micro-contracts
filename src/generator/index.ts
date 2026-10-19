@@ -8,6 +8,7 @@ import yaml from 'js-yaml';
 import type {
   OpenAPISpec,
   OperationObject,
+  HttpMethod,
   GeneratorConfig,
   MultiModuleConfig,
   ResolvedModuleConfig,
@@ -17,6 +18,7 @@ import {
   isMultiModuleConfig,
   resolveModuleConfig,
   validateConfigKeys,
+  resolveOperation,
 } from '../types.js';
 import { generateTypes, operationTypeNames } from './typeGenerator.js';
 import { generateSchemas } from './schemaGenerator.js';
@@ -604,9 +606,9 @@ function declaredDependencyTypes(
   const names = new Set<string>();
 
   for (const dep of deps) {
-    const operation = findOperation(targetSpec, dep.service, dep.method);
+    const found = findOperation(targetSpec, dep.service, dep.method);
 
-    if (!operation) {
+    if (!found) {
       throw new Error(
         `Module '${sourceModule}' depends on '${dep.raw}' but module '${targetModule}' ` +
         `has no operation with x-micro-contracts-service '${dep.service}' ` +
@@ -616,6 +618,7 @@ function declaredDependencyTypes(
 
     // deps/ re-exports from contract-published, which only carries published
     // operations: depending on an unpublished one cannot resolve.
+    const { apiPath, method, operation } = found;
     if (operation['x-micro-contracts-published'] !== true) {
       throw new Error(
         `Module '${sourceModule}' depends on '${dep.raw}' but that operation is not ` +
@@ -623,13 +626,14 @@ function declaredDependencyTypes(
       );
     }
 
-    const typeNames = operationTypeNames(operation);
+    const resolved = resolveOperation(targetSpec, apiPath, method);
+    const typeNames = operationTypeNames(operation, resolved);
     names.add(typeNames.input);
     if (typeNames.params) names.add(typeNames.params);
     if (typeNames.body) names.add(typeNames.body);
 
     // Schemas the operation reaches, named in the published types.
-    for (const pointer of collectReachableComponents(operation, targetSpec)) {
+    for (const pointer of collectReachableComponents(resolved, targetSpec)) {
       if (pointer.startsWith('schemas/')) {
         names.add(pointer.slice('schemas/'.length));
       }
@@ -644,15 +648,15 @@ function findOperation(
   spec: OpenAPISpec,
   service: string,
   method: string
-): OperationObject | undefined {
-  for (const pathItem of Object.values(spec.paths)) {
+): { apiPath: string; method: HttpMethod; operation: OperationObject } | undefined {
+  for (const [apiPath, pathItem] of Object.entries(spec.paths)) {
     for (const httpMethod of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[httpMethod];
       if (
         operation?.['x-micro-contracts-service'] === service &&
         operation['x-micro-contracts-method'] === method
       ) {
-        return operation;
+        return { apiPath, method: httpMethod, operation };
       }
     }
   }
@@ -835,7 +839,9 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
     components: {},
   };
 
-  const publicOperations: OperationObject[] = [];
+  // What the public operations reach from: themselves, and the parameters
+  // their path items declare for every operation under them.
+  const publicRoots: unknown[] = [];
   const usedTags = new Set<string>();
 
   // Filter paths to only include x-micro-contracts-published: true
@@ -848,7 +854,7 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
       if (operation?.['x-micro-contracts-published'] === true) {
         filteredPathItem[method] = operation;
         hasPublicOperation = true;
-        publicOperations.push(operation);
+        publicRoots.push(operation);
 
         for (const tag of operation.tags ?? []) {
           usedTags.add(tag);
@@ -857,6 +863,10 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
     }
 
     if (hasPublicOperation) {
+      if (pathItem.parameters) {
+        filteredPathItem.parameters = pathItem.parameters;
+        publicRoots.push(pathItem.parameters);
+      }
       filtered.paths[pathKey] = filteredPathItem;
     }
   }
@@ -864,7 +874,7 @@ function filterPublicSpec(spec: OpenAPISpec): OpenAPISpec {
   // Keep exactly the components the public operations reach, in every section.
   // Copying a section wholesale left components that only private endpoints
   // used, referring to schemas this filter had dropped: a dangling $ref.
-  const reachable = collectReachableComponents(publicOperations, spec);
+  const reachable = collectReachableComponents(publicRoots, spec);
   const sourceComponents = spec.components as Record<string, Record<string, unknown>> | undefined;
   const targetComponents = filtered.components as Record<string, Record<string, unknown>>;
 

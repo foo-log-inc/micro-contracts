@@ -9,8 +9,9 @@ import type {
   ParameterObject,
   OperationObject,
   OpenAPIType,
+  ResolvedOperation,
 } from '../types.js';
-import { isReference, getRefName, isTsIdentifier } from '../types.js';
+import { isReference, getRefName, isTsIdentifier, resolveOperation } from '../types.js';
 
 /**
  * Normalize OpenAPI 3.1 type arrays into a non-null type and a nullable flag.
@@ -306,6 +307,11 @@ function getOperationTypeName(operation: OperationObject): string {
   return 'Unknown';
 }
 
+/** The parameters an operation's Params type is made of: path and query. */
+function paramsTypeMembers(resolved: ResolvedOperation): ParameterObject[] {
+  return resolved.parameters.filter(p => p.in === 'query' || p.in === 'path');
+}
+
 /**
  * The type names generated for one operation.
  *
@@ -313,32 +319,22 @@ function getOperationTypeName(operation: OperationObject): string {
  * emitter below and the deps/ re-exports both read it, so a re-export cannot
  * name a type that is never generated.
  */
-export function operationTypeNames(operation: OperationObject): {
+export function operationTypeNames(operation: OperationObject, resolved: ResolvedOperation): {
   base: string;
   input: string;
   params?: string;
   body?: string;
 } {
   const base = getOperationTypeName(operation);
-
-  const allParams = (operation.parameters || []).filter(
-    (p): p is ParameterObject => !isReference(p) && (p.in === 'query' || p.in === 'path')
-  );
-  const params = allParams.length > 0 ? `${base}Params` : undefined;
+  const params = paramsTypeMembers(resolved).length > 0 ? `${base}Params` : undefined;
 
   let body: string | undefined;
-  if (operation.requestBody) {
-    if (isReference(operation.requestBody)) {
-      body = getRefName(operation.requestBody.$ref);
-    } else {
-      const content = operation.requestBody.content?.['application/json'];
-      if (content?.schema) {
-        if (isReference(content.schema)) {
-          body = getRefName(content.schema.$ref);
-        } else if (content.schema.properties || normalizeType(content.schema).types.includes('object')) {
-          body = `${base}Body`;
-        }
-      }
+  const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
+  if (bodySchema) {
+    if (isReference(bodySchema)) {
+      body = getRefName(bodySchema.$ref);
+    } else if (bodySchema.properties || normalizeType(bodySchema).types.includes('object')) {
+      body = `${base}Body`;
     }
   }
 
@@ -352,28 +348,24 @@ function generateOperationTypes(spec: OpenAPISpec): string {
   const lines: string[] = [];
   const generatedTypes = new Set<string>();
 
-  for (const pathItem of Object.values(spec.paths)) {
+  for (const [apiPath, pathItem] of Object.entries(spec.paths)) {
     for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
       const operation = pathItem[method];
       if (!operation) continue;
-      
+
+      const resolved = resolveOperation(spec, apiPath, method);
       const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName } =
-        operationTypeNames(operation);
+        operationTypeNames(operation, resolved);
 
       if (paramsTypeName && !generatedTypes.has(paramsTypeName)) {
-        const allParams = (operation.parameters || []).filter(
-          (p): p is ParameterObject => !isReference(p) && (p.in === 'query' || p.in === 'path')
-        );
         generatedTypes.add(paramsTypeName);
-        lines.push(generateParamsType(paramsTypeName, allParams, spec));
+        lines.push(generateParamsType(paramsTypeName, paramsTypeMembers(resolved), spec));
         lines.push('');
       }
 
       // An inline body schema needs its interface emitted; a $ref body names an
       // existing component schema.
-      const inlineBodySchema = operation.requestBody && !isReference(operation.requestBody)
-        ? operation.requestBody.content?.['application/json']?.schema
-        : undefined;
+      const inlineBodySchema = resolved.requestBody?.content?.['application/json']?.schema;
       if (bodyTypeName && inlineBodySchema && !isReference(inlineBodySchema) && !generatedTypes.has(bodyTypeName)) {
         generatedTypes.add(bodyTypeName);
         lines.push(generateRequestBodyType(bodyTypeName, inlineBodySchema, spec));

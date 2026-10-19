@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import { MICRO_CONTRACTS_OPERATION_EXTENSIONS } from '../types.js';
+import { MICRO_CONTRACTS_OPERATION_EXTENSIONS, resolveParameter } from '../types.js';
 import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject } from '../types.js';
 import { bundleExternalRefs } from './specLoader.js';
 
@@ -194,10 +194,11 @@ function applyAction(
           if (!operation.parameters) {
             operation.parameters = [];
           }
-          // Avoid duplicates
-          const existing = operation.parameters.findIndex(
-            p => !('$ref' in p) && p.name === injectedParam.name && p.in === injectedParam.in
-          );
+          // Replace the operation's parameter of the same name and location
+          const existing = operation.parameters.findIndex(p => {
+            const declared = resolveParameter(p, result.spec, `${method.toUpperCase()} ${apiPath}`);
+            return declared.name === injectedParam.name && declared.in === injectedParam.in;
+          });
           if (existing >= 0) {
             operation.parameters[existing] = injectedParam;
           } else {
