@@ -11,7 +11,7 @@ import type {
   LintError,
   ResolvedOperation,
 } from '../types.js';
-import { isReference, hasPrivateProperties, collectReferencedSchemas, collectReachableComponents, isTsIdentifier, resolveOperation } from '../types.js';
+import { isReference, hasPrivateProperties, collectReferencedSchemas, collectReachableComponents, isTsIdentifier, parseComponentRef, resolveOperation } from '../types.js';
 
 export interface LintOptions {
   /** Treat warnings as errors */
@@ -477,8 +477,9 @@ function validateInlineEvent(
     return;
   }
 
-  if (typeof obj.$ref === 'string' && obj.$ref.startsWith('#/components/x-event-defs/')) {
-    const defName = obj.$ref.split('/').pop()!;
+  const parsed = typeof obj.$ref === 'string' ? parseComponentRef(obj.$ref) : null;
+  if (parsed?.section === 'x-event-defs') {
+    const defName = parsed.name;
     if (!(defName in eventDefs)) {
       errors.push({
         type: 'error',

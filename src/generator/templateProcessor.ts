@@ -11,7 +11,7 @@ import Handlebars from 'handlebars';
 import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
 import { operationKey } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
-import { isReference, getRefName, resolveOperation } from '../types.js';
+import { isReference, getRefName, parseComponentRef, resolveOperation } from '../types.js';
 import { operationTypeNames } from './typeGenerator.js';
 
 // =============================================================================
@@ -612,10 +612,11 @@ function resolveInlineEvent(
 
   if (typeof raw === 'object' && '$ref' in raw && typeof raw.$ref === 'string') {
     const ref = raw.$ref;
-    if (!ref.startsWith('#/components/x-event-defs/')) {
+    const parsed = parseComponentRef(ref);
+    if (parsed?.section !== 'x-event-defs') {
       return { name: ref, type: defaultType };
     }
-    const defName = ref.split('/').pop()!;
+    const defName = parsed.name;
     const resolved = eventDefs[defName];
     if (!resolved) {
       // Using the ref name as the event name would turn a typo into an event.
@@ -847,9 +848,9 @@ Handlebars.registerHelper('snakeCase', (str: string) => {
   return str?.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/-/g, '_').toLowerCase();
 });
 
-// Ref helper
+// Ref helper: the component name of a reference; no reference, no name
 Handlebars.registerHelper('refName', (ref: string) => {
-  return typeof ref === 'string' ? ref.split('/').pop() : '';
+  return typeof ref === 'string' && ref ? getRefName(ref) : '';
 });
 
 // JSON helper
