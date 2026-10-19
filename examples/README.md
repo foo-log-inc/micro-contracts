@@ -192,20 +192,20 @@ The following is an auto-generated list of APIs from OpenAPI spec.
 <!--@embedoc:api_list module="all"-->
 | Module | Method | Path | Summary | Public | Middleware | Implementation |
 | --- | --- | --- | --- | --- | --- | --- |
-| core | GET | /api/users | Get users list | ✅ | requireAuth | [UserDomain.getUsers](server/src/core/domains/UserDomain.ts) |
-| core | POST | /api/users | Create new user | ✅ | requireAuth | [UserDomain.createUser](server/src/core/domains/UserDomain.ts) |
-| core | GET | /api/users/{id} | Get user by ID | ✅ | requireAuth | [UserDomain.getUserById](server/src/core/domains/UserDomain.ts) |
-| core | PUT | /api/users/{id} | Update user |  | requireAuth | [UserDomain.updateUser](server/src/core/domains/UserDomain.ts) |
-| core | DELETE | /api/users/{id} | Delete user |  | requireAuth, requireAdmin | [UserDomain.deleteUser](server/src/core/domains/UserDomain.ts) |
-| core | GET | /api/tenant/data | Get tenant-scoped data |  | requireAuth, tenantIsolation, rateLimit | [TenantDomain.getData](server/src/core/domains/TenantDomain.ts) |
-| core | POST | /api/tenant/data | Create tenant data |  | requireAuth, tenantIsolation, rateLimit | [TenantDomain.createData](server/src/core/domains/TenantDomain.ts) |
-| core | GET | /api/admin/stats | Get system statistics |  | requireAuth, requireAdmin | [AdminDomain.getStats](server/src/core/domains/AdminDomain.ts) |
-| core | POST | /api/admin/users/{id}/suspend | Suspend user account |  | requireAuth, requireAdmin | [AdminDomain.suspendUser](server/src/core/domains/AdminDomain.ts) |
-| core | GET | /api/health | Health check | ✅ |  | [HealthDomain.check](server/src/core/domains/HealthDomain.ts) |
-| billing | GET | /api/billing/invoices | List all invoices | ✅ | requireAuth, tenantIsolation | [Billing.getInvoices](server/src/billing/domains/Billing.ts) |
-| billing | POST | /api/billing/invoices | Create a new invoice | ✅ | requireAuth, tenantIsolation | [Billing.createInvoice](server/src/billing/domains/Billing.ts) |
-| billing | GET | /api/billing/invoices/{id} | Get invoice by ID | ✅ | requireAuth, tenantIsolation | [Billing.getInvoiceById](server/src/billing/domains/Billing.ts) |
-| billing | POST | /api/billing/invoices/{id}/pay | Pay an invoice | ✅ | requireAuth, tenantIsolation | [Billing.payInvoice](server/src/billing/domains/Billing.ts) |
+| core | GET | /api/users | Get users list | ✅ | requireAuth | [User.getUsers](server/src/core/services/UserService.ts) |
+| core | POST | /api/users | Create new user | ✅ | requireAuth | [User.createUser](server/src/core/services/UserService.ts) |
+| core | GET | /api/users/{id} | Get user by ID | ✅ | requireAuth | [User.getUserById](server/src/core/services/UserService.ts) |
+| core | PUT | /api/users/{id} | Update user |  | requireAuth | [User.updateUser](server/src/core/services/UserService.ts) |
+| core | DELETE | /api/users/{id} | Delete user |  | requireAuth, requireAdmin | [User.deleteUser](server/src/core/services/UserService.ts) |
+| core | GET | /api/tenant/data | Get tenant-scoped data |  | requireAuth, tenantIsolation, rateLimit | [Tenant.getData](server/src/core/services/TenantService.ts) |
+| core | POST | /api/tenant/data | Create tenant data |  | requireAuth, tenantIsolation, rateLimit | [Tenant.createData](server/src/core/services/TenantService.ts) |
+| core | GET | /api/admin/stats | Get system statistics |  | requireAuth, requireAdmin | [Admin.getStats](server/src/core/services/AdminService.ts) |
+| core | POST | /api/admin/users/{id}/suspend | Suspend user account |  | requireAuth, requireAdmin | [Admin.suspendUser](server/src/core/services/AdminService.ts) |
+| core | GET | /api/health | Health check | ✅ |  | [Health.check](server/src/core/services/HealthService.ts) |
+| billing | GET | /api/billing/invoices | List all invoices | ✅ | requireAuth, tenantIsolation | [Billing.getInvoices](server/src/billing/services/BillingService.ts) |
+| billing | POST | /api/billing/invoices | Create a new invoice | ✅ | requireAuth, tenantIsolation | [Billing.createInvoice](server/src/billing/services/BillingService.ts) |
+| billing | GET | /api/billing/invoices/{id} | Get invoice by ID | ✅ | requireAuth, tenantIsolation | [Billing.getInvoiceById](server/src/billing/services/BillingService.ts) |
+| billing | POST | /api/billing/invoices/{id}/pay | Pay an invoice | ✅ | requireAuth, tenantIsolation | [Billing.payInvoice](server/src/billing/services/BillingService.ts) |
 <!--@embedoc:end-->
 
 ---
