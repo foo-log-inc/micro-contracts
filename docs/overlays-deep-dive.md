@@ -135,7 +135,7 @@ actions:
 
 ### $ref Paths in Overlays
 
-Specify `$ref` paths **relative to the overlay file's location**. A `$ref` into another file must point at a component (`#/components/{schemas,responses,parameters,requestBodies}/<name>`): micro-contracts brings that component, and everything it references, into the module's spec, and the reference becomes a local one.
+Specify `$ref` paths **relative to the overlay file's location**. A `$ref` into another file must point at a component (`#/components/<section>/<name>`): micro-contracts brings that component, and everything it references, into the module's spec, and the reference becomes a local one.
 
 ```yaml
 # spec/_shared/overlays/middleware.overlay.yaml
