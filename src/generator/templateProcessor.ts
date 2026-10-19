@@ -617,11 +617,12 @@ function resolveInlineEvent(
       return { name: ref, type: defaultType };
     }
     const defName = parsed.name;
-    const resolved = eventDefs[defName];
-    if (!resolved) {
+    const resolved = defName === undefined ? undefined : eventDefs[defName];
+    if (defName === undefined || !resolved) {
       // Using the ref name as the event name would turn a typo into an event.
       throw new Error(
-        `x-event references '${ref}' but components.x-event-defs has no '${defName}'. ` +
+        `x-event references '${ref}' but components.x-event-defs has no ` +
+        `${defName === undefined ? 'entry by that reference' : `'${defName}'`}. ` +
         `Defined: ${Object.keys(eventDefs).join(', ') || '(none)'}.`
       );
     }

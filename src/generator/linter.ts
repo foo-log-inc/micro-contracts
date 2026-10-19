@@ -480,12 +480,13 @@ function validateInlineEvent(
   const parsed = typeof obj.$ref === 'string' ? parseComponentRef(obj.$ref) : null;
   if (parsed?.section === 'x-event-defs') {
     const defName = parsed.name;
-    if (!(defName in eventDefs)) {
+    if (defName === undefined || !(defName in eventDefs)) {
       errors.push({
         type: 'error',
         code: 'SCREEN_UNKNOWN_EVENT_REF',
         message:
-          `x-event references '${obj.$ref}' but components.x-event-defs has no '${defName}' ` +
+          `x-event references '${obj.$ref}' but components.x-event-defs has no ` +
+          `${defName === undefined ? 'entry by that reference' : `'${defName}'`} ` +
           `(defined: ${Object.keys(eventDefs).join(', ') || 'none'})`,
         path,
         location,

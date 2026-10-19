@@ -893,7 +893,7 @@ export function isTsIdentifier(name: string): boolean {
  */
 export function getRefName(ref: string): string {
   const parsed = parseComponentRef(ref);
-  if (!parsed) {
+  if (parsed?.name === undefined) {
     throw new Error(
       `$ref '${ref}' does not point at a component of this spec ('#/components/<section>/<name>').`
     );
@@ -1063,7 +1063,7 @@ export function collectReachableComponents(
 
     if (typeof record.$ref === 'string') {
       const parsed = parseComponentRef(record.$ref);
-      if (parsed && !reached.has(`${parsed.section}/${parsed.name}`)) {
+      if (parsed?.name !== undefined && !reached.has(`${parsed.section}/${parsed.name}`)) {
         reached.add(`${parsed.section}/${parsed.name}`);
         const target = (spec.components as Record<string, Record<string, unknown>> | undefined)
           ?.[parsed.section]?.[parsed.name];
@@ -1081,10 +1081,17 @@ export function collectReachableComponents(
  * Parse a reference to a component of this spec, "#/components/<section>/<name>",
  * into its parts: the single reading of a component reference, whatever the
  * section (schemas, responses, headers, examples, links and the rest).
+ *
+ * A reference into a section that does not go on to one name (".../homeView/",
+ * ".../homeView/extra", or nothing after the section) names no component: it
+ * comes back with its section and no `name`, so that a reader of that section
+ * rejects it rather than taking it for a reference somewhere else.
  */
-export function parseComponentRef(ref: string): { section: string; name: string } | null {
-  const match = ref.match(/^#\/components\/([^/]+)\/([^/]+)$/);
-  return match ? { section: match[1], name: match[2] } : null;
+export function parseComponentRef(ref: string): { section: string; name?: string } | null {
+  const match = ref.match(/^#\/components\/([^/]+)(?:\/(.*))?$/);
+  if (!match) return null;
+  const [, section, rest] = match;
+  return rest && !rest.includes('/') ? { section, name: rest } : { section };
 }
 
 /**
@@ -1106,7 +1113,7 @@ function resolveComponent<T extends object>(
   while (isReference(current)) {
     const ref = current.$ref;
     const parsed = parseComponentRef(ref);
-    if (!parsed || parsed.section !== section) {
+    if (parsed?.name === undefined || parsed.section !== section) {
       throw new Error(`$ref '${ref}' at ${location} must point at #/components/${section}/<name>.`);
     }
     if (seen.has(ref)) {

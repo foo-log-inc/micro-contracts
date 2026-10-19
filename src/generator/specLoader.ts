@@ -117,13 +117,14 @@ class ExternalRefBundler {
     const targetFile = filePart ? path.resolve(path.dirname(file), filePart) : file;
     const localRef = `#${pointer}`;
     const parsed = parseComponentRef(localRef);
-    if (!parsed) {
+    if (parsed?.name === undefined) {
       throw new Error(
         `Unsupported $ref '${ref}' in ${display(file)}: a reference into another file must point at ` +
         `a component, #/components/<section>/<name>.`
       );
     }
-    const { section, name } = parsed;
+    const section = parsed.section;
+    const name = parsed.name;
 
     const key = `${targetFile}#${pointer}`;
     if (this.reached.has(key)) {
