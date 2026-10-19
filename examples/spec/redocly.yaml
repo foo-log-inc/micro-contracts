@@ -4,7 +4,7 @@
 # Run with: redocly lint <spec files> --config spec/redocly.yaml
 # A rule at `error` fails the lint; a rule at `warn` is reported only.
 # The OpenAPI rules apply to OpenAPI 3.0 and 3.1 documents alike
-# (`oas3_1Rules` reuses the `oas3_0Rules` list).
+# (`oas3_1Rules` reuses the `oas3_0Rules` list and adds the webhook rules).
 
 extends: []
 
@@ -162,7 +162,34 @@ oas3_0Rules: &openapi
     assertions:
       disallowed: [x-service, x-method, x-public, x-private]
 
-oas3_1Rules: *openapi
+oas3_1Rules:
+  <<: *openapi
+  rule/servers-in-webhook:
+    message: Servers should not be defined in a webhook
+    severity: warn
+    subject:
+      type: Operation
+      property: servers
+    where:
+      - subject:
+          type: WebhooksMap
+        assertions:
+          defined: true
+    assertions:
+      defined: false
+  rule/callbacks-in-webhook:
+    message: Callbacks should not be defined in a webhook
+    severity: warn
+    subject:
+      type: Operation
+      property: callbacks
+    where:
+      - subject:
+          type: WebhooksMap
+        assertions:
+          defined: true
+    assertions:
+      defined: false
 
 # ==========================================================================
 # Overlay target rules
