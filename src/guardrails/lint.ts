@@ -186,17 +186,14 @@ export async function runCustomCommandCheck(
       };
     }
 
-    // Count errors and warnings from output
-    const errorCount = (output.match(/error/gi) || []).length;
-    const warningCount = (output.match(/warning/gi) || []).length;
-
+    // The command's exit code is all it states for certain. Its output is
+    // shown as is: counting words in a format this check does not know would
+    // report figures the command never gave.
     return {
       name,
       status: 'fail',
       duration: Date.now() - start,
-      message: errorCount > 0 || warningCount > 0
-        ? `${name} failed with ${errorCount} error(s), ${warningCount} warning(s)`
-        : `${name} failed (exit code: ${exitCode})`,
+      message: `${name} failed (exit code: ${exitCode})`,
       details: lines.slice(0, 50), // Limit output
     };
 
