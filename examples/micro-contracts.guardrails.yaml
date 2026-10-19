@@ -66,15 +66,20 @@ generated:
 # Based on guardrails-concept.svg:
 #
 # Gate 1: Change Allowlist
-#   - allowlist (built-in): packages/** edit blocked, *.generated.* edit blocked
+#   - allowlist (built-in): a change outside `allowed` is blocked, a `protected` one
+#     needs approval; generated files (`generated:` and the manifest) may change,
+#     and drift and manifest verify them
 #
 # Gate 2: OpenAPI Contract Validation (Spectral)
 #   - spec-lint: Schema Validity, x-security Required, x-auth Declaration
 #   - spec-breaking: Breaking Changes detection (oasdiff)
 #
 # Gate 3: Generated Artifact Integrity
-#   - drift (built-in): git diff packages/**
-#   - manifest (built-in): SHA-256 verification
+#   - drift (built-in): uncommitted changes to generated files in the manifest's
+#     directory: by default the deepest one holding every output the config
+#     generates to (here, this directory)
+#   - manifest (built-in): SHA-256 verification of the generated files recorded in
+#     .generated-manifest.json in that directory
 #   - package-typecheck: Generated package type check
 #
 # Gate 4: Code Quality
