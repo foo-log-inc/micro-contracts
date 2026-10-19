@@ -30,8 +30,8 @@
     "check:docs-sync": "node ../dist/cli.js check --only docs-sync",
     "check:docs-links": "node ../dist/cli.js check --only docs-links",
     
-    "lint:openapi": "spectral lint spec/core/openapi/core.yaml spec/billing/openapi/billing.yaml --ruleset spec/spectral.yaml",
-    "lint:openapi:generated": "spectral lint packages/contract/core/docs/openapi.generated.yaml packages/contract/billing/docs/openapi.generated.yaml --ruleset spec/spectral.yaml",
+    "lint:openapi": "redocly lint spec/core/openapi/core.yaml spec/billing/openapi/billing.yaml --config spec/redocly.yaml",
+    "lint:openapi:generated": "redocly lint packages/contract/core/docs/openapi.generated.yaml packages/contract/billing/docs/openapi.generated.yaml --config spec/redocly.yaml",
     "lint:ts": "eslint server/src frontend/src --ext .ts,.tsx",
     "lint": "npm run lint:openapi && npm run lint:ts",
     
@@ -49,15 +49,11 @@
   },
   "devDependencies": {
     "@redocly/cli": "^2.44.2",
-    "@stoplight/spectral-cli": "^6.14.2",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
     "@typescript-eslint/parser": "^8.51.0",
     "concurrently": "^9.1.2",
-    "embedoc": "^0.9.0",
+    "embedoc": "^0.14.9",
     "eslint": "^9.39.2",
     "eslint-plugin-micro-contracts": "file:../eslint-plugin"
-  },
-  "overrides": {
-    "csv-parse": "^7.0.2"
   }
 }

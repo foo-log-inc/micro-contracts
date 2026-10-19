@@ -205,13 +205,12 @@ Validates OpenAPI specs before generation.
 
 | Check | Type | Description | Local Command | CI Job |
 |-------|------|-------------|---------------|--------|
-| Spec lint | custom | OpenAPI schema + micro-contracts extensions (Spectral) | `micro-contracts check --only spec-lint` | `spec-lint` |
+| Spec lint | custom | OpenAPI schema + micro-contracts extensions (Redocly) | `micro-contracts check --only spec-lint` | `spec-lint` |
 | Breaking changes | custom | API compatibility check (oasdiff) | `micro-contracts check --only spec-breaking` | `spec-breaking` |
 
-**Spec lint** — Validates via Spectral ruleset:
+**Spec lint** — Validates via the Redocly lint config (`spec/redocly.yaml`):
 - OpenAPI 3.x structure (required fields, JSON Schema, `$ref` resolution)
-- micro-contracts extensions (`x-micro-contracts-service`, `x-micro-contracts-method`)
-- Security extensions (`x-auth`, `x-authz`) if required
+- micro-contracts extensions (`x-micro-contracts-service`, `x-micro-contracts-method`, no `x-service`/`x-method`/`x-public`/`x-private`)
 
 **Breaking changes** — Detects backward-incompatible changes:
 - Removed endpoints or parameters
@@ -239,7 +238,7 @@ Ensures generated code matches spec and hasn't been tampered.
 | Drift | built-in | `packages/**` must match the commit (staged, unstaged and untracked all count) | `micro-contracts check --only drift` | `drift` |
 | Manifest | built-in | SHA-256 hash verification | `micro-contracts check --only manifest` | `manifest` |
 | Package typecheck | custom | Generated packages compile (`tsc`) | `micro-contracts check --only package-typecheck` | `package-typecheck` |
-| Project rules | custom | Project-specific Spectral rules on **generated** spec | `micro-contracts check --only spec-project` | `spec-project` |
+| Project rules | custom | Project-specific lint rules (Redocly) on **generated** spec | `micro-contracts check --only spec-project` | `spec-project` |
 | Published breaking | custom | Breaking changes vs **published** contract (oasdiff) | `micro-contracts check --only spec-breaking-published` | `spec-breaking-published` |
 
 > **Why spec checks in Gate 3?** `spec-project` and `spec-breaking-published` validate the **generated/bundled** spec output, not the source. They run after generation to verify the published contract.
@@ -336,9 +335,11 @@ allowed:
 
 # Files that require special approval
 protected:
-  # Spectral lint rules
-  - spec/spectral.yaml
-  - spec/_shared/spectral.yaml
+  # Lint rules: spec/redocly.yaml, the redocly.yaml of every spec/<dir>/ that
+  # extends it, and the plugin they load
+  - spec/*.yaml
+  - spec/*/*.yaml
+  - spec/redocly-plugin.js
   
   # Shared overlay definitions
   - spec/_shared/overlays/**
@@ -370,8 +371,8 @@ generated:
 # Gate 1: Change Allowlist
 #   - allowlist (built-in): packages/** edit blocked, *.generated.* edit blocked
 #
-# Gate 2: OpenAPI Contract Validation (Spectral)
-#   - spec-lint: Schema Validity, x-security Required, x-auth Declaration
+# Gate 2: OpenAPI Contract Validation (Redocly)
+#   - spec-lint: Schema Validity, x-micro-contracts-service/-method Required, Canonical Extension Prefix
 #   - spec-breaking: Breaking Changes detection (oasdiff)
 #
 # Gate 3: Generated Artifact Integrity
@@ -399,9 +400,9 @@ checks:
   # ==========================================
   # Gate 2: OpenAPI Contract Validation
   # ==========================================
-  # Schema Validity, x-security Required, x-auth Declaration, Description Check
+  # Schema Validity, x-micro-contracts-service/-method Required, Canonical Extension Prefix
   spec-lint:
-    command: "npx @stoplight/spectral-cli lint {files} --ruleset spec/spectral.yaml"
+    command: "npx redocly lint {files} --config spec/redocly.yaml"
     gate: 2
   
   # Breaking Changes detection (oasdiff)
@@ -658,8 +659,8 @@ jobs:
     "check:docs-sync": "node ../dist/cli.js check --only docs-sync",
     "check:docs-links": "node ../dist/cli.js check --only docs-links",
     
-    "lint:openapi": "spectral lint spec/core/openapi/core.yaml spec/billing/openapi/billing.yaml --ruleset spec/spectral.yaml",
-    "lint:openapi:generated": "spectral lint packages/contract/core/docs/openapi.generated.yaml packages/contract/billing/docs/openapi.generated.yaml --ruleset spec/spectral.yaml",
+    "lint:openapi": "redocly lint spec/core/openapi/core.yaml spec/billing/openapi/billing.yaml --config spec/redocly.yaml",
+    "lint:openapi:generated": "redocly lint packages/contract/core/docs/openapi.generated.yaml packages/contract/billing/docs/openapi.generated.yaml --config spec/redocly.yaml",
     "lint:ts": "eslint server/src frontend/src --ext .ts,.tsx",
     "lint": "npm run lint:openapi && npm run lint:ts",
     

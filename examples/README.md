@@ -89,7 +89,8 @@ This runs the following in sequence:
 ```
 examples/
 ├── spec/                          # OpenAPI specs & templates
-│   ├── spectral.yaml              # Global lint rules
+│   ├── redocly.yaml               # Global lint rules (Redocly)
+│   ├── redocly-plugin.js          # Lint rules the config cannot express
 │   ├── default/templates/         # Code generation templates (see below)
 │   ├── _shared/
 │   │   ├── openapi/               # Shared schemas

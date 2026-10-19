@@ -34,9 +34,11 @@ allowed:
 
 # Files that require special approval
 protected:
-  # Spectral lint rules
-  - spec/spectral.yaml
-  - spec/_shared/spectral.yaml
+  # Lint rules: spec/redocly.yaml, the redocly.yaml of every spec/<dir>/ that
+  # extends it, and the plugin they load
+  - spec/*.yaml
+  - spec/*/*.yaml
+  - spec/redocly-plugin.js
   
   # Shared overlay definitions
   - spec/_shared/overlays/**
@@ -68,8 +70,8 @@ generated:
 # Gate 1: Change Allowlist
 #   - allowlist (built-in): packages/** edit blocked, *.generated.* edit blocked
 #
-# Gate 2: OpenAPI Contract Validation (Spectral)
-#   - spec-lint: Schema Validity, x-security Required, x-auth Declaration
+# Gate 2: OpenAPI Contract Validation (Redocly)
+#   - spec-lint: Schema Validity, x-micro-contracts-service/-method Required, Canonical Extension Prefix
 #   - spec-breaking: Breaking Changes detection (oasdiff)
 #
 # Gate 3: Generated Artifact Integrity
@@ -97,9 +99,9 @@ checks:
   # ==========================================
   # Gate 2: OpenAPI Contract Validation
   # ==========================================
-  # Schema Validity, x-security Required, x-auth Declaration, Description Check
+  # Schema Validity, x-micro-contracts-service/-method Required, Canonical Extension Prefix
   spec-lint:
-    command: "npx @stoplight/spectral-cli lint {files} --ruleset spec/spectral.yaml"
+    command: "npx redocly lint {files} --config spec/redocly.yaml"
     gate: 2
   
   # Breaking Changes detection (oasdiff)

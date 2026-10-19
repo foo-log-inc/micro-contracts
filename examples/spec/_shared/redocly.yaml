@@ -1,0 +1,21 @@
+# Shared Redocly rules
+# Applied to all modules (extends global rules)
+extends:
+  - ../redocly.yaml                 # Inherit global rules
+
+oas3_0Rules: &openapi
+  # Validate x-middleware values are from allowed list
+  rule/valid-middleware:
+    message: x-middleware values must be defined in overlays
+    severity: warn
+    subject:
+      type: Operation
+      property: x-middleware
+    assertions:
+      enum:
+        - requireAuth
+        - requireAdmin
+        - tenantIsolation
+        - rateLimit
+        - correlationId
+oas3_1Rules: *openapi
