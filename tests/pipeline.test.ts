@@ -191,6 +191,51 @@ generated:
       expect(fs.existsSync(path.join(tempDir, 'packages/out/second.generated.ts'))).toBe(true);
     });
 
+    it('keeps hand-written packages out of the manifest and regenerates outputs it cannot vouch for', () => {
+      fs.mkdirSync(path.join(tempDir, 'api/orders'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'api/orders/openapi.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Orders',
+          '  version: 1.0.0',
+          'paths:',
+          '  /orders:',
+          '    get:',
+          '      operationId: getOrders',
+          '      x-micro-contracts-service: Order',
+          '      x-micro-contracts-method: getOrders',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        ['defaults:', '  contract:', '    output: contracts/{module}', 'modules:', '  orders:', '    openapi: api/orders/openapi.yaml', ''].join('\n'),
+      );
+      fs.writeFileSync(path.join(tempDir, 'micro-contracts.guardrails.yaml'), 'generated:\n  - "contracts/**"\n');
+      fs.mkdirSync(path.join(tempDir, 'packages/app/src'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, 'packages/app/src/index.ts'), 'export const handWritten = 1;\n');
+
+      expect(runCli('generate').exitCode).toBe(0);
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(tempDir, 'packages/.generated-manifest.json'), 'utf-8'),
+      );
+      expect(Object.keys(manifest.files)).not.toContain('app/src/index.ts');
+
+      fs.rmSync(path.join(tempDir, 'contracts'), { recursive: true, force: true });
+      const again = runCli('generate');
+      expect(again.exitCode).toBe(0);
+      expect(again.stdout).not.toContain('No input changes detected');
+      expect(fs.existsSync(path.join(tempDir, 'contracts/orders/index.ts'))).toBe(true);
+
+      fs.writeFileSync(path.join(tempDir, 'packages/app/src/index.ts'), 'export const handWritten = 2;\n');
+      expect(runCli('check --only manifest').stdout).not.toContain('app/src/index.ts');
+    });
+
     it('does not call a pipeline that ran nothing successful', () => {
       // #77 fixed this verdict for `check`; the pipeline printed its own.
       createGuardrailsConfig();

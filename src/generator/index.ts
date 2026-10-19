@@ -166,6 +166,24 @@ export async function generate(
 }
 
 /**
+ * Every location a full generation run writes to: each module's contract and
+ * published contract directories, its outputs, and its built-in server and
+ * frontend files.
+ */
+export function configuredOutputs(config: MultiModuleConfig): string[] {
+  return Object.entries(config.modules).flatMap(([moduleName, moduleConfig]) => {
+    const resolved = resolveModuleConfig(moduleName, moduleConfig, config.defaults);
+    return [
+      resolved.contractOutput,
+      resolved.contractPublicOutput,
+      ...resolved.outputs.filter(output => output.enabled).map(output => output.output),
+      ...(resolved.server ? [resolved.server.output] : []),
+      ...(resolved.frontend ? [resolved.frontend.output] : []),
+    ];
+  });
+}
+
+/**
  * Generate for multi-module config
  */
 async function generateMultiModule(

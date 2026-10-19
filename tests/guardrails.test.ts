@@ -248,6 +248,9 @@ describe('manifest', () => {
     expect(hash).toMatch(/^[a-f0-9]+$/);
   });
   
+  /** A rule calling every file in the directory generated. */
+  const everyFile = () => ({ patterns: ['**'], baseDir: tempDir });
+
   it('should generate and verify manifest', async () => {
     // Create some test files
     fs.writeFileSync(path.join(tempDir, 'file1.ts'), 'const a = 1;');
@@ -256,7 +259,7 @@ describe('manifest', () => {
     fs.writeFileSync(path.join(tempDir, 'sub', 'file3.ts'), 'const c = 3;');
     
     // Generate manifest
-    const { manifest, changed } = await generateManifest(tempDir, {
+    const { manifest, changed } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     
@@ -278,12 +281,12 @@ describe('manifest', () => {
     expect(loaded!.files['file1.ts'].sha256).toBe(manifest.files['file1.ts'].sha256);
     
     // Verify manifest (should pass)
-    const result = await verifyManifest(tempDir);
+    const result = await verifyManifest(tempDir, everyFile());
     expect(result.valid).toBe(true);
     expect(result.mismatches).toHaveLength(0);
     
     // Generate again without changes - should not be marked as changed
-    const { changed: changedAgain } = await generateManifest(tempDir, {
+    const { changed: changedAgain } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     expect(changedAgain).toBe(false);
@@ -294,7 +297,7 @@ describe('manifest', () => {
     const filePath = path.join(tempDir, 'file.ts');
     fs.writeFileSync(filePath, 'original content');
     
-    const { manifest } = await generateManifest(tempDir, {
+    const { manifest } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     writeManifest(manifest, tempDir);
@@ -303,7 +306,7 @@ describe('manifest', () => {
     fs.writeFileSync(filePath, 'modified content');
     
     // Verify (should fail)
-    const result = await verifyManifest(tempDir);
+    const result = await verifyManifest(tempDir, everyFile());
     expect(result.valid).toBe(false);
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0].reason).toBe('hash-mismatch');
@@ -314,7 +317,7 @@ describe('manifest', () => {
     const filePath = path.join(tempDir, 'file.ts');
     fs.writeFileSync(filePath, 'content');
     
-    const { manifest } = await generateManifest(tempDir, {
+    const { manifest } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     writeManifest(manifest, tempDir);
@@ -323,7 +326,7 @@ describe('manifest', () => {
     fs.unlinkSync(filePath);
     
     // Verify (should fail)
-    const result = await verifyManifest(tempDir);
+    const result = await verifyManifest(tempDir, everyFile());
     expect(result.valid).toBe(false);
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0].reason).toBe('missing');
@@ -333,7 +336,7 @@ describe('manifest', () => {
     // Create files and manifest
     fs.writeFileSync(path.join(tempDir, 'file.ts'), 'content');
     
-    const { manifest } = await generateManifest(tempDir, {
+    const { manifest } = await generateManifest(tempDir, everyFile(), {
       generatorVersion: '1.0.0',
     });
     writeManifest(manifest, tempDir);
@@ -342,7 +345,7 @@ describe('manifest', () => {
     fs.writeFileSync(path.join(tempDir, 'extra.ts'), 'extra content');
     
     // Verify (should fail)
-    const result = await verifyManifest(tempDir);
+    const result = await verifyManifest(tempDir, everyFile());
     expect(result.valid).toBe(false);
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0].reason).toBe('extra');

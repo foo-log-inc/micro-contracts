@@ -257,7 +257,9 @@ inspect is not the same as nothing wrong. A run in which every check skipped
 reports `No checks ran` rather than success.
 
 **Manifest verification** — `packages/.generated-manifest.json` stores:
-- SHA-256 hashes of all generated files
+- SHA-256 hashes of all generated files: the files in the directory that the
+  `generated:` patterns match, read relative to the guardrails config. A
+  hand-written package beside them is neither recorded nor reported.
 - Generator version used
 - Source spec file references
 

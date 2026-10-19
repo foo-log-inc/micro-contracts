@@ -400,6 +400,11 @@ A run that generates a subset (`--output`, `--module`, or any `--*-only`) does n
 record the input hash, so the next full run regenerates rather than reporting no
 changes.
 
+The manifest records the files in its directory that the `generated:` patterns of
+`micro-contracts.guardrails.yaml` match. The cache skips a run only when every
+configured output lies in that directory and the manifest finds each recorded file
+intact; while any output lies elsewhere, every run regenerates.
+
 ### init \<module\>
 
 Initialize a new module structure with starter templates.
@@ -469,6 +474,9 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 A run that generates a subset (`--output`, `--module`, or any `--*-only`) does not
 record the input hash, so the next full run regenerates rather than reporting no
 changes.
+
+The cache reads the manifest in `--generated-dir`, under the same conditions as
+`generate`.
 
 > See **[Enforceable Guardrails](docs/development-guardrails.md)** for gate details and CI configuration.
 

@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'yaml';
 import { createProgram, type CommandHandlers } from './generated/program.js';
-import { generate, loadConfig, findConfigFile, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash } from './generator/index.js';
+import { generate, loadConfig, findConfigFile, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash, configuredOutputs } from './generator/index.js';
 import type { GeneratorConfig, MultiModuleConfig } from './types.js';
 import { isMultiModuleConfig } from './types.js';
 import { getStarterTemplates, getScreenStarterTemplates } from './cli/templates.js';
@@ -20,6 +20,7 @@ import {
   generateManifest,
   writeManifest,
   canSkipGeneration,
+  generatedFilesRule,
   GATE_DESCRIPTIONS,
   loadGuardrailsConfigWithPath,
 } from './guardrails/index.js';
@@ -87,7 +88,9 @@ const handlers: CommandHandlers = {
 
         if (useCache) {
           const manifestDir = opts.manifestDir || 'packages/';
-          const skipCheck = await canSkipGeneration(manifestDir, inputHash);
+          const skipCheck = await canSkipGeneration(
+            manifestDir, inputHash, generatedFilesRule(), configuredOutputs(config)
+          );
           if (skipCheck.skip) {
             console.log(`No input changes detected, skipping generation (${skipCheck.reason})`);
             return;
@@ -112,7 +115,7 @@ const handlers: CommandHandlers = {
           if (fs.existsSync(manifestDir)) {
             const manifestInputHash =
               (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-            const { manifest, changed } = await generateManifest(manifestDir, {
+            const { manifest, changed } = await generateManifest(manifestDir, generatedFilesRule(), {
               generatorVersion: VERSION,
               inputHash: manifestInputHash,
             });
@@ -491,7 +494,9 @@ const handlers: CommandHandlers = {
 
             if (useCache) {
               const manifestDir = opts.generatedDir || 'packages/';
-              const skipCheck = await canSkipGeneration(manifestDir, inputHash);
+              const skipCheck = await canSkipGeneration(
+                manifestDir, inputHash, generatedFilesRule(opts.guardrails), configuredOutputs(config)
+              );
               if (skipCheck.skip) {
                 generationCacheSkipped = true;
                 generateSkipped = true;
@@ -525,7 +530,7 @@ const handlers: CommandHandlers = {
                   if (fs.existsSync(manifestDir)) {
                     const manifestInputHash =
                       (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-                    const { manifest, changed } = await generateManifest(manifestDir, {
+                    const { manifest, changed } = await generateManifest(manifestDir, generatedFilesRule(opts.guardrails), {
                       generatorVersion: VERSION,
                       inputHash: manifestInputHash,
                     });
@@ -755,14 +760,14 @@ const handlers: CommandHandlers = {
 
       if (opts.verify) {
         const { verifyManifest, formatManifestResult } = await import('./guardrails/index.js');
-        const result = await verifyManifest(baseDir);
+        const result = await verifyManifest(baseDir, generatedFilesRule());
         console.log(formatManifestResult(result));
         if (!result.valid) {
           process.exit(1);
         }
       } else {
         console.log(`Generating manifest for: ${baseDir}`);
-        const { manifest, changed } = await generateManifest(baseDir, {
+        const { manifest, changed } = await generateManifest(baseDir, generatedFilesRule(), {
           generatorVersion: VERSION,
         });
 

@@ -8,6 +8,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { glob } from 'glob';
+import { matchWithNegation } from '../glob.js';
+import { loadGuardrailsConfigWithPath } from './config.js';
 import type { 
   GeneratedManifest, 
   GeneratedFileInfo, 
@@ -32,29 +34,48 @@ export function hashFile(filePath: string): string {
 }
 
 /**
- * Get all generated files in a directory
+ * Which files are generated artifacts: the guardrails config's `generated:`
+ * patterns, read relative to the directory holding that config, as the
+ * allowlist reads them.
+ */
+export interface GeneratedFilesRule {
+  patterns: string[];
+  baseDir: string;
+}
+
+/** The generated-files rule of the guardrails config (the one found from the working directory by default). */
+export function generatedFilesRule(guardrailsPath?: string): GeneratedFilesRule {
+  const { config, baseDir } = loadGuardrailsConfigWithPath(guardrailsPath);
+  return { patterns: config.generated ?? [], baseDir };
+}
+
+/**
+ * The generated files in a directory, relative to it.
+ *
+ * Only what `rule` calls generated: a hand-written file in the same directory
+ * (a workspace package beside the generated ones) is neither recorded nor
+ * reported, so editing it is not tampering.
  */
 export async function getGeneratedFiles(
   baseDir: string,
-  patterns: string[] = ['**/*']
+  rule: GeneratedFilesRule
 ): Promise<string[]> {
-  const files: string[] = [];
-  
-  for (const pattern of patterns) {
-    const matches = await glob(pattern, {
-      cwd: baseDir,
-      nodir: true,
-      ignore: [
-        '**/node_modules/**',
-        '**/.git/**',
-        MANIFEST_FILENAME,
-      ],
-    });
-    files.push(...matches);
-  }
-  
-  // Deduplicate and sort
-  return [...new Set(files)].sort();
+  const files = await glob('**/*', {
+    cwd: baseDir,
+    nodir: true,
+    ignore: [
+      '**/node_modules/**',
+      '**/.git/**',
+      MANIFEST_FILENAME,
+    ],
+  });
+
+  return files
+    .filter(file => {
+      const fromRuleBase = path.relative(rule.baseDir, path.resolve(baseDir, file)).split(path.sep).join('/');
+      return matchWithNegation(rule.patterns, fromRuleBase);
+    })
+    .sort();
 }
 
 /**
@@ -91,21 +112,20 @@ function areFilesEqual(
  */
 export async function generateManifest(
   baseDir: string,
+  rule: GeneratedFilesRule,
   options: {
     generatorVersion?: string;
     inputHash?: string;
     sourceMap?: Map<string, string>;  // file -> source mapping
-    patterns?: string[];
   } = {}
 ): Promise<GenerateManifestResult> {
   const {
     generatorVersion = '1.0.0',
     inputHash,
     sourceMap = new Map(),
-    patterns = ['**/*'],
   } = options;
   
-  const files = await getGeneratedFiles(baseDir, patterns);
+  const files = await getGeneratedFiles(baseDir, rule);
   const fileInfos: Record<string, GeneratedFileInfo> = {};
   
   for (const relPath of files) {
@@ -174,11 +194,16 @@ export async function generateManifest(
  *
  * Returns `skip: true` only when:
  *  1. A manifest exists with a matching `inputHash`, AND
- *  2. Every generated file on disk still matches the manifest hashes.
+ *  2. Every configured output (`outputs`) lies in the manifest's directory,
+ *     the only place the manifest vouches for, AND
+ *  3. The manifest records generated files, and every one on disk still
+ *     matches its hash.
  */
 export async function canSkipGeneration(
   manifestDir: string,
   inputHash: string,
+  rule: GeneratedFilesRule,
+  outputs: string[],
 ): Promise<{ skip: boolean; reason: string }> {
   const manifest = loadManifest(manifestDir);
 
@@ -194,8 +219,21 @@ export async function canSkipGeneration(
     return { skip: false, reason: 'Input files have changed' };
   }
 
+  // An output elsewhere could be missing or edited without the manifest knowing.
+  const untracked = outputs.find(output => {
+    const relative = path.relative(path.resolve(manifestDir), path.resolve(output));
+    return relative.startsWith('..') || path.isAbsolute(relative);
+  });
+  if (untracked) {
+    return { skip: false, reason: `Output ${untracked} is outside ${manifestDir}, which the manifest covers` };
+  }
+
+  if (Object.keys(manifest.files).length === 0) {
+    return { skip: false, reason: 'Manifest records no generated files' };
+  }
+
   // Input hash matches — verify that output files are intact
-  const verification = await verifyManifest(manifestDir);
+  const verification = await verifyManifest(manifestDir, rule);
   if (!verification.valid) {
     const count = verification.mismatches.length;
     return { skip: false, reason: `${count} generated file(s) have been modified` };
@@ -234,7 +272,7 @@ export function loadManifest(baseDir: string): GeneratedManifest | null {
 /**
  * Verify generated files against manifest
  */
-export async function verifyManifest(baseDir: string): Promise<ManifestResult> {
+export async function verifyManifest(baseDir: string, rule: GeneratedFilesRule): Promise<ManifestResult> {
   const manifest = loadManifest(baseDir);
   
   if (!manifest) {
@@ -274,8 +312,8 @@ export async function verifyManifest(baseDir: string): Promise<ManifestResult> {
     }
   }
   
-  // Check for extra files not in manifest
-  const currentFiles = await getGeneratedFiles(baseDir);
+  // Check for extra generated files not in manifest
+  const currentFiles = await getGeneratedFiles(baseDir, rule);
   const manifestFiles = new Set(Object.keys(manifest.files));
   
   for (const file of currentFiles) {
@@ -312,7 +350,7 @@ export async function runManifestCheck(options: CheckOptions): Promise<CheckResu
       };
     }
     
-    const result = await verifyManifest(generatedDir);
+    const result = await verifyManifest(generatedDir, generatedFilesRule(options.guardrailsPath));
     
     if (result.valid) {
       const manifest = loadManifest(generatedDir);
