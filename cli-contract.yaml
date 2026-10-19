@@ -54,9 +54,10 @@ command_sets:
       generate:
         summary: Generate code from OpenAPI specifications.
         description: >-
-          Loads the multi-module config, applies overlays, runs Spectral
-          linting (unless skipped), and generates contract packages, server
-          routes, frontend clients, and documentation from OpenAPI specs.
+          Loads the multi-module config, lints each spec with the rules of
+          the lint command (unless skipped), applies overlays, and generates
+          contract packages, server routes, frontend clients, and
+          documentation from OpenAPI specs.
           Supports input-hash caching to skip unnecessary regeneration.
         usage:
           - micro-contracts generate
@@ -117,7 +118,7 @@ command_sets:
               default: false
 
           - name: skip-lint
-            description: Skip Spectral linting before generation.
+            description: Skip linting (the rules of the lint command) before generation.
             schema:
               type: boolean
               default: false
@@ -190,8 +191,10 @@ command_sets:
       lint:
         summary: Lint OpenAPI specification.
         description: >-
-          Validates an OpenAPI specification for x-micro-contracts extension
-          violations and structural issues using Spectral rules.
+          Validates an OpenAPI specification against micro-contracts' own
+          rules: the x-micro-contracts-* extensions every operation needs,
+          screen spec consistency, and what a published endpoint may reach
+          (x-private, x-micro-contracts-non-exportable).
         usage:
           - micro-contracts lint spec/core/openapi/core.yaml
           - micro-contracts lint spec/core/openapi/core.yaml --strict
@@ -521,7 +524,7 @@ command_sets:
               default: true
 
           - name: skip-lint
-            description: Skip Spectral linting before generation.
+            description: Skip linting (the rules of the lint command) before generation.
             schema:
               type: boolean
               default: false

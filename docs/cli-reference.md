@@ -38,7 +38,7 @@ Contract-first OpenAPI toolchain for TypeScript.
 
 Generate code from OpenAPI specifications.
 
-Loads the multi-module config, applies overlays, runs Spectral linting (unless skipped), and generates contract packages, server routes, frontend clients, and documentation from OpenAPI specs. Supports input-hash caching to skip unnecessary regeneration.
+Loads the multi-module config, lints each spec with the rules of the lint command (unless skipped), applies overlays, and generates contract packages, server routes, frontend clients, and documentation from OpenAPI specs. Supports input-hash caching to skip unnecessary regeneration.
 
 **Usage:**
 
@@ -68,7 +68,7 @@ micro-contracts generate --force
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
-| `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
+| `--skip-lint` |  | No | `false` | Skip linting (the rules of the lint command) before generation. |
 | `--manifest`, `--no-manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable. |
 | `--manifest-dir` |  | No |  | Directory for manifest output. Defaults to the deepest directory holding every location the config generates to (contract, published contract and outputs), so that the manifest can record each output. |
 | `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
@@ -108,7 +108,7 @@ x-agent:
 
 Lint OpenAPI specification.
 
-Validates an OpenAPI specification for x-micro-contracts extension violations and structural issues using Spectral rules.
+Validates an OpenAPI specification against micro-contracts' own rules: the x-micro-contracts-* extensions every operation needs, screen spec consistency, and what a published endpoint may reach (x-private, x-micro-contracts-non-exportable).
 
 **Usage:**
 
@@ -321,7 +321,7 @@ micro-contracts pipeline --contracts-only --skip-lint
 | `--guardrails` | -g | No |  | Path to micro-contracts.guardrails.yaml. |
 | `--generated-dir` | -d | No |  | Directory holding the manifest of generated files. Defaults to the directory generate writes the manifest to: the deepest directory holding every location the config generates to. |
 | `--manifest`, `--no-manifest` |  | No | `true` | Generate manifest after generation. Enabled by default. Use --no-manifest to disable. |
-| `--skip-lint` |  | No | `false` | Skip Spectral linting before generation. |
+| `--skip-lint` |  | No | `false` | Skip linting (the rules of the lint command) before generation. |
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
