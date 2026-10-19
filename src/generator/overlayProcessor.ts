@@ -9,7 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { MICRO_CONTRACTS_OPERATION_EXTENSIONS, resolveParameter } from '../types.js';
-import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject } from '../types.js';
+import type { OpenAPISpec, OperationObject, ParameterObject, ReferenceObject, ResponseObject } from '../types.js';
 import { bundleExternalRefs } from './specLoader.js';
 
 // =============================================================================
@@ -181,31 +181,32 @@ function applyAction(
   for (const match of matches) {
     const { path: apiPath, method, operation } = match;
     const changes: string[] = [];
+    // The injected parameters as they resolve, for the overlay's handler input
+    const declaredParams: ParameterObject[] = [];
 
     if (update) {
       // Apply updates (parameters, responses)
-      if (update.parameters) {
-        const params = update.parameters as ParameterObject[];
-        for (const param of params) {
-          const injectedParam = bundleExternalRefs(param, overlayPath, result.spec);
-          const key = `${apiPath}:${method}:param:${injectedParam.name}`;
-          checkCollision(key, injectedParam, overlayFile, collision, injectedKeys);
-          
-          if (!operation.parameters) {
-            operation.parameters = [];
-          }
-          // Replace the operation's parameter of the same name and location
-          const existing = operation.parameters.findIndex(p => {
-            const declared = resolveParameter(p, result.spec, `${method.toUpperCase()} ${apiPath}`);
-            return declared.name === injectedParam.name && declared.in === injectedParam.in;
-          });
-          if (existing >= 0) {
-            operation.parameters[existing] = injectedParam;
-          } else {
-            operation.parameters.push(injectedParam);
-          }
-          changes.push(`+${injectedParam.name} (${injectedParam.in})`);
+      for (const param of (update.parameters ?? []) as Array<ParameterObject | ReferenceObject>) {
+        const injected = bundleExternalRefs(param, overlayPath, result.spec);
+        const declared = resolveParameter(injected, result.spec, `overlay ${overlayFile}`);
+        declaredParams.push(declared);
+        const key = `${apiPath}:${method}:param:${declared.name}`;
+        checkCollision(key, injected, overlayFile, collision, injectedKeys);
+
+        if (!operation.parameters) {
+          operation.parameters = [];
         }
+        // Replace the operation's parameter of the same name and location
+        const existing = operation.parameters.findIndex(p => {
+          const current = resolveParameter(p, result.spec, `${method.toUpperCase()} ${apiPath}`);
+          return current.name === declared.name && current.in === declared.in;
+        });
+        if (existing >= 0) {
+          operation.parameters[existing] = injected;
+        } else {
+          operation.parameters.push(injected);
+        }
+        changes.push(`+${declared.name} (${declared.in})`);
       }
 
       if (update.responses) {
@@ -240,7 +241,7 @@ function applyAction(
     });
 
     // Extract extension info
-    extractExtensionInfo(result.extensionInfo, parsed, action, apiPath, method);
+    extractExtensionInfo(result.extensionInfo, parsed, action, declaredParams, apiPath, method);
   }
 }
 
@@ -404,6 +405,7 @@ function extractExtensionInfo(
   extensionInfo: Map<string, ExtensionInfo>,
   parsed: ParsedTarget,
   action: OverlayAction,
+  injectedParameters: ParameterObject[],
   apiPath: string,
   method: string
 ): void {
@@ -433,13 +435,10 @@ function extractExtensionInfo(
   const info = extensionInfo.get(key)!;
   info.appliesTo.add(operationKey(apiPath, method));
   
-  if (update.parameters) {
-    const params = update.parameters as ParameterObject[];
-    for (const param of params) {
-      // Avoid duplicates
-      if (!info.injectedParameters.find(p => p.name === param.name)) {
-        info.injectedParameters.push(param);
-      }
+  for (const param of injectedParameters) {
+    // Avoid duplicates
+    if (!info.injectedParameters.find(p => p.name === param.name)) {
+      info.injectedParameters.push(param);
     }
   }
   
