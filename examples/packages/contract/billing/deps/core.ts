@@ -7,10 +7,12 @@
 
 // Types reached by the declared dependencies of core (contract-published)
 export type {
+  ProblemDetails,
   User,
   UserListResponse,
   User_getUserByIdInput,
   User_getUserByIdParams,
   User_getUsersInput,
   User_getUsersParams,
+  ValidationError,
 } from '../../../contract-published/core/schemas/types.js';

@@ -10,6 +10,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { MICRO_CONTRACTS_OPERATION_EXTENSIONS } from '../types.js';
 import type { OpenAPISpec, OperationObject, ParameterObject, ResponseObject } from '../types.js';
+import { bundleExternalRefs } from './specLoader.js';
 
 // =============================================================================
 // Types
@@ -94,16 +95,19 @@ export interface OverlayConfig {
 /**
  * Process overlays and apply to OpenAPI spec
  * 
+ * A `$ref` into another file in an overlay is relative to the overlay file;
+ * the component it reaches is brought into the spec.
+ *
  * @param spec - Source OpenAPI spec
  * @param overlayConfig - Overlay configuration
  * @param basePath - Base path for resolving overlay file paths
- * @param specPath - Path to the source spec file (for $ref rebasing)
+ * @param _specPath - Not read: an overlay's references resolve against the overlay file
  */
 export function processOverlays(
   spec: OpenAPISpec,
   overlayConfig: OverlayConfig,
   basePath: string = process.cwd(),
-  specPath?: string
+  _specPath?: string
 ): OverlayResult {
   const result: OverlayResult = {
     spec: JSON.parse(JSON.stringify(spec)),  // Deep clone
@@ -114,9 +118,6 @@ export function processOverlays(
 
   const collision = overlayConfig.collision || 'error';
   const injectedKeys = new Map<string, { overlay: string; content: unknown }>();
-
-  // Target directory for $ref rebasing (where transformed spec will be written)
-  const targetDir = specPath ? path.dirname(path.resolve(basePath, specPath)) : undefined;
 
   for (const overlayFile of overlayConfig.files) {
     const overlayPath = path.resolve(basePath, overlayFile);
@@ -129,7 +130,6 @@ export function processOverlays(
 
     const overlayContent = fs.readFileSync(overlayPath, 'utf-8');
     const overlay = yaml.load(overlayContent) as OverlaySpec;
-    const overlayDir = path.dirname(overlayPath);
 
     result.appliedOverlays.push(overlayFile);
 
@@ -139,10 +139,9 @@ export function processOverlays(
         overlay,
         action,
         overlayFile,
+        overlayPath,
         collision,
-        injectedKeys,
-        overlayDir,
-        targetDir
+        injectedKeys
       );
     }
   }
@@ -158,10 +157,9 @@ function applyAction(
   _overlay: OverlaySpec,
   action: OverlayAction,
   overlayFile: string,
+  overlayPath: string,
   collision: 'error' | 'warn' | 'last-wins',
-  injectedKeys: Map<string, { overlay: string; content: unknown }>,
-  overlayDir?: string,
-  targetDir?: string
+  injectedKeys: Map<string, { overlay: string; content: unknown }>
 ): void {
   const { target, update } = action;
 
@@ -189,46 +187,44 @@ function applyAction(
       if (update.parameters) {
         const params = update.parameters as ParameterObject[];
         for (const param of params) {
-          // Rebase $ref paths in parameter
-          const rebasedParam = rebaseRefs(param, overlayDir, targetDir);
-          const key = `${apiPath}:${method}:param:${rebasedParam.name}`;
-          checkCollision(key, rebasedParam, overlayFile, collision, injectedKeys);
+          const injectedParam = bundleExternalRefs(param, overlayPath, result.spec);
+          const key = `${apiPath}:${method}:param:${injectedParam.name}`;
+          checkCollision(key, injectedParam, overlayFile, collision, injectedKeys);
           
           if (!operation.parameters) {
             operation.parameters = [];
           }
           // Avoid duplicates
           const existing = operation.parameters.findIndex(
-            p => !('$ref' in p) && p.name === rebasedParam.name && p.in === rebasedParam.in
+            p => !('$ref' in p) && p.name === injectedParam.name && p.in === injectedParam.in
           );
           if (existing >= 0) {
-            operation.parameters[existing] = rebasedParam;
+            operation.parameters[existing] = injectedParam;
           } else {
-            operation.parameters.push(rebasedParam);
+            operation.parameters.push(injectedParam);
           }
-          changes.push(`+${rebasedParam.name} (${rebasedParam.in})`);
+          changes.push(`+${injectedParam.name} (${injectedParam.in})`);
         }
       }
 
       if (update.responses) {
         const responses = update.responses as Record<string, ResponseObject>;
         for (const [statusCode, response] of Object.entries(responses)) {
-          // Rebase $ref paths in response
-          const rebasedResponse = rebaseRefs(response, overlayDir, targetDir);
+          const injectedResponse = bundleExternalRefs(response, overlayPath, result.spec);
           const key = `${apiPath}:${method}:response:${statusCode}`;
-          checkCollision(key, rebasedResponse, overlayFile, collision, injectedKeys);
+          checkCollision(key, injectedResponse, overlayFile, collision, injectedKeys);
           
-          operation.responses[statusCode] = rebasedResponse as ResponseObject;
+          operation.responses[statusCode] = injectedResponse as ResponseObject;
           changes.push(`+${statusCode}`);
         }
       }
 
       for (const [key, value] of Object.entries(update)) {
         if (key === 'parameters' || key === 'responses') continue;
-        const rebasedValue = rebaseRefs(value, overlayDir, targetDir);
+        const injectedValue = bundleExternalRefs(value, overlayPath, result.spec);
         const collisionKey = `${apiPath}:${method}:${key}`;
-        checkCollision(collisionKey, rebasedValue, overlayFile, collision, injectedKeys);
-        (operation as unknown as Record<string, unknown>)[key] = rebasedValue;
+        checkCollision(collisionKey, injectedValue, overlayFile, collision, injectedKeys);
+        (operation as unknown as Record<string, unknown>)[key] = injectedValue;
         changes.push(`+${key}`);
       }
     }
@@ -360,83 +356,6 @@ function findMatchingOperations(
   }
 
   return matches;
-}
-
-/**
- * Rebase $ref paths in an object from source directory to target directory
- * 
- * @param obj - Object that may contain $ref properties
- * @param sourceDir - Directory where the source file is located (e.g., overlay or OpenAPI source)
- * @param targetDir - Directory where the output file will be written
- * @returns Object with rebased $ref paths
- */
-export function rebaseRefs<T>(obj: T, sourceDir?: string, targetDir?: string): T {
-  if (!sourceDir || !targetDir) {
-    return obj;
-  }
-
-  // Deep clone and rebase
-  return rebaseRefsRecursive(JSON.parse(JSON.stringify(obj)), sourceDir, targetDir) as T;
-}
-
-function rebaseRefsRecursive(obj: unknown, overlayDir: string, targetDir: string): unknown {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map(item => rebaseRefsRecursive(item, overlayDir, targetDir));
-  }
-
-  if (typeof obj === 'object') {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (key === '$ref' && typeof value === 'string') {
-        // Rebase the $ref path
-        result[key] = rebaseRefPath(value, overlayDir, targetDir);
-      } else {
-        result[key] = rebaseRefsRecursive(value, overlayDir, targetDir);
-      }
-    }
-    return result;
-  }
-
-  return obj;
-}
-
-/**
- * Rebase a single $ref path from overlay directory to target directory
- * 
- * @param refPath - The $ref value (e.g., '../openapi/problem-details.yaml#/components/schemas/X')
- * @param overlayDir - Directory where the overlay file is located
- * @param targetDir - Directory where the transformed spec will be written
- * @returns Rebased $ref path
- */
-function rebaseRefPath(refPath: string, overlayDir: string, targetDir: string): string {
-  // Handle internal references (start with #)
-  if (refPath.startsWith('#')) {
-    return refPath;
-  }
-
-  // Split $ref into file path and JSON pointer
-  const [filePath, jsonPointer] = refPath.split('#');
-  
-  // If no file path, it's a pure JSON pointer
-  if (!filePath) {
-    return refPath;
-  }
-
-  // Resolve the absolute path of the referenced file
-  const absoluteRefPath = path.resolve(overlayDir, filePath);
-  
-  // Calculate the relative path from target directory
-  const relativePath = path.relative(targetDir, absoluteRefPath);
-  
-  // Normalize to forward slashes (for cross-platform compatibility)
-  const normalizedPath = relativePath.split(path.sep).join('/');
-  
-  // Reconstruct the $ref
-  return jsonPointer ? `${normalizedPath}#${jsonPointer}` : normalizedPath;
 }
 
 /**

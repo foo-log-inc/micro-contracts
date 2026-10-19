@@ -6,7 +6,7 @@
       "sha256": "5b69e88fc9f60578261a8231132678550a40a70eb52dfcc611f48937f448ca44"
     },
     "contract-published/billing/docs/openapi.generated.yaml": {
-      "sha256": "9cb1fc8020f10a29cb289f08f60d2c70e57768ae89d550b8b26df70794a4052a"
+      "sha256": "753099378b2ee048f65f06df5038990772c8eeb7511a4620bbb6e4792dea1430"
     },
     "contract-published/billing/errors/index.ts": {
       "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
@@ -18,10 +18,10 @@
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
     },
     "contract-published/billing/schemas/types.ts": {
-      "sha256": "d88eea1c8091eb313dabfae2da6f40a045458f93c28b43b70c178267d3b94a4a"
+      "sha256": "ea571835e95b7dce8599046781526339405e69461473f5b139879f958fe6afdb"
     },
     "contract-published/billing/schemas/validators.ts": {
-      "sha256": "4c49f33c1bfc046cdc26a7534e1cd247c91124b1300f70bee1af23a05e7829ea"
+      "sha256": "bf37cd487989acfbf3424c61796e3f42081bf9909e27b768638fd983d2e12a90"
     },
     "contract-published/billing/services/BillingServiceApi.ts": {
       "sha256": "4230d7a55e19a117a1c696c6790f14a6ff5f08898a682ff2543804decab5888f"
@@ -33,7 +33,7 @@
       "sha256": "0c6ffe8d09a47c1c31933cf1359ef712b631cb30c61466b889f65bc6a3f3f05d"
     },
     "contract-published/core/docs/openapi.generated.yaml": {
-      "sha256": "81628c4bd17c04acd788651037a41457a75a932f54187cfbc43775ffab71ffb6"
+      "sha256": "d241689b02f9edc096bf45306fac4fd675fe7a2862ad573ed421d2958918f19a"
     },
     "contract-published/core/errors/index.ts": {
       "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
@@ -45,10 +45,10 @@
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
     },
     "contract-published/core/schemas/types.ts": {
-      "sha256": "2246c80a3adada2fc865bea55ca0fbd9dc70b6ace61b6ded55a1a89fd8c95a49"
+      "sha256": "f1d8435e1fdb2f7689103489aaaba4025cf29f78b68ea71b4f991d176d78450b"
     },
     "contract-published/core/schemas/validators.ts": {
-      "sha256": "514baee79544497deb9cefd6d0b329990d7f7a3cce864dba88fa235ea39b5bf4"
+      "sha256": "0b5f493ed2d5626e149cfe1e7b1b76b92dd58f9dd3b16a58fc63379d245ed1c0"
     },
     "contract-published/core/services/HealthServiceApi.ts": {
       "sha256": "97fe8b49940b4f82dc9ea43d077cb479195b8ba070ebff2457f926ec77550b95"
@@ -63,7 +63,7 @@
       "sha256": "d3d9aae22cb401e08c770350f3939fd877b33a6ba957460a2e660cab85a170fc"
     },
     "contract/billing/deps/core.ts": {
-      "sha256": "044a2add7cb180e9a8cff05253b7afcb9386948c560db78e49bd42816a6221a0"
+      "sha256": "b6ff5629ca18cee82c497927d78b04c538ae4ce30167cbf19527192a60eba42b"
     },
     "contract/billing/deps/index.ts": {
       "sha256": "1c5cf52aba4b6ab7e4f26b4c4c34bd10ce037d3948cd08620143e0118add49a7"
@@ -72,7 +72,7 @@
       "sha256": "5b69e88fc9f60578261a8231132678550a40a70eb52dfcc611f48937f448ca44"
     },
     "contract/billing/docs/openapi.generated.yaml": {
-      "sha256": "b500de234d2109b94e9f384bf39891ddd0f674b286c3640e2a988669bd5d4b2b"
+      "sha256": "d5e6459facf8efc168c0a60138aecf50dfbf597d09638fcf3155d2e079a20fac"
     },
     "contract/billing/errors/index.ts": {
       "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
@@ -87,10 +87,10 @@
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
     },
     "contract/billing/schemas/types.ts": {
-      "sha256": "d88eea1c8091eb313dabfae2da6f40a045458f93c28b43b70c178267d3b94a4a"
+      "sha256": "ea571835e95b7dce8599046781526339405e69461473f5b139879f958fe6afdb"
     },
     "contract/billing/schemas/validators.ts": {
-      "sha256": "4c49f33c1bfc046cdc26a7534e1cd247c91124b1300f70bee1af23a05e7829ea"
+      "sha256": "bf37cd487989acfbf3424c61796e3f42081bf9909e27b768638fd983d2e12a90"
     },
     "contract/billing/services/BillingServiceApi.ts": {
       "sha256": "4230d7a55e19a117a1c696c6790f14a6ff5f08898a682ff2543804decab5888f"
@@ -102,7 +102,7 @@
       "sha256": "e26ecf17dc435dc504900e6529e46016447f9998dc2f13b600092169746d3dc3"
     },
     "contract/core/docs/openapi.generated.yaml": {
-      "sha256": "78368a9d5c880dc6f7415ca1daace4e46b3d126c1cca0afc56b18fce2433406b"
+      "sha256": "a20e72d13d80c7294c882022891322257b70947e924fdb7eb7753d2e6cbcf30a"
     },
     "contract/core/errors/index.ts": {
       "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
@@ -117,10 +117,10 @@
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
     },
     "contract/core/schemas/types.ts": {
-      "sha256": "c38b890f73020ae0c460a71ef58af9939d4de23d11de0965f4279c701e800809"
+      "sha256": "96c0219d24c79baaeff2b1260bb35c17aacb6f46c72816a76b9557f33b5aca93"
     },
     "contract/core/schemas/validators.ts": {
-      "sha256": "1ad891f5df7398f59234be7e3ff8a4d0fe35a64f420efb827a427c0e467ee303"
+      "sha256": "a550a9b26756fe96f76598be0ccf2d3d6fef30e90a72062b21074abd8d2332f8"
     },
     "contract/core/services/AdminServiceApi.ts": {
       "sha256": "78370d2d66333978d5151ced3698aa1ef70dc6eb468e873838e44e0401b3f18f"
@@ -145,5 +145,5 @@
     }
   },
   "inputHash": "952e503f53eb3a22d9e646bee9abd960262a2d5f81f521476b5a0b8270fd7a80",
-  "updatedAt": "2026-10-01T08:05:59.496Z"
+  "updatedAt": "2026-10-19T00:21:47.475Z"
 }

@@ -26,9 +26,9 @@ import {
   processOverlays, 
   generateExtensionInterfaces,
   formatOverlayLog,
-  rebaseRefs,
   type OverlayResult,
 } from './overlayProcessor.js';
+import { loadOpenAPISpec } from './specLoader.js';
 import {
   buildTemplateContext,
   renderTemplate,
@@ -45,6 +45,7 @@ export { processOverlays, generateExtensionInterfaces } from './overlayProcessor
 export { buildTemplateContext, renderTemplate } from './templateProcessor.js';
 export type { ScreenContext, ScreenLink, ScreenAction, ScreenInteraction, TemplateContext } from './templateProcessor.js';
 export { collectInputFiles, computeInputHash } from './inputHash.js';
+export { loadOpenAPISpec } from './specLoader.js';
 
 /**
  * Write file only if content has changed (ignoring timestamp in header).
@@ -92,21 +93,6 @@ export interface GenerateOptions {
   modules?: string | string[];
   /** Filter to specific outputs by id (comma-separated or array, glob patterns allowed) */
   outputs?: string | string[];
-}
-
-/**
- * Load OpenAPI spec from file
- */
-export function loadOpenAPISpec(filePath: string): OpenAPISpec {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  
-  if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) {
-    return yaml.load(content) as OpenAPISpec;
-  } else if (filePath.endsWith('.json')) {
-    return JSON.parse(content) as OpenAPISpec;
-  } else {
-    throw new Error(`Unsupported file format: ${filePath}`);
-  }
 }
 
 /**
@@ -266,8 +252,7 @@ async function generateModule(
         collision: config.overlayCollision,
         files: config.overlays,
       },
-      process.cwd(),
-      openapiPath  // Pass spec path for $ref rebasing
+      process.cwd()
     );
     spec = overlayResult.spec;
     console.log(formatOverlayLog(overlayResult));
@@ -428,12 +413,10 @@ ${hasOverlays ? "export * from './overlays/index.js';" : ''}
 `;
   writeAndLog(path.join(outputDir, 'index.ts'), indexContent);
   
-  // Copy OpenAPI spec to docs with source info header
-  // Rebase $ref paths from source directory to output directory
-  const sourceDir = path.dirname(config.openapi);
+  // Copy OpenAPI spec to docs with source info header. The loaded spec holds
+  // every component it references, so the copy stands on its own.
   const docsDir = path.join(outputDir, 'docs');
-  const rebasedSpec = rebaseRefs(targetSpec, sourceDir, docsDir);
-  
+
   const specHeader = `# Auto-generated OpenAPI specification
 # DO NOT EDIT MANUALLY
 # 
@@ -441,7 +424,7 @@ ${hasOverlays ? "export * from './overlays/index.js';" : ''}
 # Regenerate: micro-contracts generate
 ${publicOnly ? '# Filtered for public endpoints only\n' : ''}
 `;
-  const yamlContent = specHeader + yaml.dump(rebasedSpec, { lineWidth: -1 });
+  const yamlContent = specHeader + yaml.dump(targetSpec, { lineWidth: -1 });
   writeAndLog(path.join(docsDir, 'openapi.generated.yaml'), yamlContent);
 }
 

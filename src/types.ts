@@ -829,11 +829,22 @@ export function isTsIdentifier(name: string): boolean {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name);
 }
 
-// Extract schema name from $ref
+/**
+ * The component name a local reference points at:
+ * "#/components/schemas/EntryListResponse" -> "EntryListResponse".
+ *
+ * Anything else has no such name. A reference into another file is resolved
+ * when the spec is loaded (see loadOpenAPISpec); reading the name off its end
+ * would bind it to whatever this spec defines under that name.
+ */
 export function getRefName(ref: string): string {
-  // "#/components/schemas/EntryListResponse" -> "EntryListResponse"
-  const parts = ref.split('/');
-  return parts[parts.length - 1];
+  const match = ref.match(/^#\/components\/[^/]+\/([^/]+)$/);
+  if (!match) {
+    throw new Error(
+      `$ref '${ref}' does not point at a component of this spec ('#/components/<section>/<name>').`
+    );
+  }
+  return match[1];
 }
 
 /**

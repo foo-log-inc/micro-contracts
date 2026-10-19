@@ -137,6 +137,75 @@ export const PaymentResult = {
     ]
   } as const;
 
+export const ValidationError = {
+    "$id": "ValidationError",
+    "type": "object",
+    "properties": {
+      "pointer": {
+        "type": "string",
+        "description": "JSON Pointer to the invalid field"
+      },
+      "detail": {
+        "type": "string",
+        "description": "Error message for this field"
+      }
+    },
+    "required": [
+      "pointer",
+      "detail"
+    ]
+  } as const;
+
+export const ProblemDetails = {
+    "$id": "ProblemDetails",
+    "type": "object",
+    "description": "RFC 9457 Problem Details for HTTP APIs",
+    "properties": {
+      "type": {
+        "type": "string",
+        "description": "A URI reference that identifies the problem type",
+        "format": "uri-reference"
+      },
+      "title": {
+        "type": "string",
+        "description": "A short, human-readable summary"
+      },
+      "status": {
+        "type": "integer",
+        "description": "The HTTP status code"
+      },
+      "detail": {
+        "type": "string",
+        "description": "A human-readable explanation specific to this occurrence"
+      },
+      "instance": {
+        "type": "string",
+        "description": "A URI reference to the specific occurrence",
+        "format": "uri"
+      },
+      "code": {
+        "type": "string",
+        "description": "Application-specific error code (SCREAMING_SNAKE_CASE)"
+      },
+      "traceId": {
+        "type": "string",
+        "description": "Request trace ID for debugging"
+      },
+      "errors": {
+        "type": "array",
+        "description": "Detailed validation errors",
+        "items": {
+          "$ref": "ValidationError#"
+        }
+      }
+    },
+    "required": [
+      "type",
+      "title",
+      "status"
+    ]
+  } as const;
+
 // Parameter schemas
 export const Billing_getInvoicesParams = {
     "$id": "Billing_getInvoicesParams",
@@ -191,6 +260,8 @@ export const allSchemas = [
   CreateInvoiceRequest,
   PayInvoiceRequest,
   PaymentResult,
+  ValidationError,
+  ProblemDetails,
   Billing_getInvoicesParams,
   Billing_getInvoiceByIdParams,
   Billing_payInvoiceParams,

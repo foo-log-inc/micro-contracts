@@ -135,7 +135,7 @@ actions:
 
 ### $ref Paths in Overlays
 
-Specify `$ref` paths **relative to the overlay file's location**. micro-contracts automatically rebases these paths so that the generated `openapi.generated.yaml` can resolve them correctly.
+Specify `$ref` paths **relative to the overlay file's location**. A `$ref` into another file must point at a component (`#/components/{schemas,responses,parameters,requestBodies}/<name>`): micro-contracts brings that component, and everything it references, into the module's spec, and the reference becomes a local one.
 
 ```yaml
 # spec/_shared/overlays/middleware.overlay.yaml
@@ -143,14 +143,12 @@ $ref: '../openapi/problem-details.yaml#/components/responses/Unauthorized'
 #      ↑ Resolves to spec/_shared/openapi/problem-details.yaml
 ```
 
-**Rebase example:**
+| File | $ref |
+|------|------|
+| Overlay (source) | `../openapi/problem-details.yaml#/components/responses/Unauthorized` |
+| Generated spec (`packages/contract/core/docs/openapi.generated.yaml`) | `#/components/responses/Unauthorized`, with `Unauthorized` and the `ProblemDetails` schema it references under `components` |
 
-| File | $ref path |
-|------|-----------|
-| Overlay (source) | `../openapi/problem-details.yaml#/...` |
-| Generated spec (`packages/contract/core/docs/openapi.generated.yaml`) | `../../../../spec/_shared/openapi/problem-details.yaml#/...` |
-
-The generated path is relative to `openapi.generated.yaml`'s location, ensuring the reference resolves correctly.
+The generated spec references nothing outside itself. A component brought in under a name the spec already uses for a different definition is an error.
 
 ---
 

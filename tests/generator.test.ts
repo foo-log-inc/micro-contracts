@@ -1358,5 +1358,109 @@ components:
         .rejects.toThrow(/not x-micro-contracts-published/);
     });
   });
+
+  describe('$ref into another file', () => {
+    /** An API module and a screen module whose ViewModel references the API's Order. */
+    function setupScreenReferencingApi(screenSchemas = ''): MultiModuleConfig {
+      fs.mkdirSync(path.join(tmpDir, 'api/orders'), { recursive: true });
+      fs.mkdirSync(path.join(tmpDir, 'api/screens'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'api/orders/openapi.yaml'), `
+openapi: 3.0.3
+info: { title: Orders, version: 1.0.0 }
+paths: {}
+components:
+  schemas:
+    Order:
+      type: object
+      required: [orderId, status]
+      properties:
+        orderId: { type: string }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+    OrderStatus:
+      type: string
+      enum: [new, paid, shipped]
+`);
+      fs.writeFileSync(path.join(tmpDir, 'api/screens/screens.yaml'), `
+openapi: 3.0.3
+info: { title: Screens, version: 1.0.0 }
+paths:
+  /orders/{orderId}:
+    get:
+      operationId: renderOrderPage
+      x-screen-const: ORDER
+      x-screen-id: SCR-001
+      x-screen-name: OrderPage
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Order page ViewModel
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderPageViewModel' }
+components:
+  schemas:
+    OrderPageViewModel:
+      type: object
+      required: [order]
+      properties:
+        order: { $ref: '../orders/openapi.yaml#/components/schemas/Order' }
+${screenSchemas}`);
+
+      return {
+        defaults: {
+          contract: { output: path.join(tmpDir, 'contracts/{module}') },
+          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
+        },
+        modules: {
+          orders: { openapi: path.join(tmpDir, 'api/orders/openapi.yaml') },
+          screens: { openapi: path.join(tmpDir, 'api/screens/screens.yaml'), screen: true },
+        },
+      };
+    }
+
+    it('brings the referenced schema, and what it references, into the module', async () => {
+      await generate(setupScreenReferencingApi(), { contractsOnly: true, modules: 'screens' });
+
+      const types = fs.readFileSync(path.join(tmpDir, 'contracts/screens/schemas/types.ts'), 'utf-8');
+      expect(types).toContain('order: Order;');
+      expect(types).toContain('export interface Order {');
+      expect(types).toContain("export type OrderStatus = ('new' | 'paid' | 'shipped');");
+
+      const validators = fs.readFileSync(path.join(tmpDir, 'contracts/screens/schemas/validators.ts'), 'utf-8');
+      expect(validators).toContain('"$id": "Order"');
+      expect(validators).toContain('"$id": "OrderStatus"');
+      expect(validators).toMatch(/allSchemas = \[[^\]]*\bOrder,/);
+    });
+
+    it('fails when the referenced name is already a different schema in the module', async () => {
+      const config = setupScreenReferencingApi(`    Order:
+      type: object
+      properties:
+        label: { type: string }
+`);
+
+      await expect(generate(config, { contractsOnly: true, modules: 'screens' }))
+        .rejects.toThrow(/components\.schemas\.Order/);
+    });
+
+    it('fails on a reference to another file that does not name a component', () => {
+      const specPath = path.join(tmpDir, 'spec.yaml');
+      fs.writeFileSync(path.join(tmpDir, 'order.yaml'), 'type: object\n');
+      fs.writeFileSync(specPath, `
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths: {}
+components:
+  schemas:
+    Holder:
+      type: object
+      properties:
+        order: { $ref: './order.yaml' }
+`);
+
+      expect(() => loadOpenAPISpec(specPath)).toThrow(/\.\/order\.yaml/);
+    });
+  });
 });
 

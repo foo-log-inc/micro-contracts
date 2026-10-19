@@ -10,68 +10,9 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import YAML from 'yaml';
 import type { MultiModuleConfig } from '../types.js';
 import { resolveModuleConfig } from '../types.js';
-
-/**
- * Recursively walk a parsed YAML/JSON structure and collect absolute
- * paths of files referenced by external `$ref` values (e.g.
- * `../../_shared/openapi/problem-details.yaml#/components/...`).
- * Follows transitive references so that indirectly referenced files
- * are also included.
- */
-function collectExternalRefs(
-  value: unknown,
-  baseDir: string,
-  visited: Set<string>,
-): void {
-  if (value === null || typeof value !== 'object') return;
-
-  if (Array.isArray(value)) {
-    for (const item of value) collectExternalRefs(item, baseDir, visited);
-    return;
-  }
-
-  const obj = value as Record<string, unknown>;
-  if (typeof obj['$ref'] === 'string') {
-    const ref = obj['$ref'];
-    const filePart = ref.split('#')[0];
-    if (filePart) {
-      const absPath = path.resolve(baseDir, filePart);
-      if (!visited.has(absPath) && fs.existsSync(absPath)) {
-        visited.add(absPath);
-        try {
-          const raw = fs.readFileSync(absPath, 'utf8');
-          const parsed = YAML.parse(raw);
-          collectExternalRefs(parsed, path.dirname(absPath), visited);
-        } catch {
-          // unparseable — file is still tracked by its content hash
-        }
-      }
-    }
-  }
-
-  for (const v of Object.values(obj)) {
-    collectExternalRefs(v, baseDir, visited);
-  }
-}
-
-/**
- * Parse a YAML/JSON file and collect all externally-referenced file
- * paths (via `$ref`) transitively.
- */
-function collectRefsFromFile(filePath: string): string[] {
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    const parsed = YAML.parse(raw);
-    const refFiles = new Set<string>();
-    collectExternalRefs(parsed, path.dirname(filePath), refFiles);
-    return [...refFiles];
-  } catch {
-    return [];
-  }
-}
+import { referencedFiles } from './specLoader.js';
 
 /**
  * Collect every input file path that can affect generation output.
@@ -93,7 +34,7 @@ export function collectInputFiles(
     const openapiPath = path.resolve(resolved.openapi);
     if (fs.existsSync(openapiPath)) {
       files.add(openapiPath);
-      for (const ref of collectRefsFromFile(openapiPath)) files.add(ref);
+      for (const ref of referencedFiles(openapiPath)) files.add(ref);
     }
 
     // Overlays + their transitive $ref targets
@@ -101,7 +42,7 @@ export function collectInputFiles(
       const overlayPath = path.resolve(overlay);
       if (fs.existsSync(overlayPath)) {
         files.add(overlayPath);
-        for (const ref of collectRefsFromFile(overlayPath)) files.add(ref);
+        for (const ref of referencedFiles(overlayPath)) files.add(ref);
       }
     }
 

@@ -75,6 +75,13 @@ export interface PaymentResult {
   paidAt?: string;
 }
 
+export interface ValidationError {
+  /** JSON Pointer to the invalid field */
+  pointer: string;
+  /** Error message for this field */
+  detail: string;
+}
+
 // Operation-specific types
 export interface Billing_getInvoicesParams {
   /** Filter by user ID */
