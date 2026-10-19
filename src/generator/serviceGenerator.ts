@@ -16,6 +16,7 @@ import type {
   HttpMethod,
 } from '../types.js';
 import { isReference, getRefName, resolveOperation } from '../types.js';
+import { operationTypeNames } from './typeGenerator.js';
 
 interface ServiceGeneratorOptions {
   /** Only include public endpoints (x-public: true) */
@@ -134,17 +135,13 @@ function extractMethodInfo(
   spec: OpenAPISpec
 ): ServiceMethodInfo | null {
   // Canonical extension names only
-  const serviceName = operation['x-micro-contracts-service'];
   const serviceMethod = operation['x-micro-contracts-method'];
   if (!serviceMethod) return null;
   
   const operationId = operation.operationId || serviceMethod;
-  // Use service + _ + method for type names (clearer separation)
-  const typeNameBase = serviceName && serviceMethod 
-    ? `${serviceName}_${serviceMethod}`
-    : operationId.replace(/[^a-zA-Z0-9]/g, '_');
   const isPublished = operation['x-micro-contracts-published'] === true;
   const resolved = resolveOperation(spec, path, httpMethod);
+  const typeNames = operationTypeNames(operation, resolved);
 
   // Request body schema name
   const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
@@ -163,11 +160,6 @@ function extractMethodInfo(
     responseType = 'void';
   }
 
-  // Params type (path + query combined)
-  const allParams: ParameterObject[] = resolved.parameters;
-  const hasParams = allParams.some(p => p.in === 'query' || p.in === 'path');
-  const paramsType = hasParams ? `${typeNameBase}Params` : undefined;
-
 
   // Collect all x-* extensions from the operation
   const extensions: Record<string, unknown> = {};
@@ -185,8 +177,9 @@ function extractMethodInfo(
     isPublished,
     requestType,
     responseType,
-    paramsType,
-    parameters: allParams,
+    inputType: typeNames.input,
+    paramsType: typeNames.params,
+    parameters: resolved.parameters,
     requestBodySchema: requestType,
     extensions,
   };
@@ -209,8 +202,7 @@ function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): str
   const types = new Set<string>();
   for (const method of service.methods) {
     // Always use Input type (even for parameterless operations)
-    const inputTypeName = `${service.name}_${method.name}Input`;
-    types.add(inputTypeName);
+    types.add(method.inputType);
     if (method.responseType && method.responseType !== 'void') types.add(method.responseType);
   }
   
@@ -236,7 +228,7 @@ function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): str
     lines.push('   */');
     
     // Method signature with single Input parameter (always present)
-    const inputTypeName = `${service.name}_${method.name}Input`;
+    const inputTypeName = method.inputType;
     const returnType = method.responseType || 'void';
     const returnTypeStr = returnType === 'void' ? 'Promise<void>' : `Promise<${returnType}>`;
     
@@ -260,7 +252,7 @@ function generateServiceInterfaceFromTemplate(
   const imports = collectImportsForService(service);
   
   const methods: ServiceMethodTemplateContext[] = service.methods.map(method => {
-    const inputType = `${service.name}_${method.name}Input`;
+    const inputType = method.inputType;
     const returnType = method.responseType || 'void';
     const returnTypeStr = returnType === 'void' ? 'Promise<void>' : `Promise<${returnType}>`;
     
@@ -295,7 +287,7 @@ function generateServiceInterfaceFromTemplate(
 function collectImportsForService(service: ServiceInfo): string[] {
   const types = new Set<string>();
   for (const method of service.methods) {
-    types.add(`${service.name}_${method.name}Input`);
+    types.add(method.inputType);
     if (method.responseType && method.responseType !== 'void') {
       types.add(method.responseType);
     }

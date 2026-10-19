@@ -849,7 +849,9 @@ export interface ServiceMethodInfo {
   isPublished: boolean;
   requestType?: string;
   responseType?: string;
-  /** Params type (path + query combined) */
+  /** Input type (see operationTypeNames) */
+  inputType: string;
+  /** Params type (path + query combined; see operationTypeNames) */
   paramsType?: string;
   /** All parameters (path, query, header) from the operation */
   parameters: ParameterObject[];

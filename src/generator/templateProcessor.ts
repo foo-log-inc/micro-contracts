@@ -335,11 +335,11 @@ function extractSchemaTypes(routes: RouteContext[]): string[] {
       }
     }
     // Add params type (path + query parameters) for templates that need it
-    if (route.pathParams.length > 0 || route.queryParams.length > 0) {
-      types.add(`${route.typeNameBase}Params`);
+    if (route.paramsType) {
+      types.add(route.paramsType);
     }
     // Add unified input type (for service-aligned templates)
-    types.add(`${route.typeNameBase}Input`);
+    types.add(route.inputType);
   }
   
   return Array.from(types).sort();
@@ -410,7 +410,9 @@ function extractRoutes(
       if (!service || !serviceMethod) continue;
 
       const operationId = operation.operationId || `${method}${apiPath.replace(/[^a-zA-Z0-9]/g, '')}`;
-      const typeNameBase = `${service}_${serviceMethod}`;
+      const resolved = resolveOperation(spec, apiPath, method);
+      const typeNames = operationTypeNames(operation, resolved);
+      const typeNameBase = typeNames.base;
       const fastifyPath = apiPath.replace(/\{([^}]+)\}/g, ':$1');
       const serviceKey = service.charAt(0).toLowerCase() + service.slice(1);
 
@@ -450,8 +452,6 @@ function extractRoutes(
         }
       }
 
-      const resolved = resolveOperation(spec, apiPath, method);
-
       // Extract parameters
       const queryParams = resolved.parameters
         .filter(p => p.in === 'query')
@@ -462,9 +462,8 @@ function extractRoutes(
 
       // Extract request body, under the name types.ts and validators.ts give it
       let requestBody: RouteContext['requestBody'];
-      const { body: bodyType } = operationTypeNames(operation, resolved);
-      if (resolved.requestBody && bodyType) {
-        requestBody = { schemaName: bodyType, required: resolved.requestBody.required || false };
+      if (resolved.requestBody && typeNames.body) {
+        requestBody = { schemaName: typeNames.body, required: resolved.requestBody.required || false };
       }
 
       // Extract responses
@@ -490,9 +489,9 @@ function extractRoutes(
         : 'void';
       const requestType = requestBody?.schemaName;
       // Params type combines both path and query parameters
-      const paramsType = (pathParams.length > 0 || queryParams.length > 0) ? `${typeNameBase}Params` : undefined;
+      const paramsType = typeNames.params;
       // Unified input type name (matches contract service API)
-      const inputType = `${typeNameBase}Input`;
+      const inputType = typeNames.input;
       
       routes.push({
         path: apiPath,
