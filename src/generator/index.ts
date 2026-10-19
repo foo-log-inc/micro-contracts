@@ -200,7 +200,9 @@ export function configuredOutputs(config: MultiModuleConfig): string[] {
       resolved.contractPublicOutput,
       ...resolved.outputs.filter(output => output.enabled).map(output => output.output),
       ...(resolved.server ? [resolved.server.output] : []),
-      ...(resolved.frontend ? [resolved.frontend.output] : []),
+      ...(resolved.frontend
+        ? [path.join(resolved.frontend.output, resolved.frontend.client), path.join(resolved.frontend.output, resolved.frontend.service)]
+        : []),
     ];
   });
 }

@@ -88,9 +88,7 @@ const handlers: CommandHandlers = {
 
         if (useCache) {
           const manifestDir = opts.manifestDir || 'packages/';
-          const skipCheck = await canSkipGeneration(
-            manifestDir, inputHash, generatedFilesRule(), configuredOutputs(config)
-          );
+          const skipCheck = await canSkipGeneration(manifestDir, inputHash, generatedFilesRule());
           if (skipCheck.skip) {
             console.log(`No input changes detected, skipping generation (${skipCheck.reason})`);
             return;
@@ -115,9 +113,10 @@ const handlers: CommandHandlers = {
           if (fs.existsSync(manifestDir)) {
             const manifestInputHash =
               (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-            const { manifest, changed } = await generateManifest(manifestDir, generatedFilesRule(), {
+            const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, generatedFilesRule(), {
               generatorVersion: VERSION,
               inputHash: manifestInputHash,
+              outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
             });
             const fileCount = Object.keys(manifest.files).length;
 
@@ -126,6 +125,9 @@ const handlers: CommandHandlers = {
               console.log(`\nManifest updated: ${manifestPath} (${fileCount} files)`);
             } else {
               console.log(`\nManifest unchanged (${fileCount} files)`);
+            }
+            if (unrecordedOutput) {
+              console.log(`Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}, so the next run regenerates`);
             }
           }
         }
@@ -494,9 +496,7 @@ const handlers: CommandHandlers = {
 
             if (useCache) {
               const manifestDir = opts.generatedDir || 'packages/';
-              const skipCheck = await canSkipGeneration(
-                manifestDir, inputHash, generatedFilesRule(opts.guardrails), configuredOutputs(config)
-              );
+              const skipCheck = await canSkipGeneration(manifestDir, inputHash, generatedFilesRule(opts.guardrails));
               if (skipCheck.skip) {
                 generationCacheSkipped = true;
                 generateSkipped = true;
@@ -530,9 +530,10 @@ const handlers: CommandHandlers = {
                   if (fs.existsSync(manifestDir)) {
                     const manifestInputHash =
                       (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-                    const { manifest, changed } = await generateManifest(manifestDir, generatedFilesRule(opts.guardrails), {
+                    const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, generatedFilesRule(opts.guardrails), {
                       generatorVersion: VERSION,
                       inputHash: manifestInputHash,
+                      outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
                     });
                     if (verbose) {
                       const fileCount = Object.keys(manifest.files).length;
@@ -541,6 +542,9 @@ const handlers: CommandHandlers = {
                         originalLog(`  Manifest updated: ${mPath} (${fileCount} files)`);
                       } else {
                         originalLog(`  Manifest unchanged (${fileCount} files)`);
+                      }
+                      if (unrecordedOutput) {
+                        originalLog(`  Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}`);
                       }
                     } else if (changed) {
                       writeManifest(manifest, manifestDir);

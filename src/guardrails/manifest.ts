@@ -84,6 +84,8 @@ export async function getGeneratedFiles(
 export interface GenerateManifestResult {
   manifest: GeneratedManifest;
   changed: boolean;
+  /** A file of the outputs the manifest does not record, which kept the input hash out of it */
+  unrecordedOutput?: string;
 }
 
 /**
@@ -107,8 +109,42 @@ function areFilesEqual(
 }
 
 /**
+ * The first file in `outputs` the manifest does not record: outside its
+ * directory, or not matched by the generated: patterns. Read right after a
+ * full generation run, when the outputs hold what that run wrote; an output
+ * absent from disk is one the run had no reason to write.
+ */
+async function firstUnrecordedOutput(
+  baseDir: string,
+  recorded: string[],
+  outputs: string[]
+): Promise<string | undefined> {
+  const recordedPaths = new Set(recorded.map(file => path.resolve(baseDir, file)));
+
+  for (const output of outputs) {
+    if (!fs.existsSync(output)) continue;
+
+    const files = fs.statSync(output).isDirectory()
+      ? (await glob('**/*', { cwd: output, nodir: true, ignore: ['**/node_modules/**', '**/.git/**'] }))
+        .map(file => path.resolve(output, file))
+      : [path.resolve(output)];
+    const unrecorded = files.find(file => !recordedPaths.has(file));
+    if (unrecorded) {
+      return path.relative(process.cwd(), unrecorded) || unrecorded;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Generate manifest for a directory of generated files
  * Only updates `updatedAt` timestamp when files actually change
+ *
+ * `inputHash` is recorded only when the manifest records every file the
+ * generation `outputs` hold: a later run skips generation on that hash, and an
+ * output the manifest does not record could be missing or edited without that
+ * run noticing.
  */
 export async function generateManifest(
   baseDir: string,
@@ -116,12 +152,14 @@ export async function generateManifest(
   options: {
     generatorVersion?: string;
     inputHash?: string;
+    /** Every location the generation run writes to (see configuredOutputs) */
+    outputs?: string[];
     sourceMap?: Map<string, string>;  // file -> source mapping
   } = {}
 ): Promise<GenerateManifestResult> {
   const {
     generatorVersion = '1.0.0',
-    inputHash,
+    outputs = [],
     sourceMap = new Map(),
   } = options;
   
@@ -147,6 +185,11 @@ export async function generateManifest(
     fileInfos[relPath] = info;
   }
   
+  const unrecordedOutput = options.inputHash !== undefined
+    ? await firstUnrecordedOutput(baseDir, Object.keys(fileInfos), outputs)
+    : undefined;
+  const inputHash = unrecordedOutput ? undefined : options.inputHash;
+
   // Load existing manifest to compare
   const existingManifest = loadManifest(baseDir);
   
@@ -156,9 +199,8 @@ export async function generateManifest(
   // Check if generator version has changed
   const versionChanged = !existingManifest || existingManifest.generatorVersion !== generatorVersion;
   
-  // Check if input hash has changed
-  const inputHashChanged = inputHash !== undefined &&
-    (!existingManifest || existingManifest.inputHash !== inputHash);
+  // Check if input hash has changed (including one no longer recorded)
+  const inputHashChanged = !existingManifest || existingManifest.inputHash !== inputHash;
   
   // Content is considered changed if files, version, or input hash changed
   const changed = filesChanged || versionChanged || inputHashChanged;
@@ -186,6 +228,7 @@ export async function generateManifest(
   return {
     manifest,
     changed,
+    unrecordedOutput,
   };
 }
 
@@ -193,17 +236,15 @@ export async function generateManifest(
  * Check whether generation can be skipped.
  *
  * Returns `skip: true` only when:
- *  1. A manifest exists with a matching `inputHash`, AND
- *  2. Every configured output (`outputs`) lies in the manifest's directory,
- *     the only place the manifest vouches for, AND
- *  3. The manifest records generated files, and every one on disk still
+ *  1. A manifest exists with a matching `inputHash` — recorded only by a run
+ *     whose outputs the manifest records in full (see generateManifest), AND
+ *  2. The manifest records generated files, and every one on disk still
  *     matches its hash.
  */
 export async function canSkipGeneration(
   manifestDir: string,
   inputHash: string,
   rule: GeneratedFilesRule,
-  outputs: string[],
 ): Promise<{ skip: boolean; reason: string }> {
   const manifest = loadManifest(manifestDir);
 
@@ -212,20 +253,11 @@ export async function canSkipGeneration(
   }
 
   if (!manifest.inputHash) {
-    return { skip: false, reason: 'Manifest has no inputHash (pre-cache version)' };
+    return { skip: false, reason: 'Manifest has no inputHash' };
   }
 
   if (manifest.inputHash !== inputHash) {
     return { skip: false, reason: 'Input files have changed' };
-  }
-
-  // An output elsewhere could be missing or edited without the manifest knowing.
-  const untracked = outputs.find(output => {
-    const relative = path.relative(path.resolve(manifestDir), path.resolve(output));
-    return relative.startsWith('..') || path.isAbsolute(relative);
-  });
-  if (untracked) {
-    return { skip: false, reason: `Output ${untracked} is outside ${manifestDir}, which the manifest covers` };
   }
 
   if (Object.keys(manifest.files).length === 0) {

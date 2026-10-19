@@ -236,6 +236,58 @@ generated:
       expect(runCli('check --only manifest').stdout).not.toContain('app/src/index.ts');
     });
 
+    it('regenerates an output in the manifest directory that the generated patterns leave out', () => {
+      fs.mkdirSync(path.join(tempDir, 'api/orders'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempDir, 'api/orders/openapi.yaml'),
+        [
+          'openapi: 3.0.3',
+          'info:',
+          '  title: Orders',
+          '  version: 1.0.0',
+          'paths:',
+          '  /orders:',
+          '    get:',
+          '      operationId: getOrders',
+          '      x-micro-contracts-service: Order',
+          '      x-micro-contracts-method: getOrders',
+          '      responses:',
+          "        '200':",
+          '          description: ok',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(path.join(tempDir, 'dump.hbs'), '{{#each routes}}{{operationId}}\n{{/each}}');
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.config.yaml'),
+        [
+          'defaults:',
+          '  contract:',
+          '    output: packages/contract/{module}',
+          '  outputs:',
+          '    dump:',
+          '      output: packages/server/{module}/routes.ts',
+          '      template: dump.hbs',
+          'modules:',
+          '  orders:',
+          '    openapi: api/orders/openapi.yaml',
+          '',
+        ].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(tempDir, 'micro-contracts.guardrails.yaml'),
+        'generated:\n  - "packages/contract/**"\n  - "**/*.generated.ts"\n',
+      );
+
+      expect(runCli('generate').exitCode).toBe(0);
+      fs.rmSync(path.join(tempDir, 'packages/server'), { recursive: true, force: true });
+
+      const again = runCli('generate');
+      expect(again.exitCode).toBe(0);
+      expect(again.stdout).not.toContain('No input changes detected');
+      expect(fs.existsSync(path.join(tempDir, 'packages/server/orders/routes.ts'))).toBe(true);
+    });
+
     it('does not call a pipeline that ran nothing successful', () => {
       // #77 fixed this verdict for `check`; the pipeline printed its own.
       createGuardrailsConfig();
