@@ -24,9 +24,10 @@ function encodeFrame(format: StreamFormat, json: string, name: string): string {
  * yielded first: a route awaits it before sending anything, so a service that
  * fails at once fails as an ordinary error response. `serialize` writes an
  * event as the contract declares it and throws for one the contract does not;
- * `discriminator` is the property naming each event's type. When the frames
- * stop — every event sent, an event refused, or the client gone — `events`
- * is closed.
+ * `discriminator` is the property naming each event's type. `events` is
+ * closed when every event is sent or one is refused. When the client goes
+ * away, it is closed at its next yield: a service waiting between events keeps
+ * running until it yields again.
  */
 export async function* encodeStream<E extends object>(
   format: StreamFormat,

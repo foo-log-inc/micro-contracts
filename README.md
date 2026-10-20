@@ -667,7 +667,8 @@ service that fails at once answers through the error handler, as a JSON operatio
 then sends the success status with the declared media type, and each event as the service
 yields it, serialized by the event schema as a JSON response is: a property the schema does
 not declare is not sent, and an event no member of the schema accepts ends the stream. When
-the client goes away, the service's iterator is closed. The starter fetch client returns the
+the client goes away, the service's iterator is closed at its next yield: a service waiting
+between events keeps running until it yields again. The starter fetch client returns the
 events as an `AsyncIterable` to read with `for await`.
 
 ### Validators
@@ -800,7 +801,8 @@ that status, as Fastify serializes an error.
 A [stream operation](#stream-responses) needs the response streaming of a function URL whose
 invoke mode is `RESPONSE_STREAM`. For one, the template exports `createStreamHandler` too, a
 handler wrapped in `awslambda.streamifyResponse` that sends each event as the service yields
-it and closes the service's iterator when the response stream closes; it answers the other
+it. When the response stream closes, the service's iterator is closed at its next yield: a
+service waiting between events keeps running until it yields again. It answers the other
 operations as `createHandler` does. `createHandler` answers a stream operation with all its
 events at once, when the stream ends.
 

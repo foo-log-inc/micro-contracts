@@ -427,9 +427,10 @@ export type StreamHandler = (event: HttpApiEvent, responseStream: Writable) => P
 
 /**
  * The Lambda handler for a function URL whose invoke mode is RESPONSE_STREAM:
- * a stream operation sends each event as its service yields it, and the
- * service's iterator is closed when the client goes away. Other operations
- * are answered as createHandler answers them.
+ * a stream operation sends each event as its service yields it. When the
+ * client goes away, the service's iterator is closed at its next yield: a
+ * service waiting between events keeps running until it yields again. Other
+ * operations are answered as createHandler answers them.
  */
 export function createStreamHandler(options: HandlerOptions): StreamHandler {
   const dispatch = createDispatcher(options);
