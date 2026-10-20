@@ -1,8 +1,9 @@
 /**
  * Starter Templates for micro-contracts init command
- * 
+ *
  * These templates are created in spec/default/templates/ and can be customized.
- * Keep in sync with examples/spec/default/templates/
+ * examples/spec/default/templates/ holds exactly these files, as init writes
+ * them: the example project is generated and type-checked with them.
  */
 
 const STARTER_FASTIFY_ROUTES_TEMPLATE = `/**
@@ -282,7 +283,18 @@ export async function runOverlays(
     const extract = extractors[name];
     const handler = handlers[name as keyof OverlayRegistry];
     
-    if (!extract || !handler) continue;
+    // SECURITY: Never skip a required overlay - fail fast if not registered
+    if (!handler) {
+      throw new Error(
+        \`[SECURITY] Overlay handler "\${name}" is required for operation "\${operationId}" but not registered. \` +
+        \`Register it in server.ts: fastify.decorate('overlayHandlers', { \${name}: ... })\`
+      );
+    }
+    if (!extract) {
+      throw new Error(
+        \`[SECURITY] Overlay extractor "\${name}" is missing. This indicates a code generation issue.\`
+      );
+    }
 
     const input = extract(req);
     const result = await (handler as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
