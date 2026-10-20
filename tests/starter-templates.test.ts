@@ -270,9 +270,36 @@ actions:
       });
 
       const stubs = fs.readFileSync(path.join(tmpDir, 'server/overlays.stubs.ts'), 'utf-8');
-      expect(stubs).toContain('export async function requireAuth(input: RequireAuthOverlayInput)');
-      expect(stubs).toContain('export async function audit(input: AuditOverlayInput)');
+      expect(stubs).toContain("'requireAuth': async (input: RequireAuthOverlayInput)");
+      expect(stubs).toContain("'audit': async (input: AuditOverlayInput)");
       expect(typecheck()).toBe('');
+    });
+
+    it('generate overlay types, an adapter and stubs that type-check for an overlay named outside identifier syntax', { timeout: 180_000 }, async () => {
+      await generateProject(userSpec.replace('x-middleware: [requireAuth]', 'x-middleware: [tenant-isolation]'), {
+        'tenant.overlay.yaml': `
+overlay: 1.0.0
+info: { title: tenant, version: 1.0.0 }
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'tenant-isolation')]"
+    update:
+      parameters:
+        - { name: X-Tenant-Id, in: header, required: true, schema: { type: string } }
+`,
+      });
+
+      expect(typecheck()).toBe('');
+      const received: Array<Record<string, unknown>> = [];
+      const app = await serve({ user: userService }, {
+        'tenant-isolation': async (input: Record<string, unknown>) => { received.push(input); return { success: true }; },
+      });
+      try {
+        const res = await app.inject({ method: 'GET', url: '/users/ab', headers: { 'x-tenant-id': 't1' } });
+        expect(res.statusCode).toBe(200);
+        expect(received).toEqual([{ 'X-Tenant-Id': 't1' }]);
+      } finally {
+        await app.close();
+      }
     });
 
     it('generate an adapter that type-checks for a module with a single overlay', { timeout: 180_000 }, async () => {

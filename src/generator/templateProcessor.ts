@@ -9,7 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import Handlebars from 'handlebars';
 import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
-import { operationKey } from './overlayProcessor.js';
+import { operationKey, overlayTypeName } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
 import { isReference, getRefName, parseComponentRef, resolveOperation, carriedBodySchema } from '../types.js';
 import { operationTypeNames } from './typeGenerator.js';
@@ -861,6 +861,10 @@ Handlebars.registerHelper('kebabCase', (str) => {
 Handlebars.registerHelper('snakeCase', (str: string) => {
   return str?.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/-/g, '_').toLowerCase();
 });
+
+// Overlay helper: the stem of the type names generated for an overlay
+// (`{{overlayTypeName name}}OverlayInput`)
+Handlebars.registerHelper('overlayTypeName', (name: string) => overlayTypeName(name));
 
 // Ref helper: the component name of a reference; no reference, no name
 Handlebars.registerHelper('refName', (ref: string) => {

@@ -11,6 +11,7 @@ import yaml from 'js-yaml';
 import { MICRO_CONTRACTS_OPERATION_EXTENSIONS, resolveParameter } from '../types.js';
 import type { OpenAPISpec, OperationObject, ParameterObject, ReferenceObject, ResponseObject } from '../types.js';
 import { bundleExternalRefs } from './specLoader.js';
+import { formatPropertyKey } from './typeGenerator.js';
 
 // =============================================================================
 // Types
@@ -510,7 +511,8 @@ export function generateExtensionInterfaces(
 
   // Generate interfaces for each marker
   for (const [marker, extensions] of byMarker) {
-    const markerName = markerToTypeName(marker);
+    // A marker like 'x-middleware' names its types without the 'x-' prefix: 'Middleware'
+    const markerName = overlayTypeName(marker.replace(/^x-/, ''));
     
     lines.push(`// =============================================================================`);
     lines.push(`// ${markerName} Overlays`);
@@ -534,8 +536,7 @@ export function generateExtensionInterfaces(
     lines.push(` */`);
     lines.push(`export interface ${registryName} {`);
     for (const ext of extensions) {
-      const handlerName = `${capitalize(ext.name)}Overlay`;
-      lines.push(`  ${ext.name}: ${handlerName};`);
+      lines.push(`  ${formatPropertyKey(ext.name)}: ${overlayTypeName(ext.name)}Overlay;`);
     }
     lines.push(`}`);
     lines.push('');
@@ -565,8 +566,7 @@ export function generateExtensionInterfaces(
   lines.push(' */');
   lines.push('export interface OverlayRegistry {');
   for (const ext of allExtensions) {
-    const handlerName = `${capitalize(ext.name)}Overlay`;
-    lines.push(`  ${ext.name}: ${handlerName};`);
+    lines.push(`  ${formatPropertyKey(ext.name)}: ${overlayTypeName(ext.name)}Overlay;`);
   }
   lines.push('}');
   lines.push('');
@@ -599,8 +599,8 @@ export function generateExtensionInterfaces(
  * Every overlay gets these, whether a marker or `$.paths[*][*]` selected it.
  */
 function pushOverlayTypes(lines: string[], ext: ExtensionInfo): void {
-  const inputName = `${capitalize(ext.name)}OverlayInput`;
-  const handlerName = `${capitalize(ext.name)}Overlay`;
+  const inputName = `${overlayTypeName(ext.name)}OverlayInput`;
+  const handlerName = `${overlayTypeName(ext.name)}Overlay`;
 
   // Generate input type from injected parameters
   lines.push(`/**`);
@@ -660,18 +660,22 @@ function parameterToTsType(param: ParameterObject): string {
 }
 
 /**
- * Convert marker like 'x-middleware' to type name like 'Middleware'
+ * The stem of the type names generated for an overlay (and its marker): the
+ * name's words — the runs of characters an identifier can hold — each
+ * capitalized and joined. 'tenant-isolation' -> 'TenantIsolation',
+ * 'requireAuth' -> 'RequireAuth'.
+ *
+ * The one place an overlay name becomes part of a type name: the overlay
+ * interfaces and the templates (through the `overlayTypeName` helper) both
+ * use it, so a template names exactly the types generated.
  */
-function markerToTypeName(marker: string): string {
-  return marker
-    .replace(/^x-/, '')
-    .split('-')
-    .map(capitalize)
+export function overlayTypeName(name: string): string {
+  const stem = name
+    .split(/[^A-Za-z0-9_$]+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join('');
-}
-
-function capitalize(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+  return /^[0-9]/.test(stem) ? `_${stem}` : stem;
 }
 
 // =============================================================================

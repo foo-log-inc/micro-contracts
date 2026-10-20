@@ -285,7 +285,9 @@ operations get a handler:
 
 A named action gets an `OverlayRegistry` entry, a handler type, an extractor in the overlay
 adapter, and a `runOverlays` call on every operation its target selected — through a marker or
-through `$.paths[*][*]`. An unnamed action injects its parameters, responses and extension
+through `$.paths[*][*]`. The registry entry is keyed by the name as written; the types are named
+by its words, capitalized: `requireAuth` gets `RequireAuthOverlayInput`, and `tenant-isolation`
+gets `TenantIsolationOverlayInput` under the registry key `'tenant-isolation'`. An unnamed action injects its parameters, responses and extension
 properties into the spec and stops there, which is what a documentation-only header such as
 `X-Correlation-Id` needs.
 

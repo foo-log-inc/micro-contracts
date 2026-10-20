@@ -471,11 +471,11 @@ function generateParamsType(
 }
 
 /**
- * Render an OpenAPI property name as a TypeScript property key.
- * Schema property names are arbitrary strings, so names that are not
- * identifiers are emitted as quoted keys.
+ * Render a name as a TypeScript property key. Schema property names (and
+ * overlay names) are arbitrary strings, so names that are not identifiers
+ * are emitted as quoted keys.
  */
-function formatPropertyKey(name: string): string {
+export function formatPropertyKey(name: string): string {
   return isTsIdentifier(name) ? name : literalType(name);
 }
 

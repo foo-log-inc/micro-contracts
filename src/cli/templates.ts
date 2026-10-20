@@ -373,43 +373,40 @@ export function sendError(reply: FastifyReply, error: ProblemDetails): void {
 }
 `;
 
-const STARTER_OVERLAY_STUBS_TEMPLATE = `{{!-- Overlay handler stubs: a handler per overlay, registered in OverlayRegistry --}}
+const STARTER_OVERLAY_STUBS_TEMPLATE = `{{!-- Overlay handler stubs: a handler per overlay, in the OverlayRegistry --}}
 // Auto-generated overlay handler stubs - Edit to implement overlay logic
 import type {
   OverlayResult,
 {{#each extensionInfo}}
-  {{capitalize name}}OverlayInput,
+  {{overlayTypeName name}}OverlayInput,
 {{/each}}
   OverlayRegistry,
 } from '{{contractPackage}}/overlays/index.js';
 
-{{#each extensionInfo}}
-/**
- * {{name}} overlay handler
- *
- * Runs before every operation the overlay applies to. Return
- * { success: false, error: { status, message, code } } to refuse the request.
-{{#if injectedParameters.length}}
- *
- * Input parameters:
-{{#each injectedParameters}}
- * - {{name}} (in: {{this.in}}){{#if required}} required{{/if}}
-{{/each}}
-{{/if}}
- */
-export async function {{name}}(input: {{capitalize name}}OverlayInput): Promise<OverlayResult> {
-  // TODO: Implement {{name}}
-  throw new Error('Not implemented: {{name}}');
-}
-
-{{/each}}
 /**
  * Registry of all overlay handlers
  * Register this with your server framework
  */
 export const overlayHandlers: OverlayRegistry = {
 {{#each extensionInfo}}
-  {{name}},
+  /**
+   * {{name}} overlay handler
+   *
+   * Runs before every operation the overlay applies to. Return
+   * { success: false, error: { status, message, code } } to refuse the request.
+{{#if injectedParameters.length}}
+   *
+   * Input parameters:
+{{#each injectedParameters}}
+   * - {{name}} (in: {{this.in}}){{#if required}} required{{/if}}
+{{/each}}
+{{/if}}
+   */
+  '{{name}}': async (input: {{overlayTypeName name}}OverlayInput): Promise<OverlayResult> => {
+    // TODO: Implement {{name}}
+    throw new Error('Not implemented: {{name}}');
+  },
+
 {{/each}}
 };
 `;
