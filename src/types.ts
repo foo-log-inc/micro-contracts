@@ -1159,7 +1159,7 @@ export interface OperationBody {
 }
 
 /** The response an operation answers a successful call with. */
-export interface SuccessResponse {
+interface SuccessResponse {
   /** Its key under `responses`: a 2xx status code, the `2XX` range or `default` */
   statusCode: string;
   /** The status code it is sent with: the code itself, or 200 for `2XX` and `default` */

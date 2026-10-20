@@ -156,7 +156,7 @@ interface RouteContext {
   responses: ResponseContext[];
   /** Type name base for this route (e.g., 'User_getUsers') */
   typeNameBase: string;
-  /** The status code a successful call is answered with (200 for a `2XX` response) */
+  /** The status code a successful call is answered with (200 for a `2XX` or `default` response) */
   successStatus: number;
   /** The success response body's type, or 'void' when it has none */
   responseType: string;
