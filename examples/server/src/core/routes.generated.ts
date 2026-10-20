@@ -7,7 +7,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/core/schemas/index.js';
 import * as types from '@project/contract/core/schemas/types.js';
-import { User_getUsersHeaderParams, User_createUserHeaderParams, User_getUserByIdHeaderParams, User_updateUserHeaderParams, User_deleteUserHeaderParams, Tenant_getDataHeaderParams, Tenant_createDataHeaderParams, Admin_getStatsHeaderParams, Admin_suspendUserHeaderParams, Health_checkHeaderParams, } from '@project/contract/core/schemas/validators.js';
+import { User_getUsersHeaderParams, User_createUserHeaderParams, User_getUserByIdHeaderParams, User_updateUserHeaderParams, User_deleteUserHeaderParams, Tenant_getDataHeaderParams, Tenant_createDataHeaderParams, Admin_getStatsHeaderParams, Admin_suspendUserHeaderParams, User_getSessionHeaderParams, Health_checkHeaderParams, } from '@project/contract/core/schemas/validators.js';
 import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
 
 /**
@@ -226,6 +226,35 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       data: req.body as types.SuspendUserRequest,
     };
     const output = await admin.suspendUser(input);
+    return reply.code(200).send(output);
+  });
+
+  // GET /api/session
+  const User_getSessionCookieParams = { $ref: 'User_getSessionCookieParams#' };
+  fastify.get('/api/session', {
+    schema: {
+      headers: User_getSessionHeaderParams,
+      response: { '200': { $ref: 'Session#' } },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const cookieParams: Record<string, unknown> = {};
+    for (const name of ['session_id', ]) {
+      const value = cookies.get(name);
+      if (value !== undefined) cookieParams[name] = value;
+    }
+    const validateCookies = req.compileValidationSchema(User_getSessionCookieParams);
+    if (!validateCookies(cookieParams)) {
+      throw Object.assign(
+        new Error((validateCookies.errors ?? []).map(e => `cookies${e.instancePath} ${e.message}`).join(', ')),
+        { statusCode: 400, validation: validateCookies.errors, validationContext: 'cookies' },
+      );
+    }
+    // Build input object (always required, even if empty)
+    const input: types.User_getSessionInput = {
+      ...(cookieParams as unknown as types.User_getSessionParams),
+    };
+    const output = await user.getSession(input);
     return reply.code(200).send(output);
   });
 

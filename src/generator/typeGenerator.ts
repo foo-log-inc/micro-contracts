@@ -335,6 +335,12 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
   params?: string;
   /** The validation schema of the parameters of each request location that has any */
   parameterSchemas: Partial<Record<keyof typeof PARAMETER_SCHEMA_SUFFIXES, string>>;
+  /**
+   * The input a client calls the operation with, where it differs from the
+   * service's: the input with its cookie parameters optional, since the
+   * browser sends cookies and a client does not.
+   */
+  clientInput?: { name: string; cookies: string[] };
   /** The request body's type */
   body?: string;
   /** The success response body's type; absent when the response has no body */
@@ -372,7 +378,10 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
     return type ? [{ statusCode, type }] : [];
   });
 
-  return { base, input: `${base}Input`, params, parameterSchemas, body, response, otherResponses, inline };
+  const cookies = resolved.parameters.filter(p => p.in === 'cookie').map(p => p.name);
+  const clientInput = cookies.length > 0 ? { name: `${base}ClientInput`, cookies } : undefined;
+
+  return { base, input: `${base}Input`, params, parameterSchemas, clientInput, body, response, otherResponses, inline };
 }
 
 /**
@@ -388,7 +397,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
       if (!operation) continue;
 
       const resolved = resolveOperation(spec, apiPath, method);
-      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName, inline } =
+      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName, clientInput, inline } =
         operationTypeNames(operation, resolved);
 
       if (paramsTypeName && !generatedTypes.has(paramsTypeName)) {
@@ -413,6 +422,15 @@ function generateOperationTypes(spec: OpenAPISpec): string {
       if (!generatedTypes.has(inputTypeName)) {
         generatedTypes.add(inputTypeName);
         lines.push(generateInputType(inputTypeName, paramsTypeName, bodyTypeName));
+        lines.push('');
+      }
+
+      // A client's input leaves the cookies out: the browser sends them. It is
+      // wider than the service's input, so a client implements the service API.
+      if (clientInput && !generatedTypes.has(clientInput.name)) {
+        generatedTypes.add(clientInput.name);
+        const cookies = clientInput.cookies.map(literalType).join(' | ');
+        lines.push(`export type ${clientInput.name} = Omit<${inputTypeName}, ${cookies}> & Partial<Pick<${inputTypeName}, ${cookies}>>;`);
         lines.push('');
       }
     }

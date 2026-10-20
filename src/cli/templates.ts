@@ -159,6 +159,7 @@ const STARTER_FETCH_CLIENT_TEMPLATE = `/**
  * 
  * Client API matches Service API signature (single input object).
  * Internally maps input to HTTP request (path params, query params, body).
+ * Cookie parameters are optional: the browser sends cookies, the client does not.
  */
 
 import type {
@@ -200,7 +201,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 // ==========================================================================
 // {{name}} API Client
 // ==========================================================================
-export const {{key}}Api: {{name}}ServiceApi = {
+export const {{key}}Api = {
 {{#each ../routes}}
 {{#if (eq service ../name)}}
   /**
@@ -208,7 +209,7 @@ export const {{key}}Api: {{name}}ServiceApi = {
    {{#if summary}}* {{summary}}{{/if}}
    {{#if isPublished}}* @published{{/if}}
    */
-  async {{serviceMethod}}(input: {{inputType}}): Promise<{{responseType}}> {
+  async {{serviceMethod}}(input: {{clientInputType}}): Promise<{{responseType}}> {
 {{#if queryParams.length}}
     const searchParams = new URLSearchParams();
 {{#each queryParams}}
@@ -240,7 +241,7 @@ export const {{key}}Api: {{name}}ServiceApi = {
 
 {{/if}}
 {{/each}}
-};
+} satisfies {{name}}ServiceApi;
 
 {{/each}}
 `;

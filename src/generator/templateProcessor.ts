@@ -183,6 +183,8 @@ interface RouteContext {
   paramsType?: string;
   /** Unified input type (e.g., User_getUsersInput) */
   inputType: string;
+  /** The input a client calls the operation with: inputType, with its cookie parameters optional */
+  clientInputType: string;
   /** URL pattern for client using input object (with ${input.xxx} template syntax) */
   clientUrlPatternInput: string;
   /** Parameters injected by extensions for this route */
@@ -369,8 +371,9 @@ function extractSchemaTypes(routes: RouteContext[]): string[] {
     if (route.paramsType) {
       types.add(route.paramsType);
     }
-    // Add unified input type (for service-aligned templates)
+    // Add unified input type (for service-aligned templates), and the client's
     types.add(route.inputType);
+    types.add(route.clientInputType);
   }
   
   return Array.from(types).sort();
@@ -560,6 +563,7 @@ function extractRoutes(
         requestType,
         paramsType,
         inputType,
+        clientInputType: typeNames.clientInput?.name ?? typeNames.input,
       });
     }
   }

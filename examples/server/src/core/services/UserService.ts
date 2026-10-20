@@ -13,6 +13,11 @@ const mockUsers: types.User[] = [
   { id: '3', name: 'Charlie', email: 'charlie@example.com', role: 'user', createdAt: '2024-01-03T00:00:00Z' },
 ];
 
+// Mock session store (in real app: a session store the login sets the cookie from)
+const mockSessions = new Map<string, types.Session>([
+  ['session-1', { userId: '1', expiresAt: '2030-01-01T00:00:00Z' }],
+]);
+
 export class UserService implements UserServiceApi {
   async getUsers(input: types.User_getUsersInput): Promise<types.UserListResponse> {
     // Input is flattened - direct access to limit/offset
@@ -67,6 +72,15 @@ export class UserService implements UserServiceApi {
     };
     mockUsers[index] = updated;
     return updated;
+  }
+
+  async getSession(input: types.User_getSessionInput): Promise<types.Session> {
+    // The session cookie arrives in the input, validated by the route
+    const session = mockSessions.get(input.session_id);
+    if (!session) {
+      throw { statusCode: 404, message: 'Session not found' };
+    }
+    return session;
   }
 
   async deleteUser(input: types.User_deleteUserInput): Promise<void> {

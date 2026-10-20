@@ -187,6 +187,7 @@ The following is an auto-generated list of APIs from OpenAPI spec.
 | core | POST | /api/tenant/data | Create tenant data |  | requireAuth, tenantIsolation, rateLimit | [Tenant.createData](server/src/core/services/TenantService.ts) |
 | core | GET | /api/admin/stats | Get system statistics |  | requireAuth, requireAdmin | [Admin.getStats](server/src/core/services/AdminService.ts) |
 | core | POST | /api/admin/users/{id}/suspend | Suspend user account |  | requireAuth, requireAdmin | [Admin.suspendUser](server/src/core/services/AdminService.ts) |
+| core | GET | /api/session | Current session |  |  | [User.getSession](server/src/core/services/UserService.ts) |
 | core | GET | /api/health | Health check | ✅ |  | [Health.check](server/src/core/services/HealthService.ts) |
 | billing | GET | /api/billing/invoices | List all invoices | ✅ | requireAuth, tenantIsolation | [Billing.getInvoices](server/src/billing/services/BillingService.ts) |
 | billing | POST | /api/billing/invoices | Create a new invoice | ✅ | requireAuth, tenantIsolation | [Billing.createInvoice](server/src/billing/services/BillingService.ts) |

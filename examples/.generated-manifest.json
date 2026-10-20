@@ -3,10 +3,10 @@
   "generatorVersion": "0.19.0",
   "files": {
     "frontend/src/billing/api.generated.ts": {
-      "sha256": "8e3d5b75d6a30a1ea19f0c57135cb1c4913c8c344ae9ad83d9095db2e5bc4fea"
+      "sha256": "2b3eacca56412cc2d9287f1449676f8b4542d672a8113d60208af546778fdd8b"
     },
     "frontend/src/core/api.generated.ts": {
-      "sha256": "51bf79523f6c621d4e78f871713c9843dfa1773f2922201c324d64aa83123c93"
+      "sha256": "8e284c5fad1db72a615bda7c7d8d37715207c8c44c84404968bf04d212f564df"
     },
     "packages/contract-published/billing/docs/api-reference.html": {
       "sha256": "5b69e88fc9f60578261a8231132678550a40a70eb52dfcc611f48937f448ca44"
@@ -108,7 +108,7 @@
       "sha256": "e26ecf17dc435dc504900e6529e46016447f9998dc2f13b600092169746d3dc3"
     },
     "packages/contract/core/docs/openapi.generated.yaml": {
-      "sha256": "a20e72d13d80c7294c882022891322257b70947e924fdb7eb7753d2e6cbcf30a"
+      "sha256": "38612cd5bde2f9b98c8dc7819c0cd948f568397167552348fc3270c1a04edcbd"
     },
     "packages/contract/core/errors/index.ts": {
       "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
@@ -123,10 +123,10 @@
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
     },
     "packages/contract/core/schemas/types.ts": {
-      "sha256": "96c0219d24c79baaeff2b1260bb35c17aacb6f46c72816a76b9557f33b5aca93"
+      "sha256": "d053c32d4054b81f574ebe74eafbac1b915a971e100ba2ba1e7e7b0ab711bbcb"
     },
     "packages/contract/core/schemas/validators.ts": {
-      "sha256": "ed2959e54ab134e17d59583ab7e77aa531200ecd812591a8000091fe1dcc9750"
+      "sha256": "b257b09dacc3a273ce215f48319f0d20df99fbb52b45ed26735cafb7ec190190"
     },
     "packages/contract/core/services/AdminServiceApi.ts": {
       "sha256": "78370d2d66333978d5151ced3698aa1ef70dc6eb468e873838e44e0401b3f18f"
@@ -138,7 +138,7 @@
       "sha256": "ed09d2013f4f46493d95535a32f807bc3c7468147ce0982bbc60370d6ae790dd"
     },
     "packages/contract/core/services/UserServiceApi.ts": {
-      "sha256": "e666f2cd336e80f9e5fcdd234ac083099f4f27d7aca1116d96dcc76be7f381ab"
+      "sha256": "41d7865f6c98d9b9159e10a7fbf1315cfec17897b9557e5e2978e579313a54ed"
     },
     "packages/contract/core/services/index.ts": {
       "sha256": "c1055c73f3c3ed15da852848663d20684218a3077c6ef172b96d8a6cb7d303e3"
@@ -159,9 +159,9 @@
       "sha256": "c2d65bd7d4e69417beadf7230ba43debbb8845babe098fde72b7f09168f84394"
     },
     "server/src/core/routes.generated.ts": {
-      "sha256": "47ec7145936354844b9bf35184f52646491f539d827ea7a672684f3326f736eb"
+      "sha256": "40351070f4a889384108abbead0d311d11b433e36ac1a0671315e1ac54e8ecfb"
     }
   },
-  "inputHash": "29c96afe7bcb8f5da23e0d72a8e5d12a2a1eabe933cf6bf260e9dda53df44aba",
-  "updatedAt": "2026-10-20T07:57:23.988Z"
+  "inputHash": "0793744448ece6dc22a6b188840a61548882b4c62c8e189b060da2d235aa44a1",
+  "updatedAt": "2026-10-20T08:06:18.162Z"
 }

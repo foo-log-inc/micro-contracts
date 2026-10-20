@@ -54,6 +54,24 @@ export const User = {
     }
   } as const;
 
+export const Session = {
+    "$id": "Session",
+    "type": "object",
+    "required": [
+      "userId",
+      "expiresAt"
+    ],
+    "properties": {
+      "userId": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    }
+  } as const;
+
 export const UserListResponse = {
     "$id": "UserListResponse",
     "type": "object",
@@ -525,6 +543,31 @@ export const Admin_suspendUserHeaderParams = {
     }
   } as const;
 
+export const User_getSessionHeaderParams = {
+    "$id": "User_getSessionHeaderParams",
+    "type": "object",
+    "properties": {
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
+export const User_getSessionCookieParams = {
+    "$id": "User_getSessionCookieParams",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "session_id"
+    ]
+  } as const;
+
 export const Health_checkHeaderParams = {
     "$id": "Health_checkHeaderParams",
     "type": "object",
@@ -540,6 +583,7 @@ export const Health_checkHeaderParams = {
 // All schemas for registration
 export const allSchemas = [
   User,
+  Session,
   UserListResponse,
   CreateUserRequest,
   UpdateUserRequest,
@@ -555,4 +599,5 @@ export const allSchemas = [
   User_updateUserPathParams,
   User_deleteUserPathParams,
   Admin_suspendUserPathParams,
+  User_getSessionCookieParams,
 ] as const;

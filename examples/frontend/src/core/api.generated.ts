@@ -23,6 +23,7 @@ import type {
   HealthStatus,
   Health_checkInput,
   ProblemDetails,
+  Session,
   SuspendUserRequest,
   SystemStats,
   TenantData,
@@ -34,6 +35,9 @@ import type {
   User_createUserInput,
   User_deleteUserInput,
   User_deleteUserParams,
+  User_getSessionClientInput,
+  User_getSessionInput,
+  User_getSessionParams,
   User_getUserByIdInput,
   User_getUserByIdParams,
   User_getUsersInput,
@@ -69,7 +73,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 // ==========================================================================
 // Admin API Client
 // ==========================================================================
-export const adminApi: AdminServiceApi = {
+export const adminApi = {
   /**
    * GET /api/admin/stats
    * Get system statistics
@@ -96,12 +100,12 @@ export const adminApi: AdminServiceApi = {
     return handleResponse<User>(res);
   },
 
-};
+} satisfies AdminServiceApi;
 
 // ==========================================================================
 // Health API Client
 // ==========================================================================
-export const healthApi: HealthServiceApi = {
+export const healthApi = {
   /**
    * GET /api/health
    * Health check
@@ -113,12 +117,12 @@ export const healthApi: HealthServiceApi = {
     return handleResponse<HealthStatus>(res);
   },
 
-};
+} satisfies HealthServiceApi;
 
 // ==========================================================================
 // Tenant API Client
 // ==========================================================================
-export const tenantApi: TenantServiceApi = {
+export const tenantApi = {
   /**
    * GET /api/tenant/data
    * Get tenant-scoped data
@@ -145,12 +149,12 @@ export const tenantApi: TenantServiceApi = {
     return handleResponse<TenantData>(res);
   },
 
-};
+} satisfies TenantServiceApi;
 
 // ==========================================================================
 // User API Client
 // ==========================================================================
-export const userApi: UserServiceApi = {
+export const userApi = {
   /**
    * GET /api/users
    * Get users list
@@ -217,5 +221,16 @@ export const userApi: UserServiceApi = {
     await handleResponse<void>(res);
   },
 
-};
+  /**
+   * GET /api/session
+   * Current session
+   
+   */
+  async getSession(input: User_getSessionClientInput): Promise<Session> {
+    const url = `${BASE_URL}/api/session`;
+    const res = await fetch(url);
+    return handleResponse<Session>(res);
+  },
+
+} satisfies UserServiceApi;
 

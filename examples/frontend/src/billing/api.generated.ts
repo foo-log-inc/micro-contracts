@@ -6,6 +6,7 @@
  * 
  * Client API matches Service API signature (single input object).
  * Internally maps input to HTTP request (path params, query params, body).
+ * Cookie parameters are optional: the browser sends cookies, the client does not.
  */
 
 import type {
@@ -54,7 +55,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 // ==========================================================================
 // Billing API Client
 // ==========================================================================
-export const billingApi: BillingServiceApi = {
+export const billingApi = {
   /**
    * GET /api/billing/invoices
    * List all invoices
@@ -110,5 +111,5 @@ export const billingApi: BillingServiceApi = {
     return handleResponse<PaymentResult>(res);
   },
 
-};
+} satisfies BillingServiceApi;
 
