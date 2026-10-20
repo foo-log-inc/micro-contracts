@@ -13,6 +13,7 @@ import { operationKey, overlayTypeName } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
 import { isReference, getRefName, parseComponentRef, resolveOperation } from '../types.js';
 import { operationTypeNames } from './typeGenerator.js';
+import { serviceKey as serviceKeyOf } from './serviceGenerator.js';
 
 // =============================================================================
 // Types
@@ -460,7 +461,7 @@ function extractRoutes(
       const typeNames = operationTypeNames(operation, resolved);
       const typeNameBase = typeNames.base;
       const fastifyPath = apiPath.replace(/\{([^}]+)\}/g, ':$1');
-      const serviceKey = service.charAt(0).toLowerCase() + service.slice(1);
+      const serviceKey = serviceKeyOf(service);
 
       // Extract extensions and their parameters
       const extensions: RouteExtension[] = [];

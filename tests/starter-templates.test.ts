@@ -726,6 +726,30 @@ components:
     });
   });
 
+  it('reach a service named ...Service under its ServiceRegistry key', { timeout: 180_000 }, async () => {
+    await generateProject(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      x-micro-contracts-service: UserService
+      x-micro-contracts-method: listUsers
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { type: object, properties: { n: { type: integer } } } } } }
+`);
+    expect(fs.readFileSync(path.join(tmpDir, 'contract/m/services/index.ts'), 'utf-8')).toContain('  user: UserServiceServiceApi;');
+    const app = await serve({ user: { listUsers: async () => ({ n: 1 }) } });
+    try {
+      const res = await app.inject({ method: 'GET', url: '/users' });
+      expect(res.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+    expect(typecheck()).toBe('');
+  });
+
   describe('stream responses', () => {
     const chatSpec = `
 openapi: 3.0.3

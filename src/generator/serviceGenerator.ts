@@ -309,7 +309,7 @@ function generateServicesIndex(services: ServiceInfo[]): string {
   lines.push('export interface ServiceRegistry {');
   
   for (const service of services) {
-    const propertyName = serviceNameToProperty(service.name);
+    const propertyName = serviceKey(service.name);
     lines.push(`  ${propertyName}: ${service.name}ServiceApi;`);
   }
   
@@ -319,10 +319,11 @@ function generateServicesIndex(services: ServiceInfo[]): string {
 }
 
 /**
- * Convert service name to property name
- * e.g., "Account" -> "account", "ExtensionInstance" -> "extensionInstance"
+ * The key a service has in ServiceRegistry, which routes reach it by: its
+ * name without a "Service" suffix, starting in lower case.
+ * e.g., "Account" -> "account", "UserService" -> "user"
  */
-function serviceNameToProperty(serviceName: string): string {
+export function serviceKey(serviceName: string): string {
   // Remove "Service" suffix if present
   const baseName = serviceName.replace(/Service$/, '');
   // Convert to camelCase (first letter lowercase)
