@@ -6,7 +6,7 @@ import { CONTRACT_YAML, CONTRACT_JSON_STR } from "./contract.js";
 export interface CommandHandlers {
   generate: (options: { config?: string; module?: string; output?: string; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; skipLint?: boolean; manifest?: boolean; manifestDir?: string; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   lint: (input: string | undefined, options: { strict?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
-  init: (name: string | undefined, options: { dir?: string; openapi?: string; output?: string; skipTemplates?: boolean; screens?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
+  init: (name: string | undefined, options: { dir?: string; openapi?: string; output?: string; skipTemplates?: boolean; screens?: boolean; lambda?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   check: (options: { only?: string; skip?: string; gate?: string; verbose?: boolean; fix?: boolean; guardrails?: string; generatedDir?: string; changedFiles?: string; list?: boolean; listGates?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   pipeline: (options: { config?: string; verbose?: boolean; skip?: string; continueOnError?: boolean; guardrails?: string; generatedDir?: string; manifest?: boolean; skipLint?: boolean; contractsOnly?: boolean; serverOnly?: boolean; frontendOnly?: boolean; force?: boolean; cache?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
   deps: (options: { config?: string; module?: string; graph?: boolean; impact?: string; whoDependsOn?: string; validate?: boolean }, parentOpts: Record<string, unknown>) => Promise<void>;
@@ -81,6 +81,7 @@ export function createProgram(
     .option("-o, --output <path>", "Output path for processed OpenAPI. Defaults to spec/{name}/openapi/{name}.yaml.")
     .option("--skip-templates", "Skip creating starter Handlebars templates.", false)
     .option("--screens", "Initialize as screen spec module (generates screen templates and starter spec).", false)
+    .option("--lambda", "Also create the AWS Lambda handler template (lambda-routes.hbs), and configure it as the server output in place of the Fastify routes.", false)
     .action(async (name, opts, cmd) => {
       const globalOpts = cmd.optsWithGlobals();
       if (globalOpts.introspect) {

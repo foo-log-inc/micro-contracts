@@ -157,7 +157,8 @@ function extractMethodInfo(
     httpMethod,
     path,
     isPublished,
-    responseType: typeNames.response ?? 'void',
+    responseType: typeNames.event ?? typeNames.response ?? 'void',
+    returnType: typeNames.event ? `AsyncIterable<${typeNames.event}>` : `Promise<${typeNames.response ?? 'void'}>`,
     inputType: typeNames.input,
     paramsType: typeNames.params,
     parameters: resolved.parameters,
@@ -210,7 +211,7 @@ function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): str
     
     // Method signature with single Input parameter (always present)
     const inputTypeName = method.inputType;
-    const returnTypeStr = `Promise<${method.responseType}>`;
+    const returnTypeStr = method.returnType;
     
     lines.push(`  ${method.name}(input: ${inputTypeName}): ${returnTypeStr};`);
     lines.push('');
@@ -234,7 +235,7 @@ function generateServiceInterfaceFromTemplate(
   const methods: ServiceMethodTemplateContext[] = service.methods.map(method => {
     const inputType = method.inputType;
     const returnType = method.responseType;
-    const returnTypeStr = `Promise<${returnType}>`;
+    const returnTypeStr = method.returnType;
     
     return {
       name: method.name,
@@ -308,7 +309,7 @@ function generateServicesIndex(services: ServiceInfo[]): string {
   lines.push('export interface ServiceRegistry {');
   
   for (const service of services) {
-    const propertyName = serviceNameToProperty(service.name);
+    const propertyName = serviceKey(service.name);
     lines.push(`  ${propertyName}: ${service.name}ServiceApi;`);
   }
   
@@ -318,10 +319,11 @@ function generateServicesIndex(services: ServiceInfo[]): string {
 }
 
 /**
- * Convert service name to property name
- * e.g., "Account" -> "account", "ExtensionInstance" -> "extensionInstance"
+ * The key a service has in ServiceRegistry, which routes reach it by: its
+ * name without a "Service" suffix, starting in lower case.
+ * e.g., "Account" -> "account", "UserService" -> "user"
  */
-function serviceNameToProperty(serviceName: string): string {
+export function serviceKey(serviceName: string): string {
   // Remove "Service" suffix if present
   const baseName = serviceName.replace(/Service$/, '');
   // Convert to camelCase (first letter lowercase)

@@ -350,7 +350,7 @@ function findReachableSchemas(
   return [...new Set(found)];
 }
 
-/** Inline (non-$ref) values of `schema` keys anywhere under `root`. */
+/** Inline (non-$ref) schemas anywhere under `root`: values of `schema`, and of `x-stream-event` (a stream's event). */
 function collectInlineSchemas(root: unknown): SchemaObject[] {
   const schemas: SchemaObject[] = [];
   const pending: unknown[] = [root];
@@ -363,9 +363,10 @@ function collectInlineSchemas(root: unknown): SchemaObject[] {
       continue;
     }
     const record = node as Record<string, unknown>;
-    const schema = record.schema;
-    if (schema && typeof schema === 'object' && !isReference(schema)) {
-      schemas.push(schema as SchemaObject);
+    for (const schema of [record.schema, record['x-stream-event']]) {
+      if (schema && typeof schema === 'object' && !isReference(schema)) {
+        schemas.push(schema as SchemaObject);
+      }
     }
     pending.push(...Object.values(record));
   }
@@ -392,8 +393,12 @@ function checkPublicEndpointComposition(
     collectReferencedSchemas(resolved.body.schema, spec, referencedSchemas);
   }
   
-  for (const response of [resolved.success, ...resolved.otherResponses]) {
-    const schema = response.body?.schema;
+  const success = resolved.success.body;
+  const responseSchemas = [
+    success?.kind === 'stream' ? success.event : success?.schema,
+    ...resolved.otherResponses.map(response => response.body?.schema),
+  ];
+  for (const schema of responseSchemas) {
     if (schema) {
       collectReferencedSchemas(schema, spec, referencedSchemas);
     }

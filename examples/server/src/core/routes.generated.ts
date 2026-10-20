@@ -8,29 +8,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/core/schemas/index.js';
 import * as types from '@project/contract/core/schemas/types.js';
 import { User_getUsersHeaderParams, User_createUserHeaderParams, User_getUserByIdHeaderParams, User_updateUserHeaderParams, User_deleteUserHeaderParams, Tenant_getDataHeaderParams, Tenant_createDataHeaderParams, Admin_getStatsHeaderParams, Admin_suspendUserHeaderParams, User_getSessionHeaderParams, Health_checkHeaderParams, } from '@project/contract/core/schemas/validators.js';
-import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
-
-/**
- * The cookies of a Cookie header (`name=value; name=value`), by name.
- * Of two cookies with one name, the first is kept: it is the more specific.
- */
-function parseCookies(header: string | string[] | undefined): Map<string, string> {
-  const cookies = new Map<string, string>();
-  for (const pair of [header ?? []].flat().join('; ').split(';')) {
-    const separator = pair.indexOf('=');
-    const name = pair.slice(0, separator).trim();
-    if (separator < 0 || !name || cookies.has(name)) continue;
-
-    let value = pair.slice(separator + 1).trim();
-    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-    try {
-      cookies.set(name, decodeURIComponent(value));
-    } catch {
-      cookies.set(name, value);
-    }
-  }
-  return cookies;
-}
+import { runOverlays, type HttpRequest } from './overlayAdapter.generated.js';
+import { parseCookies } from '@project/contract/core/http/index.js';
 
 /** The request as the overlays read it */
 function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>): HttpRequest {
@@ -41,6 +20,11 @@ function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>
     cookies,
     body: req.body,
   };
+}
+
+/** Answer with an overlay's refusal */
+function sendError(reply: FastifyReply, error: types.ProblemDetails): FastifyReply {
+  return reply.status(error.status).send(error);
 }
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {

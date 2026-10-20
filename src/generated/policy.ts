@@ -139,6 +139,13 @@ export const commandDefinitions = {
           "type": "boolean",
           "default": false
         }
+      },
+      {
+        "name": "lambda",
+        "schema": {
+          "type": "boolean",
+          "default": false
+        }
       }
     ]
   },

@@ -16,7 +16,7 @@ export class {{name}}Service implements {{name}}ServiceApi {
   /**
    * {{httpMethod}} {{path}}{{#if summary}}: {{summary}}{{/if}}
    */
-  async {{serviceMethod}}(input: types.{{inputType}}): Promise<{{#if (eq responseType "void")}}void{{else}}types.{{responseType}}{{/if}}> {
+  async {{#if stream}}*{{/if}}{{serviceMethod}}(input: types.{{inputType}}): {{#if stream}}AsyncGenerator<types.{{stream.eventType}}>{{else}}Promise<{{#if (eq responseType "void")}}void{{else}}types.{{responseType}}{{/if}}>{{/if}} {
     // TODO: Implement {{serviceMethod}}
     throw new Error('Not implemented: {{service}}.{{serviceMethod}}');
   }

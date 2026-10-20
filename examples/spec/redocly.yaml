@@ -44,10 +44,12 @@ oas3_0Rules: &openapi
     subject:
       type: Schema
     where:
+      # `const` also holds for a schema without a type, such as a oneOf
       - subject:
           type: Schema
           property: type
         assertions:
+          defined: true
           const: array
     assertions:
       required: [items]

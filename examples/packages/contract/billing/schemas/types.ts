@@ -39,6 +39,20 @@ export interface ValidationError {
   detail: string;
 }
 
+export interface InvoiceStatusChanged {
+  type: ('status_changed');
+  invoiceId: string;
+  status: ('draft' | 'pending' | 'paid' | 'overdue');
+}
+
+export interface InvoiceSettled {
+  type: ('settled');
+  invoiceId: string;
+  paidAt: string;
+}
+
+export type InvoiceEvent = (InvoiceStatusChanged | InvoiceSettled);
+
 export interface Invoice {
   id: string;
   /** Reference to core.User */
@@ -99,6 +113,12 @@ export interface Billing_getInvoiceByIdParams {
 }
 
 export type Billing_getInvoiceByIdInput = Billing_getInvoiceByIdParams;
+
+export interface Billing_watchInvoiceParams {
+  id: string;
+}
+
+export type Billing_watchInvoiceInput = Billing_watchInvoiceParams;
 
 export interface Billing_payInvoiceParams {
   id: string;

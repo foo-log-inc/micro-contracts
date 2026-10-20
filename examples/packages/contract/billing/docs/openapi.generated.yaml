@@ -205,6 +205,65 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/billing/invoices/{id}/events:
+    get:
+      tags:
+        - Billing
+      operationId: watchInvoice
+      summary: Watch an invoice
+      description: |
+        The invoice's status as it changes, as server-sent events, until the
+        invoice is settled.
+      x-micro-contracts-service: Billing
+      x-micro-contracts-method: watchInvoice
+      x-middleware:
+        - requireAuth
+        - tenantIsolation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Bearer token for authentication
+        - name: X-Tenant-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Tenant identifier for multi-tenant isolation
+        - name: X-Correlation-Id
+          in: header
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: |
+            Correlation ID for distributed tracing.
+            If not provided, server will generate one.
+      responses:
+        '200':
+          description: The invoice's status changes
+          content:
+            text/event-stream:
+              x-stream-event:
+                $ref: '#/components/schemas/InvoiceEvent'
+        '400':
+          description: Missing or invalid X-Tenant-Id header
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/billing/invoices/{id}/pay:
     post:
       tags:
@@ -283,6 +342,49 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
+    InvoiceStatusChanged:
+      type: object
+      required:
+        - type
+        - invoiceId
+        - status
+      properties:
+        type:
+          type: string
+          enum:
+            - status_changed
+        invoiceId:
+          type: string
+        status:
+          type: string
+          enum:
+            - draft
+            - pending
+            - paid
+            - overdue
+    InvoiceSettled:
+      type: object
+      required:
+        - type
+        - invoiceId
+        - paidAt
+      properties:
+        type:
+          type: string
+          enum:
+            - settled
+        invoiceId:
+          type: string
+        paidAt:
+          type: string
+          format: date-time
+    InvoiceEvent:
+      description: A change to an invoice, named by its type
+      oneOf:
+        - $ref: '#/components/schemas/InvoiceStatusChanged'
+        - $ref: '#/components/schemas/InvoiceSettled'
+      discriminator:
+        propertyName: type
     Invoice:
       type: object
       required:

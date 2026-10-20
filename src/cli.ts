@@ -7,7 +7,7 @@ import { createProgram, type CommandHandlers } from './generated/program.js';
 import { generate, loadConfig, findConfigFile, findSpecModule, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash, configuredOutputs } from './generator/index.js';
 import type { GeneratorConfig, MultiModuleConfig } from './types.js';
 import { isMultiModuleConfig } from './types.js';
-import { getStarterTemplates, getScreenStarterTemplates } from './cli/templates.js';
+import { getStarterTemplates, getScreenStarterTemplates, getLambdaStarterTemplates } from './cli/templates.js';
 import {
   runAllChecks,
   formatCheckResults,
@@ -185,23 +185,16 @@ const handlers: CommandHandlers = {
     }
 
     if (!opts.skipTemplates) {
-      const starterTemplates = getStarterTemplates();
+      const starterTemplates = {
+        ...getStarterTemplates(),
+        ...(opts.screens ? getScreenStarterTemplates() : {}),
+        ...(opts.lambda ? getLambdaStarterTemplates() : {}),
+      };
       for (const [filename, content] of Object.entries(starterTemplates)) {
         const templatePath = path.join('spec/default/templates', filename);
         if (!fs.existsSync(templatePath)) {
           fs.writeFileSync(templatePath, content);
           console.log(`Created: ${templatePath}`);
-        }
-      }
-
-      if (opts.screens) {
-        const screenTemplates = getScreenStarterTemplates();
-        for (const [filename, content] of Object.entries(screenTemplates)) {
-          const templatePath = path.join('spec/default/templates', filename);
-          if (!fs.existsSync(templatePath)) {
-            fs.writeFileSync(templatePath, content);
-            console.log(`Created: ${templatePath}`);
-          }
         }
       }
     }
@@ -260,7 +253,7 @@ const handlers: CommandHandlers = {
     if (!fs.existsSync(configPath)) {
       const configContent = opts.screens
         ? generateScreenConfigTemplate(name!)
-        : generateConfigTemplate(name!);
+        : generateConfigTemplate(name!, opts.lambda);
       fs.writeFileSync(configPath, configContent);
       console.log(`Created: ${configPath}`);
     }
@@ -1050,14 +1043,19 @@ export async function initialize${pascalName}Module(): Promise<${pascalName}Modu
 `;
 }
 
-function generateConfigTemplate(moduleName: string): string {
+/** The config init writes: the server is the Fastify routes, or with --lambda the Lambda handler. */
+function generateConfigTemplate(moduleName: string, lambda: boolean | undefined): string {
+  const server = lambda
+    ? ['    lambda-routes:', '      output: server/src/{module}/lambda.generated.ts',
+      '      template: spec/default/templates/lambda-routes.hbs', '']
+    : ['    server-routes:', '      output: server/src/{module}/routes.generated.ts',
+      '      template: spec/default/templates/fastify-routes.hbs', '      config:',
+      '        servicesPath: fastify.services.{module}', ''];
   return [
     '# micro-contracts Configuration', '',
     'defaults:', '  contract:', '    output: packages/contract/{module}', '',
     '  contractPublic:', '    output: packages/contract-published/{module}', '',
-    '  outputs:', '    server-routes:', '      output: server/src/{module}/routes.generated.ts',
-    '      template: spec/default/templates/fastify-routes.hbs', '      config:',
-    '        servicesPath: fastify.services.{module}', '',
+    '  outputs:', ...server,
     '    frontend-api:', '      output: frontend/src/{module}/api.generated.ts',
     '      template: spec/default/templates/fetch-client.hbs', '',
     '    shared-client:', '      output: frontend/src/shared/{module}.api.generated.ts',

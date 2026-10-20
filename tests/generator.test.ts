@@ -1910,7 +1910,7 @@ paths:
           description: ok
           content:
             application/pdf:
-              schema: { type: string, format: binary }`, /POST \/files response 200 declares 'application\/pdf', which generated code cannot carry\. Remove it, and declare the body as application\/json\./],
+              schema: { type: string, format: binary }`, /POST \/files response 200 declares 'application\/pdf', which generated code cannot carry\. Remove it, and declare the body as one of application\/json, text\/event-stream, application\/x-ndjson, application\/jsonl\./],
     ])('fails on a %s in a media type generated code cannot carry', async (_label, operation, message) => {
       const { specPath, config } = setupSpec(`
 openapi: 3.0.3
@@ -1925,6 +1925,75 @@ paths:
 
       expect(() => lintSpec(loadOpenAPISpec(specPath))).toThrow(message);
       await expect(generate(config, { skipLint: true, contractsOnly: true })).rejects.toThrow(message);
+    });
+
+    describe('stream responses', () => {
+      /** A spec with one operation answering with `mediaType`, its event given by `event` (YAML). */
+      function streamSpec(mediaType: string, event: string): string {
+        return `
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /chat:
+    post:
+      operationId: chat
+      x-micro-contracts-service: Chat
+      x-micro-contracts-method: chat
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ChatRequest' } } } }
+      responses:
+        '200':
+          description: events
+          content:
+            ${mediaType}:
+${event}
+components:
+  schemas:
+    ChatRequest: { type: object, required: [prompt], properties: { prompt: { type: string } } }
+    TextDelta: { type: object, required: [type, text], properties: { type: { type: string, enum: [text] }, text: { type: string } } }
+    StreamEnd: { type: object, required: [type], properties: { type: { type: string, enum: [end] } } }
+    ChatEvent:
+      oneOf: [ { $ref: '#/components/schemas/TextDelta' }, { $ref: '#/components/schemas/StreamEnd' } ]
+      discriminator: { propertyName: type }
+`;
+      }
+
+      const inlineEvent = `              x-stream-event:
+                oneOf: [ { $ref: '#/components/schemas/TextDelta' }, { $ref: '#/components/schemas/StreamEnd' } ]
+                discriminator: { propertyName: type }`;
+      const refEvent = `              x-stream-event: { $ref: '#/components/schemas/ChatEvent' }`;
+
+      it.each([
+        ['text/event-stream', 'sse', inlineEvent, 'Chat_chatEvent'],
+        ['application/x-ndjson', 'ndjson', refEvent, 'ChatEvent'],
+      ])('types, validates and routes the events of a %s response', async (mediaType, format, event, eventType) => {
+        const { specPath, config } = setupSpec(streamSpec(mediaType, event));
+
+        await generate(config, { contractsOnly: true });
+        if (eventType === 'Chat_chatEvent') {
+          expect(read('contracts/core/schemas/types.ts')).toContain('export type Chat_chatEvent = (TextDelta | StreamEnd);');
+        }
+        expect(read('contracts/core/schemas/validators.ts')).toMatch(new RegExp(`allSchemas = \\[[^\\]]*\\b${eventType},`));
+        expect(read('contracts/core/services/ChatServiceApi.ts'))
+          .toContain(`chat(input: Chat_chatInput): AsyncIterable<${eventType}>;`);
+        expect(read('contracts/core/streams/index.ts')).toContain('export async function* encodeStream');
+
+        const [route] = buildTemplateContext(loadOpenAPISpec(specPath), 'core').routes;
+        expect(route).toMatchObject({
+          successStatus: 200,
+          responseType: 'void',
+          stream: { format, mediaType, eventType, discriminator: 'type' },
+        });
+      });
+
+      it.each(['text/event-stream', 'application/x-ndjson'])('fails on a %s response without x-stream-event', (mediaType) => {
+        const { specPath } = setupSpec(streamSpec(mediaType, `              schema: { type: string }`));
+        expect(() => lintSpec(loadOpenAPISpec(specPath))).toThrow(new RegExp(`POST /chat response 200 declares '${mediaType}' without x-stream-event`));
+      });
+
+      it.each(['text/event-stream', 'application/x-ndjson'])('fails on %s events without a discriminator', (mediaType) => {
+        const { specPath } = setupSpec(streamSpec(mediaType, `              x-stream-event: { $ref: '#/components/schemas/TextDelta' }`));
+        expect(() => lintSpec(loadOpenAPISpec(specPath))).toThrow(/POST \/chat response 200 declares stream events without a discriminator/);
+      });
     });
   });
 });

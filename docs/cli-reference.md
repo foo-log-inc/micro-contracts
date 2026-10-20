@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.20.0
+**Version:** 0.20.1
 
 ## Table of Contents
 
@@ -172,6 +172,9 @@ micro-contracts init core --openapi path/to/spec.yaml
 micro-contracts init myScreens --screens
 ```
 ```
+micro-contracts init billing --lambda
+```
+```
 micro-contracts init users --skip-templates
 ```
 
@@ -190,6 +193,7 @@ micro-contracts init users --skip-templates
 | `--output` | -o | No |  | Output path for processed OpenAPI. Defaults to spec/{name}/openapi/{name}.yaml. |
 | `--skip-templates` |  | No | `false` | Skip creating starter Handlebars templates. |
 | `--screens` |  | No | `false` | Initialize as screen spec module (generates screen templates and starter spec). |
+| `--lambda` |  | No | `false` | Also create the AWS Lambda handler template (lambda-routes.hbs), and configure it as the server output in place of the Fastify routes. |
 
 #### Exit Codes
 

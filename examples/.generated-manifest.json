@@ -1,9 +1,9 @@
 {
   "version": "1.0",
-  "generatorVersion": "0.20.0",
+  "generatorVersion": "0.20.1",
   "files": {
     "frontend/src/billing/api.generated.ts": {
-      "sha256": "2b3eacca56412cc2d9287f1449676f8b4542d672a8113d60208af546778fdd8b"
+      "sha256": "a984194c30ea63542f38f5a98c5c2acbd89fe5249d032a6482e6e695017e2437"
     },
     "frontend/src/core/api.generated.ts": {
       "sha256": "8e284c5fad1db72a615bda7c7d8d37715207c8c44c84404968bf04d212f564df"
@@ -15,10 +15,13 @@
       "sha256": "753099378b2ee048f65f06df5038990772c8eeb7511a4620bbb6e4792dea1430"
     },
     "packages/contract-published/billing/errors/index.ts": {
-      "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
+      "sha256": "580385488c70f8073a68df5767fe9324ce8c6bca6e6ac23dbaa9eb63e104852c"
+    },
+    "packages/contract-published/billing/http/index.ts": {
+      "sha256": "8d3a12c8600eeff268cf724d872ff246aa6425da44c75909d0c3663fe49a913d"
     },
     "packages/contract-published/billing/index.ts": {
-      "sha256": "ce83a2e3675107487642e178a8678e354b44d66448e784367a1d4d6dd5ca288f"
+      "sha256": "84ef77ec5cd85239038c2d68b1034173465b6906301ea5d844423552c0959e3d"
     },
     "packages/contract-published/billing/schemas/index.ts": {
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
@@ -42,10 +45,13 @@
       "sha256": "d241689b02f9edc096bf45306fac4fd675fe7a2862ad573ed421d2958918f19a"
     },
     "packages/contract-published/core/errors/index.ts": {
-      "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
+      "sha256": "580385488c70f8073a68df5767fe9324ce8c6bca6e6ac23dbaa9eb63e104852c"
+    },
+    "packages/contract-published/core/http/index.ts": {
+      "sha256": "8d3a12c8600eeff268cf724d872ff246aa6425da44c75909d0c3663fe49a913d"
     },
     "packages/contract-published/core/index.ts": {
-      "sha256": "ce83a2e3675107487642e178a8678e354b44d66448e784367a1d4d6dd5ca288f"
+      "sha256": "84ef77ec5cd85239038c2d68b1034173465b6906301ea5d844423552c0959e3d"
     },
     "packages/contract-published/core/schemas/index.ts": {
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
@@ -78,13 +84,16 @@
       "sha256": "5b69e88fc9f60578261a8231132678550a40a70eb52dfcc611f48937f448ca44"
     },
     "packages/contract/billing/docs/openapi.generated.yaml": {
-      "sha256": "d5e6459facf8efc168c0a60138aecf50dfbf597d09638fcf3155d2e079a20fac"
+      "sha256": "c54c62b2723732c60349c3cd7d1010f65f2ef37f992f4c6df9a7898d56f2f8eb"
     },
     "packages/contract/billing/errors/index.ts": {
-      "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
+      "sha256": "580385488c70f8073a68df5767fe9324ce8c6bca6e6ac23dbaa9eb63e104852c"
+    },
+    "packages/contract/billing/http/index.ts": {
+      "sha256": "8d3a12c8600eeff268cf724d872ff246aa6425da44c75909d0c3663fe49a913d"
     },
     "packages/contract/billing/index.ts": {
-      "sha256": "87af27a53854e7096b630cab46d96371456ca98854e65d5aaf8d30d273296240"
+      "sha256": "5d8936136d47dbf936ada96b6abfd9ba060e0f40d1f9111d07070b2f036ebecc"
     },
     "packages/contract/billing/overlays/index.ts": {
       "sha256": "67623ebaa031c8a9abb0ad1065b6140654ea55fd55fb142b547bf5c4bfe389a2"
@@ -93,16 +102,19 @@
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
     },
     "packages/contract/billing/schemas/types.ts": {
-      "sha256": "ea571835e95b7dce8599046781526339405e69461473f5b139879f958fe6afdb"
+      "sha256": "19333a6c3b93e7b7ffd2fecf9fa9498b78d22e34bf59e06c157be3e3d2491f3a"
     },
     "packages/contract/billing/schemas/validators.ts": {
-      "sha256": "14c8b9325afa1c3b85be1df498810d09cdb4c5fbc2818046bc23204178b570f0"
+      "sha256": "bb689722f766686bcafce0ef60168f2eff725961ee3e4ea198941e1baff9e703"
     },
     "packages/contract/billing/services/BillingServiceApi.ts": {
-      "sha256": "4230d7a55e19a117a1c696c6790f14a6ff5f08898a682ff2543804decab5888f"
+      "sha256": "1cf95a75e7062f117197ff0efe55eaebd22d178084657d9a2a55963cd19f8b62"
     },
     "packages/contract/billing/services/index.ts": {
       "sha256": "339f4801675fbca93f1f23c9fa36d7cf593c0f7872752ec0ba9f768a311c6d96"
+    },
+    "packages/contract/billing/streams/index.ts": {
+      "sha256": "4e266cd52d19521f273065901ff60e06f5b8534080a4c79f087c629febd0b00d"
     },
     "packages/contract/core/docs/api-reference.html": {
       "sha256": "e26ecf17dc435dc504900e6529e46016447f9998dc2f13b600092169746d3dc3"
@@ -111,10 +123,13 @@
       "sha256": "38612cd5bde2f9b98c8dc7819c0cd948f568397167552348fc3270c1a04edcbd"
     },
     "packages/contract/core/errors/index.ts": {
-      "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
+      "sha256": "580385488c70f8073a68df5767fe9324ce8c6bca6e6ac23dbaa9eb63e104852c"
+    },
+    "packages/contract/core/http/index.ts": {
+      "sha256": "8d3a12c8600eeff268cf724d872ff246aa6425da44c75909d0c3663fe49a913d"
     },
     "packages/contract/core/index.ts": {
-      "sha256": "87af27a53854e7096b630cab46d96371456ca98854e65d5aaf8d30d273296240"
+      "sha256": "f61eb94e5c96a335ed870672429a528ad7f41c95155be50ca74c4e1d86ea32a3"
     },
     "packages/contract/core/overlays/index.ts": {
       "sha256": "53722276a69e657324a70dc451c51854c71ffd9168f4672fb43bf02c708a4a52"
@@ -149,19 +164,22 @@
     "packages/contract/tsconfig.json": {
       "sha256": "d791f51b36215aba3e7cf7c5f69fc4b9fd6d4f2cf515718fdc93589fa05e2608"
     },
+    "server/src/billing/lambda.generated.ts": {
+      "sha256": "f5bb9f1d4055c43971352ea9f50d196639cb77c246a135fdc52e8f364f0cf473"
+    },
     "server/src/billing/overlayAdapter.generated.ts": {
-      "sha256": "fa7457b2c3f435643be3f76c79fad86e261dc755e7f320a9de946b2400468c96"
+      "sha256": "29b4a74d463cc040c6f28ba2235a16a0a831922f3151c48bde8e58eeddbe64b5"
     },
     "server/src/billing/routes.generated.ts": {
-      "sha256": "8546c9d4d9cee80764e0391d28a6f2e67f958017f000910d7a77e98a0734d2be"
+      "sha256": "56ba2c0eadb9052a084cee3ea0328ad0de3c6379ba6ee053ea4b0fe412988729"
     },
     "server/src/core/overlayAdapter.generated.ts": {
-      "sha256": "c2d65bd7d4e69417beadf7230ba43debbb8845babe098fde72b7f09168f84394"
+      "sha256": "93a8ca4dca85edc465d6d923cbf2dd98a1747d02ea744c3847f653542e35440c"
     },
     "server/src/core/routes.generated.ts": {
-      "sha256": "897da698e40a6390e7589ba0726baa275ff91f3c5c7925b5dcded873840395e3"
+      "sha256": "d478df4b00cca55d6ecb4cb51142aa32f712ff8d9bde4451bb992e2d0aa682ef"
     }
   },
-  "inputHash": "5f87739dc061448922a60964f79ab3e389ae647bf5d0d84061e5180b10267db1",
-  "updatedAt": "2026-10-20T08:26:53.964Z"
+  "inputHash": "925e8ec5b39c14ee7aea0541e07ce98b01f89e6a3188d9ab02371cdfbaa8b5dc",
+  "updatedAt": "2026-10-20T09:51:53.617Z"
 }

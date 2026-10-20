@@ -172,11 +172,15 @@ project/
 │   │   ├── schemas/                   #    Types, validators
 │   │   ├── services/                  #    Service interfaces
 │   │   ├── overlays/                  #    Overlay handler interfaces
+│   │   ├── errors/                    #    Error shape (ProblemDetails, ApiError)
+│   │   ├── http/                      #    Request reading the server templates share (cookies)
+│   │   ├── streams/                   #    Stream framing (modules with stream responses)
 │   │   └── deps/                      #    Re-exports from dependencies
 │   └── contract-published/{module}/   #    Public API subset
 │
 ├── server/src/{module}/
 │   ├── routes.generated.ts            # ❌ Auto-generated (template: fastify-routes.hbs)
+│   ├── lambda.generated.ts            # ❌ Auto-generated (template: lambda-routes.hbs, init --lambda)
 │   ├── services/                      # ✅ Human-edited (service implementations)
 │   └── overlays/                      # ✅ Human-edited (overlay implementations)
 │
@@ -299,7 +303,7 @@ Create `micro-contracts.config.yaml`. All paths support `{module}` placeholder.
 | `outputs.<id>.output` | string | yes | Output file path |
 | `outputs.<id>.template` | string | yes | Handlebars template file path, used as written (resolved from the working directory) |
 | `outputs.<id>.overwrite` | boolean | no | Overwrite existing files (default: `true`) |
-| `outputs.<id>.condition` | string | no | `hasPublicEndpoints` \| `hasOverlays` \| `always` (default: `always`) |
+| `outputs.<id>.condition` | string | no | `hasPublicEndpoints` \| `hasOverlays` \| `always` (default: `always`). An output under `hasPublicEndpoints` is generated for a module with published operations, and rendered over what `contract-published` carries: those operations and their schemas |
 | `outputs.<id>.enabled` | boolean | no | Enable/disable this output (default: `true`) |
 | `outputs.<id>.config` | object | no | Template-specific configuration passed to context |
 
@@ -421,6 +425,7 @@ Initialize a new module structure with starter templates.
 | `-o, --output <path>` | Output path for processed OpenAPI |
 | `--skip-templates` | Skip creating starter templates |
 | `--screens` | Initialize as screen spec module (generates screen templates and starter spec) |
+| `--lambda` | Also create the AWS Lambda handler template (`lambda-routes.hbs`), and configure it as the server output in place of the Fastify routes (see [AWS Lambda](#aws-lambda)) |
 
 ### lint \<input\>
 
@@ -441,12 +446,15 @@ do not apply.
 An operation's success response is its lowest 2xx status code, else its `2XX` range, else
 `default`: the service returns that response's body and the generated route answers with
 that status (200 for `2XX` and `default`). An operation that declares none of them is an
-error: declare the response a successful call returns. Its request body and success response
-must be in a media type generated code carries — `application/json` — since a body in any
-other media type would be dropped from every generated artifact; one declared otherwise is an
-error: remove that media type, and declare the body as `application/json`. A response of any
-other status, which documents an error, may use any media type; generated code has a schema
-only for an `application/json` one.
+error: declare the response a successful call returns. Its request body must be
+`application/json`, and its success response `application/json` or a stream —
+`text/event-stream`, `application/x-ndjson` or `application/jsonl` — since a body in any other
+media type would be dropped from every generated artifact; one declared otherwise is an
+error: remove that media type, and declare the body in one of them. A stream declares the
+schema of one event under `x-stream-event`, as a `oneOf` with `discriminator.propertyName`:
+a stream without `x-stream-event`, or whose events have no discriminator, is an error. A
+response of any other status, which documents an error, may use any media type; generated
+code has a schema only for an `application/json` one.
 
 `<input>` is linted under the rules of the module in `micro-contracts.config.yaml` whose
 `openapi` it is — the rules `generate` applies to it — and as a service API spec when no
@@ -619,13 +627,58 @@ export class UserService implements UserServiceApi {
 }
 ```
 
+### Stream Responses
+
+An operation whose success response is `text/event-stream` (server-sent events) or
+`application/x-ndjson` / `application/jsonl` (one JSON value per line) streams events. The
+schema of one event is declared under `x-stream-event`: a `oneOf` whose `discriminator`
+names each event's type.
+
+```yaml
+responses:
+  '200':
+    description: Reply, as it is written
+    content:
+      text/event-stream:
+        x-stream-event:
+          oneOf:
+            - $ref: '#/components/schemas/TextDelta'
+            - $ref: '#/components/schemas/StreamEnd'
+          discriminator: { propertyName: type }
+```
+
+The event type is the referenced component, or `<Service>_<method>Event` for an inline schema,
+in `schemas/types.ts` and among the validators. The service returns its events as an
+`AsyncIterable`:
+
+```typescript
+export interface ChatServiceApi {
+  reply(input: Chat_replyInput): AsyncIterable<Chat_replyEvent>;
+}
+```
+
+The contract package carries the framing, `streams/index.ts`: routes encode events with
+`encodeStream` and clients decode them with `decodeStream`. A server-sent event is
+`event: <discriminator value>`, `data: <the event as JSON>` and a blank line; NDJSON is one
+event per line.
+
+The starter Fastify route awaits the service's first event before sending anything, so a
+service that fails at once answers through the error handler, as a JSON operation does. It
+then sends the success status with the declared media type, and each event as the service
+yields it, serialized by the event schema as a JSON response is: a property the schema does
+not declare is not sent, and an event no member of the schema accepts ends the stream. When
+the client goes away, the service's iterator is closed at its next yield: a service waiting
+between events keeps running until it yields again. The starter fetch client returns the
+events as an `AsyncIterable` to read with `for await`.
+
 ### Validators
 
 `schemas/validators.ts` holds every schema as the JSON Schema Fastify validates requests and
 serializes responses with, plus the path, query, header and cookie parameter schemas of each
 operation (`<Service>_<method>PathParams`, `…QueryParams`, `…HeaderParams`, `…CookieParams`)
-and its inline request body and response schemas (`…Body`; `…Response` for the success
-response, and `…404Response`, `…4XXResponse` or `…DefaultResponse` for another).
+and its inline request body, response and stream event schemas (`…Body`; `…Response` for the
+success response, and `…404Response`, `…4XXResponse` or `…DefaultResponse` for another;
+`…Event`).
 `schemas/types.ts` names the inline body types the same way. A header parameter schema names headers in lower case, as a
 request delivers them, and is not in `allSchemas`: the starter routes give it to Fastify
 inline (`schema.headers`), since Fastify matches header names case-insensitively only in an
@@ -703,6 +756,55 @@ for (const schema of allSchemas) {
 const fastify = Fastify();
 fastify.setValidatorCompiler(({ schema }) => ajv.compile(schema));
 ```
+
+### AWS Lambda
+
+`init --lambda` also writes `lambda-routes.hbs`, a handler for the events of an API Gateway
+HTTP API (payload format 2.0) and of a Lambda function URL, and configures it as the server
+output (`server/src/{module}/lambda.generated.ts`) in place of the Fastify routes. It runs a
+module's operations without Fastify — one Lambda function per module — and needs `ajv`,
+`ajv-formats` and `fast-json-stringify` in your dependencies.
+
+```typescript
+import { createHandler } from './billing/lambda.generated.js';
+import { BillingService } from './billing/services/index.js';
+import { requireAuth, tenantIsolation } from './billing/overlays/index.js';
+
+export const handler = createHandler({
+  services: { billing: new BillingService() },
+  overlays: { requireAuth, tenantIsolation },
+  basePath: '/prod', // what the event's path carries before the spec's paths, if anything
+});
+```
+
+The handler answers as the starter Fastify routes do:
+
+- It routes an event by `rawPath` and `requestContext.http.method`, a literal path segment
+  before a parameter. A path no operation has is answered with 404, and another method of an
+  operation's path with 405 and `Allow`.
+- It validates the path, query, header and cookie parameters and the body against the
+  schemas the Fastify routes use, with Fastify's default validator options except
+  `removeAdditional: false` (see [Validators](#validators)), and words a refusal (400) as
+  Fastify does (`querystring/limit must be integer`). The query is read from
+  `rawQueryString`, a key given more than once being an array; headers in lower case; cookies
+  from the event's `cookies`. A body is JSON — decoded first when `isBase64Encoded` — and
+  another content type is answered with 415.
+- It runs the operation's overlays (`overlayAdapter.generated.ts`), then the service, and
+  answers with the success status and the body serialized by the schema declared for it.
+
+An error — a refused request, an overlay's refusal, a service's throw — is answered as the
+contract's `ProblemDetails`, with `toProblemDetails` from the contract's `errors/`: a thrown
+error's `status` or `statusCode` (400–599) is the response's status, any other error is 500
+and logged, and its message is the title. The body is serialized by the schema declared for
+that status, as Fastify serializes an error.
+
+A [stream operation](#stream-responses) needs the response streaming of a function URL whose
+invoke mode is `RESPONSE_STREAM`. For one, the template exports `createStreamHandler` too, a
+handler wrapped in `awslambda.streamifyResponse` that sends each event as the service yields
+it. When the response stream closes, the service's iterator is closed at its next yield: a
+service waiting between events keeps running until it yields again. It answers the other
+operations as `createHandler` does. `createHandler` answers a stream operation with all its
+events at once, when the stream ends.
 
 ---
 

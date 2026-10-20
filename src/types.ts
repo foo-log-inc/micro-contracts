@@ -169,6 +169,8 @@ export interface LinkObject {
 
 export interface MediaTypeObject {
   schema?: SchemaObject | ReferenceObject;
+  /** For a stream (`text/event-stream`, `application/x-ndjson`), the schema of one event */
+  'x-stream-event'?: SchemaObject | ReferenceObject;
 }
 
 export interface ReferenceObject {
@@ -847,8 +849,10 @@ export interface ServiceMethodInfo {
   httpMethod: string;
   path: string;
   isPublished: boolean;
-  /** Success response body type (see operationTypeNames), or 'void' when it has none */
+  /** Success response body type, or event type for a stream (see operationTypeNames), or 'void' */
   responseType: string;
+  /** What the method returns: `Promise<responseType>`, or `AsyncIterable<responseType>` for a stream */
+  returnType: string;
   /** Input type (see operationTypeNames) */
   inputType: string;
   /** Params type (path + query combined; see operationTypeNames) */
@@ -1141,34 +1145,57 @@ export function resolveParameter(
   return resolveComponent<ParameterObject>(param, 'parameters', spec, location);
 }
 
+/** How a stream response frames its events: server-sent events, or one JSON value per line. */
+export type StreamFormat = 'sse' | 'ndjson';
+
 /**
- * The media types generated code carries a body in, and the kind of body each
- * one is. A request body or success response declared in any other media type
- * is an error: generated code would drop it.
+ * The media types generated code carries a body in, and what each one is: a
+ * JSON value, or a stream of JSON events in a framing. A body declared in any
+ * other media type is an error: generated code would drop it.
  */
-const BODY_MEDIA_TYPES: Readonly<Record<string, OperationBody['kind']>> = {
-  'application/json': 'json',
+const BODY_MEDIA_TYPES: Readonly<Record<string, { kind: 'json' } | { kind: 'stream'; format: StreamFormat }>> = {
+  'application/json': { kind: 'json' },
+  'text/event-stream': { kind: 'stream', format: 'sse' },
+  'application/x-ndjson': { kind: 'stream', format: 'ndjson' },
+  'application/jsonl': { kind: 'stream', format: 'ndjson' },
 };
 
-/** A request or response body, in a media type generated code carries. */
-export interface OperationBody {
+/** A request or response body that is one JSON value. */
+interface JsonBody {
   kind: 'json';
   mediaType: string;
   /** The body's schema: `{}` (any value) when the contract gives none */
   schema: SchemaObject | ReferenceObject;
 }
 
+/** A response body that is a stream of JSON events. */
+interface StreamBody {
+  kind: 'stream';
+  format: StreamFormat;
+  mediaType: string;
+  /** The schema of one event (`x-stream-event`) */
+  event: SchemaObject | ReferenceObject;
+  /** The event property naming each event's type: its discriminator, an SSE event name */
+  discriminator: string;
+}
+
+/** A request or response body, in a media type generated code carries. */
+type OperationBody = JsonBody | StreamBody;
+
 /** A response an operation declares. */
 interface DeclaredResponse {
   /** Its key under `responses`: a status code, a range (`4XX`) or `default` */
   statusCode: string;
-  body?: OperationBody;
+  body?: JsonBody;
 }
 
-/** The response an operation answers a successful call with. */
-interface SuccessResponse extends DeclaredResponse {
+/** The response an operation answers a successful call with: one JSON value, or a stream. */
+interface SuccessResponse {
+  /** Its key under `responses`: a 2xx status code, the `2XX` range or `default` */
+  statusCode: string;
   /** The status code it is sent with: the code itself, or 200 for `2XX` and `default` */
   status: number;
+  body?: OperationBody;
 }
 
 /**
@@ -1184,48 +1211,103 @@ export interface ResolvedOperation {
   parameters: ParameterObject[];
   requestBody?: RequestBodyObject;
   responses: Record<string, ResponseObject>;
-  /** The request body, as generated code carries it */
-  body?: OperationBody;
+  /** The request body, as generated code carries it: one JSON value */
+  body?: JsonBody;
   /** The response a successful call returns */
   success: SuccessResponse;
   /**
    * Every other response, in declaration order. Its body is given when it is
-   * in a media type generated code carries; a response that documents an
-   * error may declare any other besides.
+   * one JSON value; a response that documents an error may declare any other
+   * media type besides.
    */
   otherResponses: DeclaredResponse[];
 }
 
+/** The media types in `content` that carry a body of one of these kinds. */
+function carriedMediaTypes(
+  content: Record<string, MediaTypeObject> | undefined,
+  kinds: ReadonlyArray<OperationBody['kind']>
+): string[] {
+  return Object.keys(content ?? {}).filter(m => Object.hasOwn(BODY_MEDIA_TYPES, m) && kinds.includes(BODY_MEDIA_TYPES[m].kind));
+}
+
+/** The JSON body `content` declares, if it declares one. */
+function jsonBody(content: Record<string, MediaTypeObject> | undefined): JsonBody | undefined {
+  const [mediaType] = carriedMediaTypes(content, ['json']);
+  return mediaType === undefined ? undefined : { kind: 'json', mediaType, schema: content![mediaType].schema ?? {} };
+}
+
 /**
- * The body `content` declares in a media type generated code carries, if it
- * declares one there.
+ * A stream body: its events' schema (`x-stream-event`) and the property that
+ * names each event's type, both of which a stream cannot be generated without.
  */
-function carriedBody(content: Record<string, MediaTypeObject> | undefined): OperationBody | undefined {
-  const mediaType = Object.keys(content ?? {}).find(m => Object.hasOwn(BODY_MEDIA_TYPES, m));
-  if (mediaType === undefined) return undefined;
-  return { kind: BODY_MEDIA_TYPES[mediaType], mediaType, schema: content![mediaType].schema ?? {} };
+function streamBody(
+  mediaType: string,
+  format: StreamFormat,
+  media: MediaTypeObject,
+  spec: OpenAPISpec,
+  location: string
+): StreamBody {
+  const event = media['x-stream-event'];
+  if (event === undefined) {
+    throw new Error(
+      `${location} declares '${mediaType}' without x-stream-event. ` +
+      `Declare the schema of one event under x-stream-event.`
+    );
+  }
+  const discriminator = resolveComponent<SchemaObject>(event, 'schemas', spec, `${location} x-stream-event`)
+    .discriminator?.propertyName;
+  if (!discriminator) {
+    throw new Error(
+      `${location} declares stream events without a discriminator. Declare the events as a oneOf ` +
+      `with discriminator.propertyName, the property whose value names each event's type.`
+    );
+  }
+  return { kind: 'stream', format, mediaType, event, discriminator };
 }
 
 /**
  * The body `content` declares, as generated code carries it; none when it
  * declares no media type. Generated code reads a request body and returns a
- * success response, so a media type it cannot carry is an error, never
- * skipped: a skipped body vanishes from every artifact.
+ * success response, so a media type it cannot carry there is an error, never
+ * skipped: a skipped body vanishes from every artifact. A request body is one
+ * JSON value; a success response may also stream.
  */
 function readBody(
+  content: Record<string, MediaTypeObject> | undefined, kinds: readonly ['json'], spec: OpenAPISpec, location: string
+): JsonBody | undefined;
+function readBody(
+  content: Record<string, MediaTypeObject> | undefined, kinds: ReadonlyArray<OperationBody['kind']>, spec: OpenAPISpec, location: string
+): OperationBody | undefined;
+function readBody(
   content: Record<string, MediaTypeObject> | undefined,
+  kinds: ReadonlyArray<OperationBody['kind']>,
+  spec: OpenAPISpec,
   location: string
 ): OperationBody | undefined {
-  const body = carriedBody(content);
-  const uncarried = Object.keys(content ?? {}).filter(m => !Object.hasOwn(BODY_MEDIA_TYPES, m));
+  const carried = carriedMediaTypes(content, kinds);
+  const uncarried = Object.keys(content ?? {}).filter(m => !carried.includes(m));
   if (uncarried.length > 0) {
+    const supported = Object.keys(BODY_MEDIA_TYPES).filter(m => kinds.includes(BODY_MEDIA_TYPES[m].kind));
     throw new Error(
       `${location} declares ${uncarried.map(m => `'${m}'`).join(', ')}, which generated code cannot carry. ` +
       `Remove ${uncarried.length === 1 ? 'it' : 'them'}` +
-      `${body ? '' : `, and declare the body as ${Object.keys(BODY_MEDIA_TYPES).join(' or ')}`}.`
+      `${carried.length > 0 ? '' : `, and declare the body as ${supported.length === 1 ? supported[0] : `one of ${supported.join(', ')}`}`}.`
     );
   }
-  return body;
+  if (carried.length > 1) {
+    throw new Error(
+      `${location} declares ${carried.map(m => `'${m}'`).join(', ')}: generated code carries one body. ` +
+      `Keep one of them.`
+    );
+  }
+
+  const [mediaType] = carried;
+  if (mediaType === undefined) return undefined;
+  const carriedAs = BODY_MEDIA_TYPES[mediaType];
+  return carriedAs.kind === 'json'
+    ? jsonBody(content)
+    : streamBody(mediaType, carriedAs.format, content![mediaType], spec, location);
 }
 
 /** Statuses whose response carries no content (RFC 9110). */
@@ -1240,6 +1322,7 @@ const NO_CONTENT_STATUSES = new Set([204, 205]);
  */
 function selectSuccessResponse(
   responses: Record<string, ResponseObject>,
+  spec: OpenAPISpec,
   location: string
 ): SuccessResponse {
   const [lowest] = Object.keys(responses)
@@ -1254,7 +1337,7 @@ function selectSuccessResponse(
   }
 
   const status = statusCode === lowest ? Number(statusCode) : 200;
-  const body = readBody(responses[statusCode].content, `${location} response ${statusCode}`);
+  const body = readBody(responses[statusCode].content, ['json', 'stream'], spec, `${location} response ${statusCode}`);
   if (body && NO_CONTENT_STATUSES.has(status)) {
     throw new Error(
       `${location} response ${statusCode} declares content, which a ${status} response cannot carry. ` +
@@ -1316,16 +1399,16 @@ export function resolveOperation(
     );
   }
 
-  const success = selectSuccessResponse(responses, location);
+  const success = selectSuccessResponse(responses, spec, location);
   return {
     parameters,
     requestBody,
     responses,
-    body: readBody(requestBody?.content, `${location} requestBody`),
+    body: readBody(requestBody?.content, ['json'] as const, spec, `${location} requestBody`),
     success,
     otherResponses: Object.entries(responses)
       .filter(([statusCode]) => statusCode !== success.statusCode)
-      .map(([statusCode, response]) => ({ statusCode, body: carriedBody(response.content) })),
+      .map(([statusCode, response]) => ({ statusCode, body: jsonBody(response.content) })),
   };
 }
 

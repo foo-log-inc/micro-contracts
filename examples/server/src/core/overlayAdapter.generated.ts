@@ -4,9 +4,9 @@
  * DO NOT EDIT MANUALLY
  */
 
-import type { FastifyReply } from 'fastify';
 import type { OverlayResult, OverlayRegistry } from '@project/contract/core/overlays/index.js';
 import type { ProblemDetails } from '@project/contract/core/schemas/types.js';
+import { toProblemDetails } from '@project/contract/core/errors/index.js';
 
 // ==========================================================================
 // Types
@@ -102,7 +102,7 @@ export async function runOverlays(
     if (!handler) {
       throw new Error(
         `[SECURITY] Overlay handler "${name}" is required for operation "${operationId}" but not registered. ` +
-        `Register it in server.ts: fastify.decorate('overlayHandlers', { ${name}: ... })`
+        `Register it in the overlay registry the routes are given: { ${name}: ... }`
       );
     }
     if (!extract) {
@@ -118,24 +118,17 @@ export async function runOverlays(
     if (missing.length > 0) {
       return {
         success: false,
-        error: {
-          type: '/errors/missing_parameter',
-          title: `Missing required parameter: ${missing.join(', ')}`,
+        error: toProblemDetails({
           status: 400,
-        },
+          message: `Missing required parameter: ${missing.join(', ')}`,
+          code: 'MISSING_PARAMETER',
+        }),
       };
     }
     const result = await (handler as unknown as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
 
     if (!result.success) {
-      return {
-        success: false,
-        error: {
-          type: `/errors/${result.error?.code?.toLowerCase() ?? 'error'}`,
-          title: result.error?.message ?? 'Error',
-          status: result.error?.status ?? 500,
-        },
-      };
+      return { success: false, error: toProblemDetails(result.error ?? { status: 500, message: 'Error' }) };
     }
 
     if (result.context) {
@@ -144,11 +137,4 @@ export async function runOverlays(
   }
 
   return { success: true, context };
-}
-
-/**
- * Send error response
- */
-export function sendError(reply: FastifyReply, error: ProblemDetails): void {
-  reply.status(error.status).send(error);
 }

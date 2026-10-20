@@ -4,6 +4,74 @@
  * DO NOT EDIT MANUALLY
  */
 
+export const InvoiceStatusChanged = {
+    "$id": "InvoiceStatusChanged",
+    "type": "object",
+    "required": [
+      "type",
+      "invoiceId",
+      "status"
+    ],
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": [
+          "status_changed"
+        ]
+      },
+      "invoiceId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "pending",
+          "paid",
+          "overdue"
+        ]
+      }
+    }
+  } as const;
+
+export const InvoiceSettled = {
+    "$id": "InvoiceSettled",
+    "type": "object",
+    "required": [
+      "type",
+      "invoiceId",
+      "paidAt"
+    ],
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": [
+          "settled"
+        ]
+      },
+      "invoiceId": {
+        "type": "string"
+      },
+      "paidAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    }
+  } as const;
+
+export const InvoiceEvent = {
+    "$id": "InvoiceEvent",
+    "description": "A change to an invoice, named by its type",
+    "oneOf": [
+      {
+        "$ref": "InvoiceStatusChanged#"
+      },
+      {
+        "$ref": "InvoiceSettled#"
+      }
+    ]
+  } as const;
+
 export const Invoice = {
     "$id": "Invoice",
     "type": "object",
@@ -302,6 +370,40 @@ export const Billing_getInvoiceByIdHeaderParams = {
     ]
   } as const;
 
+export const Billing_watchInvoicePathParams = {
+    "$id": "Billing_watchInvoicePathParams",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  } as const;
+
+export const Billing_watchInvoiceHeaderParams = {
+    "$id": "Billing_watchInvoiceHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-tenant-id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "x-tenant-id"
+    ]
+  } as const;
+
 export const Billing_payInvoicePathParams = {
     "$id": "Billing_payInvoicePathParams",
     "type": "object",
@@ -343,6 +445,9 @@ export const Billing_payInvoiceHeaderParams = {
 
 // All schemas for registration
 export const allSchemas = [
+  InvoiceStatusChanged,
+  InvoiceSettled,
+  InvoiceEvent,
   Invoice,
   InvoiceListResponse,
   CreateInvoiceRequest,
@@ -352,5 +457,6 @@ export const allSchemas = [
   ProblemDetails,
   Billing_getInvoicesQueryParams,
   Billing_getInvoiceByIdPathParams,
+  Billing_watchInvoicePathParams,
   Billing_payInvoicePathParams,
 ] as const;

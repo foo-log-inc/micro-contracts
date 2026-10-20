@@ -109,6 +109,35 @@ paths:
         '404':
           $ref: '../../_shared/openapi/problem-details.yaml#/components/responses/NotFound'
 
+  /api/billing/invoices/{id}/events:
+    get:
+      tags: [Billing]
+      operationId: watchInvoice
+      summary: Watch an invoice
+      description: |
+        The invoice's status as it changes, as server-sent events, until the
+        invoice is settled.
+      x-micro-contracts-service: Billing
+      x-micro-contracts-method: watchInvoice
+      x-middleware:
+        - requireAuth
+        - tenantIsolation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The invoice's status changes
+          content:
+            text/event-stream:
+              x-stream-event:
+                $ref: '#/components/schemas/InvoiceEvent'
+        '404':
+          $ref: '../../_shared/openapi/problem-details.yaml#/components/responses/NotFound'
+
   /api/billing/invoices/{id}/pay:
     post:
       tags: [Billing]
@@ -153,6 +182,40 @@ paths:
 
 components:
   schemas:
+    InvoiceStatusChanged:
+      type: object
+      required: [type, invoiceId, status]
+      properties:
+        type:
+          type: string
+          enum: [status_changed]
+        invoiceId:
+          type: string
+        status:
+          type: string
+          enum: [draft, pending, paid, overdue]
+
+    InvoiceSettled:
+      type: object
+      required: [type, invoiceId, paidAt]
+      properties:
+        type:
+          type: string
+          enum: [settled]
+        invoiceId:
+          type: string
+        paidAt:
+          type: string
+          format: date-time
+
+    InvoiceEvent:
+      description: A change to an invoice, named by its type
+      oneOf:
+        - $ref: '#/components/schemas/InvoiceStatusChanged'
+        - $ref: '#/components/schemas/InvoiceSettled'
+      discriminator:
+        propertyName: type
+
     Invoice:
       type: object
       required:

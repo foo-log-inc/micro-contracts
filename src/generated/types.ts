@@ -44,6 +44,7 @@ export interface InitOptions {
   output?: string;
   skipTemplates?: boolean;
   screens?: boolean;
+  lambda?: boolean;
 }
 
 export type InitExitCode = 0 | 1;

@@ -10,31 +10,14 @@ import * as types from '{{contractPackage}}/schemas/types.js';
 {{!-- A header schema is given inline: Fastify matches header names case-insensitively only in an inline schema --}}
 import { {{#each routes}}{{#if parameterSchemas.header}}{{parameterSchemas.header}}, {{/if}}{{/each~}} } from '{{contractPackage}}/schemas/validators.js';
 {{#if extensionInfo.length}}
-import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
+import { runOverlays, type HttpRequest } from './overlayAdapter.generated.js';
+{{/if}}
+{{#if streams}}
+import { Readable } from 'node:stream';
+import { encodeStream } from '{{contractPackage}}/streams/index.js';
 {{/if}}
 {{#if readsCookies}}
-
-/**
- * The cookies of a Cookie header (`name=value; name=value`), by name.
- * Of two cookies with one name, the first is kept: it is the more specific.
- */
-function parseCookies(header: string | string[] | undefined): Map<string, string> {
-  const cookies = new Map<string, string>();
-  for (const pair of [header ?? []].flat().join('; ').split(';')) {
-    const separator = pair.indexOf('=');
-    const name = pair.slice(0, separator).trim();
-    if (separator < 0 || !name || cookies.has(name)) continue;
-
-    let value = pair.slice(separator + 1).trim();
-    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-    try {
-      cookies.set(name, decodeURIComponent(value));
-    } catch {
-      cookies.set(name, value);
-    }
-  }
-  return cookies;
-}
+import { parseCookies } from '{{contractPackage}}/http/index.js';
 {{/if}}
 {{#if extensionInfo.length}}
 
@@ -47,6 +30,11 @@ function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>
     cookies,
     body: req.body,
   };
+}
+
+/** Answer with an overlay's refusal */
+function sendError(reply: FastifyReply, error: types.ProblemDetails): FastifyReply {
+  return reply.status(error.status).send(error);
 }
 {{/if}}
 
@@ -73,6 +61,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{#if parameterSchemas.cookie}}
   {{!-- Fastify parses no cookies: the route validates them, with the validator Fastify validates the rest with --}}
   const {{parameterSchemas.cookie}} = { $ref: '{{parameterSchemas.cookie}}#' };
+{{/if}}
+{{#if stream}}
+  {{!-- Events are serialized as a JSON response is: by the schema of one event --}}
+  const {{typeNameBase}}EventSchema = { $ref: '{{stream.eventType}}#' };
 {{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
@@ -131,7 +123,14 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{/if}}
     };
 {{!-- The success status is set once the service has returned: an error it throws keeps its own status. --}}
-{{#if (eq responseType "void")}}
+{{#if stream}}
+{{!-- A stream's first event is awaited before anything is sent: a service that fails at once fails through the error handler --}}
+    const events = {{serviceKey}}.{{serviceMethod}}(input)[Symbol.asyncIterator]();
+    const first = await events.next();
+    const serialize = reply.compileSerializationSchema({{typeNameBase}}EventSchema);
+    reply.code({{successStatus}}).header('content-type', '{{stream.mediaType}}').header('cache-control', 'no-cache');
+    return reply.send(Readable.from(encodeStream('{{stream.format}}', first, events, serialize, '{{stream.discriminator}}')));
+{{else if (eq responseType "void")}}
     await {{serviceKey}}.{{serviceMethod}}(input);
     return reply.code({{successStatus}}).send();
 {{else}}

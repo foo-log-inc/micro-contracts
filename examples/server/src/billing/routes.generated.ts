@@ -7,30 +7,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/billing/schemas/index.js';
 import * as types from '@project/contract/billing/schemas/types.js';
-import { Billing_getInvoicesHeaderParams, Billing_createInvoiceHeaderParams, Billing_getInvoiceByIdHeaderParams, Billing_payInvoiceHeaderParams, } from '@project/contract/billing/schemas/validators.js';
-import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
-
-/**
- * The cookies of a Cookie header (`name=value; name=value`), by name.
- * Of two cookies with one name, the first is kept: it is the more specific.
- */
-function parseCookies(header: string | string[] | undefined): Map<string, string> {
-  const cookies = new Map<string, string>();
-  for (const pair of [header ?? []].flat().join('; ').split(';')) {
-    const separator = pair.indexOf('=');
-    const name = pair.slice(0, separator).trim();
-    if (separator < 0 || !name || cookies.has(name)) continue;
-
-    let value = pair.slice(separator + 1).trim();
-    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-    try {
-      cookies.set(name, decodeURIComponent(value));
-    } catch {
-      cookies.set(name, value);
-    }
-  }
-  return cookies;
-}
+import { Billing_getInvoicesHeaderParams, Billing_createInvoiceHeaderParams, Billing_getInvoiceByIdHeaderParams, Billing_watchInvoiceHeaderParams, Billing_payInvoiceHeaderParams, } from '@project/contract/billing/schemas/validators.js';
+import { runOverlays, type HttpRequest } from './overlayAdapter.generated.js';
+import { Readable } from 'node:stream';
+import { encodeStream } from '@project/contract/billing/streams/index.js';
+import { parseCookies } from '@project/contract/billing/http/index.js';
 
 /** The request as the overlays read it */
 function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>): HttpRequest {
@@ -41,6 +22,11 @@ function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>
     cookies,
     body: req.body,
   };
+}
+
+/** Answer with an overlay's refusal */
+function sendError(reply: FastifyReply, error: types.ProblemDetails): FastifyReply {
+  return reply.status(error.status).send(error);
 }
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
@@ -114,6 +100,28 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     };
     const output = await billing.getInvoiceById(input);
     return reply.code(200).send(output);
+  });
+
+  // GET /api/billing/invoices/{id}/events
+  const Billing_watchInvoiceEventSchema = { $ref: 'InvoiceEvent#' };
+  fastify.get('/api/billing/invoices/:id/events', {
+    schema: {
+      params: { $ref: 'Billing_watchInvoicePathParams#' },
+      headers: Billing_watchInvoiceHeaderParams,
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('watchInvoice', handlers, toHttpRequest(req, cookies));
+    if (!result.success) return sendError(reply, result.error);
+    // Build input object (always required, even if empty)
+    const input: types.Billing_watchInvoiceInput = {
+      ...(req.params as types.Billing_watchInvoiceParams),
+    };
+    const events = billing.watchInvoice(input)[Symbol.asyncIterator]();
+    const first = await events.next();
+    const serialize = reply.compileSerializationSchema(Billing_watchInvoiceEventSchema);
+    reply.code(200).header('content-type', 'text/event-stream').header('cache-control', 'no-cache');
+    return reply.send(Readable.from(encodeStream('sse', first, events, serialize, 'type')));
   });
 
   // POST /api/billing/invoices/{id}/pay [PUBLISHED]
