@@ -186,7 +186,7 @@ actions:
       const app = await serve({ user: userService }, {});
 
       try {
-        const res = await app.inject({ method: 'GET', url: '/users/ab' });
+        const res = await app.inject({ method: 'GET', url: '/users/ab', headers: { authorization: 'Bearer x' } });
         expect(res.statusCode).toBe(500);
         expect(res.json().message).toContain('"requireAuth"');
       } finally {
@@ -203,7 +203,7 @@ actions:
       const app = await serve({ user: userService }, { requireAuth });
 
       try {
-        const denied = await app.inject({ method: 'GET', url: '/users/ab' });
+        const denied = await app.inject({ method: 'GET', url: '/users/ab', headers: { authorization: 'Bearer y' } });
         expect(denied.statusCode).toBe(401);
 
         const admitted = await app.inject({ method: 'GET', url: '/users/ab', headers: { authorization: 'Bearer x' } });
@@ -305,6 +305,37 @@ actions:
     it('generate an adapter that type-checks for a module with a single overlay', { timeout: 180_000 }, async () => {
       await generateProject(userSpec, { 'auth.overlay.yaml': authOverlay });
       expect(typecheck()).toBe('');
+    });
+
+    it('refuse a request without a required overlay parameter before the overlay runs', async () => {
+      await generateProject(userSpec, {
+        'session.overlay.yaml': `
+overlay: 1.0.0
+info: { title: session, version: 1.0.0 }
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'requireAuth')]"
+    update:
+      parameters:
+        - { name: session, in: cookie, required: true, schema: { type: string } }
+`,
+      });
+      const received: Array<Record<string, unknown>> = [];
+      const served: unknown[] = [];
+      const requireAuth = async (input: Record<string, unknown>) => { received.push(input); return { success: true }; };
+      const app = await serve({ user: { getUser: async (input: unknown) => { served.push(input); return { id: 'ab', name: 'n' }; } } }, { requireAuth });
+
+      try {
+        const refused = await app.inject({ method: 'GET', url: '/users/ab' });
+        expect(refused.statusCode).toBe(400);
+        expect(refused.json()).toMatchObject({ status: 400, title: expect.stringContaining('session') });
+        expect([received, served]).toEqual([[], []]);
+
+        const admitted = await app.inject({ method: 'GET', url: '/users/ab', headers: { cookie: 'session=s1' } });
+        expect(admitted.statusCode).toBe(200);
+        expect(received).toEqual([{ session: 's1' }]);
+      } finally {
+        await app.close();
+      }
     });
 
     it('fail generation on an overlay parameter in a location requests do not have', async () => {
@@ -456,6 +487,40 @@ components:
   });
 
   describe('request validation', () => {
+    it('refuses a request without a required header the operation declares, before the service', { timeout: 180_000 }, async () => {
+      await generateProject(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /reports:
+    get:
+      operationId: getReport
+      x-micro-contracts-service: Report
+      x-micro-contracts-method: getReport
+      parameters:
+        - { name: X-Tenant-Id, in: header, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: ok
+          content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } }
+`);
+      const served: unknown[] = [];
+      const app = await serve({ report: { getReport: async (input: unknown) => { served.push(input); return { ok: true }; } } });
+      const tenant = '3f0e4f5e-1111-4222-8333-444455556666';
+
+      try {
+        const statuses = [];
+        for (const headers of [{}, { 'X-Tenant-Id': 'tenant-1' }, { 'X-Tenant-Id': tenant }, { 'x-tenant-id': tenant }]) {
+          statuses.push((await app.inject({ method: 'GET', url: '/reports', headers })).statusCode);
+        }
+        expect(statuses).toEqual([400, 400, 200, 200]);
+        expect(served).toHaveLength(2);
+      } finally {
+        await app.close();
+      }
+      expect(typecheck()).toBe('');
+    });
+
     it('accepts every oneOf member, tagged or not, unchanged, with the validator options the README gives', async () => {
       await generateProject(`
 openapi: 3.0.3

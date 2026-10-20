@@ -183,6 +183,11 @@ export async function requireAuth(input: RequireAuthOverlayInput): Promise<Overl
 
 > **📦 Full examples**: See [`examples/server/src/core/overlays/`](../examples/server/src/core/overlays/)
 
+A parameter the overlay declares `required: true` is always in the input: the generated
+adapter refuses a request without it — header, query or cookie — with 400 (a ProblemDetails
+naming the missing parameter) before the handler runs. A header or query parameter is also
+validated against its schema by the generated route, before any overlay runs.
+
 ### Layer Responsibilities
 
 | Layer | Responsibility | Touches HTTP objects | Knows HTTP concepts |

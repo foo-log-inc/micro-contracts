@@ -309,6 +309,9 @@ function getOperationTypeName(operation: OperationObject): string {
   return 'Unknown';
 }
 
+/** The request locations whose parameters are validated, and the suffix of each one's schema. */
+const PARAMETER_SCHEMA_SUFFIXES = { path: 'PathParams', query: 'QueryParams', header: 'HeaderParams' } as const;
+
 /** The parameters an operation's Params type is made of: path and query. */
 function paramsTypeMembers(resolved: ResolvedOperation): ParameterObject[] {
   return resolved.parameters.filter(p => p.in === 'query' || p.in === 'path');
@@ -325,6 +328,8 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
   base: string;
   input: string;
   params?: string;
+  /** The validation schema of the parameters of each request location that has any */
+  parameterSchemas: Partial<Record<keyof typeof PARAMETER_SCHEMA_SUFFIXES, string>>;
   /** The request body's type */
   body?: string;
   /** The success response body's type; absent when the response has no body */
@@ -336,6 +341,11 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
 } {
   const base = getOperationTypeName(operation);
   const params = paramsTypeMembers(resolved).length > 0 ? `${base}Params` : undefined;
+
+  const parameterSchemas: Partial<Record<keyof typeof PARAMETER_SCHEMA_SUFFIXES, string>> = {};
+  for (const [location, suffix] of Object.entries(PARAMETER_SCHEMA_SUFFIXES) as Array<[keyof typeof PARAMETER_SCHEMA_SUFFIXES, string]>) {
+    if (resolved.parameters.some(p => p.in === location)) parameterSchemas[location] = `${base}${suffix}`;
+  }
 
   const inline: Array<{ name: string; schema: SchemaObject }> = [];
   // A $ref body is its component's type; an inline one, of any shape, is
@@ -357,7 +367,7 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
     return type ? [{ statusCode, type }] : [];
   });
 
-  return { base, input: `${base}Input`, params, body, response, otherResponses, inline };
+  return { base, input: `${base}Input`, params, parameterSchemas, body, response, otherResponses, inline };
 }
 
 /**

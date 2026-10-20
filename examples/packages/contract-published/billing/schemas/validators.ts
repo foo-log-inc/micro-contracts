@@ -226,6 +226,48 @@ export const Billing_getInvoicesQueryParams = {
     }
   } as const;
 
+export const Billing_getInvoicesHeaderParams = {
+    "$id": "Billing_getInvoicesHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-tenant-id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "x-tenant-id"
+    ]
+  } as const;
+
+export const Billing_createInvoiceHeaderParams = {
+    "$id": "Billing_createInvoiceHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-tenant-id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "x-tenant-id"
+    ]
+  } as const;
+
 export const Billing_getInvoiceByIdPathParams = {
     "$id": "Billing_getInvoiceByIdPathParams",
     "type": "object",
@@ -239,6 +281,27 @@ export const Billing_getInvoiceByIdPathParams = {
     ]
   } as const;
 
+export const Billing_getInvoiceByIdHeaderParams = {
+    "$id": "Billing_getInvoiceByIdHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-tenant-id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "x-tenant-id"
+    ]
+  } as const;
+
 export const Billing_payInvoicePathParams = {
     "$id": "Billing_payInvoicePathParams",
     "type": "object",
@@ -249,6 +312,31 @@ export const Billing_payInvoicePathParams = {
     },
     "required": [
       "id"
+    ]
+  } as const;
+
+export const Billing_payInvoiceHeaderParams = {
+    "$id": "Billing_payInvoiceHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-tenant-id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "x-payment-token": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "x-tenant-id",
+      "x-payment-token"
     ]
   } as const;
 

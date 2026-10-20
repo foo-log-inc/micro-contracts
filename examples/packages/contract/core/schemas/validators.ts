@@ -317,6 +317,34 @@ export const User_getUsersQueryParams = {
     }
   } as const;
 
+export const User_getUsersHeaderParams = {
+    "$id": "User_getUsersHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
+export const User_createUserHeaderParams = {
+    "$id": "User_createUserHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
 export const User_getUserByIdPathParams = {
     "$id": "User_getUserByIdPathParams",
     "type": "object",
@@ -329,6 +357,20 @@ export const User_getUserByIdPathParams = {
     "required": [
       "id"
     ]
+  } as const;
+
+export const User_getUserByIdHeaderParams = {
+    "$id": "User_getUserByIdHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
   } as const;
 
 export const User_updateUserPathParams = {
@@ -345,6 +387,20 @@ export const User_updateUserPathParams = {
     ]
   } as const;
 
+export const User_updateUserHeaderParams = {
+    "$id": "User_updateUserHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
 export const User_deleteUserPathParams = {
     "$id": "User_deleteUserPathParams",
     "type": "object",
@@ -359,6 +415,88 @@ export const User_deleteUserPathParams = {
     ]
   } as const;
 
+export const User_deleteUserHeaderParams = {
+    "$id": "User_deleteUserHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
+export const Tenant_getDataHeaderParams = {
+    "$id": "Tenant_getDataHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-tenant-id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "x-ratelimit-limit": {
+        "type": "integer"
+      },
+      "x-ratelimit-remaining": {
+        "type": "integer"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "x-tenant-id"
+    ]
+  } as const;
+
+export const Tenant_createDataHeaderParams = {
+    "$id": "Tenant_createDataHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-tenant-id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "x-ratelimit-limit": {
+        "type": "integer"
+      },
+      "x-ratelimit-remaining": {
+        "type": "integer"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "x-tenant-id"
+    ]
+  } as const;
+
+export const Admin_getStatsHeaderParams = {
+    "$id": "Admin_getStatsHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
 export const Admin_suspendUserPathParams = {
     "$id": "Admin_suspendUserPathParams",
     "type": "object",
@@ -371,6 +509,31 @@ export const Admin_suspendUserPathParams = {
     "required": [
       "id"
     ]
+  } as const;
+
+export const Admin_suspendUserHeaderParams = {
+    "$id": "Admin_suspendUserHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
+export const Health_checkHeaderParams = {
+    "$id": "Health_checkHeaderParams",
+    "type": "object",
+    "properties": {
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
   } as const;
 
 

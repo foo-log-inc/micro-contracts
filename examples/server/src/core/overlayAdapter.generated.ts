@@ -54,6 +54,14 @@ const extractors: Record<string, ParamExtractor> = {
   }),
 };
 
+/** The parameters each overlay requires: a request without one is refused before the overlay runs */
+const requiredParams: Record<string, string[]> = {
+  'requireAuth': [],
+  'requireAdmin': [],
+  'tenantIsolation': ['X-Tenant-Id', ],
+  'rateLimit': [],
+};
+
 // ==========================================================================
 // Endpoint → Overlay Mapping
 // ==========================================================================
@@ -106,6 +114,17 @@ export async function runOverlays(
     // The extractor builds the input the handler is declared with, from the
     // same parameters; looked up by name, TypeScript cannot pair the two.
     const input = extract(req);
+    const missing = (requiredParams[name] ?? []).filter(param => input[param] === undefined);
+    if (missing.length > 0) {
+      return {
+        success: false,
+        error: {
+          type: '/errors/missing_parameter',
+          title: `Missing required parameter: ${missing.join(', ')}`,
+          status: 400,
+        },
+      };
+    }
     const result = await (handler as unknown as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
 
     if (!result.success) {

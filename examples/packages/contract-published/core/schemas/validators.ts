@@ -216,6 +216,34 @@ export const User_getUsersQueryParams = {
     }
   } as const;
 
+export const User_getUsersHeaderParams = {
+    "$id": "User_getUsersHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
+export const User_createUserHeaderParams = {
+    "$id": "User_createUserHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
 export const User_getUserByIdPathParams = {
     "$id": "User_getUserByIdPathParams",
     "type": "object",
@@ -228,6 +256,31 @@ export const User_getUserByIdPathParams = {
     "required": [
       "id"
     ]
+  } as const;
+
+export const User_getUserByIdHeaderParams = {
+    "$id": "User_getUserByIdHeaderParams",
+    "type": "object",
+    "properties": {
+      "authorization": {
+        "type": "string"
+      },
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  } as const;
+
+export const Health_checkHeaderParams = {
+    "$id": "Health_checkHeaderParams",
+    "type": "object",
+    "properties": {
+      "x-correlation-id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
   } as const;
 
 

@@ -314,11 +314,11 @@ curl -H "Authorization: Bearer admin" http://localhost:3001/api/admin/stats
 
 ```bash
 # Get invoices (requires auth + tenant)
-curl -H "Authorization: Bearer test" -H "X-Tenant-Id: tenant-1" \
+curl -H "Authorization: Bearer test" -H "X-Tenant-Id: 3f0e4f5e-1111-4222-8333-444455556666" \
   http://localhost:3001/api/billing/invoices
 
 # Create invoice
-curl -X POST -H "Authorization: Bearer test" -H "X-Tenant-Id: tenant-1" \
+curl -X POST -H "Authorization: Bearer test" -H "X-Tenant-Id: 3f0e4f5e-1111-4222-8333-444455556666" \
   -H "Content-Type: application/json" \
   -d '{"userId":"1","amount":99.99}' \
   http://localhost:3001/api/billing/invoices

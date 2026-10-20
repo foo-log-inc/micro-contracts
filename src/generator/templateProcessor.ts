@@ -147,6 +147,12 @@ interface RouteContext {
   queryParams: ParameterContext[];
   /** Path parameters */
   pathParams: ParameterContext[];
+  /**
+   * The validation schema of the path, query and header parameters, for each
+   * location the operation has parameters in. A header schema names headers
+   * in lower case and is not registered: a route gives it inline.
+   */
+  parameterSchemas: { path?: string; query?: string; header?: string };
   /** Request body info */
   requestBody?: {
     schemaName: string;
@@ -535,6 +541,7 @@ function extractRoutes(
         extensionParams,
         queryParams,
         pathParams,
+        parameterSchemas: typeNames.parameterSchemas,
         requestBody,
         responses,
         responseSchemas,

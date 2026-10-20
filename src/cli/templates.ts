@@ -15,6 +15,8 @@ const STARTER_FASTIFY_ROUTES_TEMPLATE = `/**
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '{{contractPackage}}/schemas/index.js';
 import * as types from '{{contractPackage}}/schemas/types.js';
+{{!-- A header schema is given inline: Fastify matches header names case-insensitively only in an inline schema --}}
+import { {{#each routes}}{{#if parameterSchemas.header}}{{parameterSchemas.header}}, {{/if}}{{/each~}} } from '{{contractPackage}}/schemas/validators.js';
 {{#if extensionInfo.length}}
 import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
 {{/if}}
@@ -41,11 +43,14 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // {{uppercase method}} {{path}}{{#if isPublished}} [PUBLISHED]{{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
-{{#if pathParams.length}}
-      params: { $ref: '{{typeNameBase}}PathParams#' },
+{{#if parameterSchemas.path}}
+      params: { $ref: '{{parameterSchemas.path}}#' },
 {{/if}}
-{{#if queryParams.length}}
-      querystring: { $ref: '{{typeNameBase}}QueryParams#' },
+{{#if parameterSchemas.query}}
+      querystring: { $ref: '{{parameterSchemas.query}}#' },
+{{/if}}
+{{#if parameterSchemas.header}}
+      headers: {{parameterSchemas.header}},
 {{/if}}
 {{#if requestBody}}
       body: { $ref: '{{requestBody.schemaName}}#' },
@@ -260,6 +265,13 @@ const extractors: Record<string, ParamExtractor> = {
 {{/each}}
 };
 
+/** The parameters each overlay requires: a request without one is refused before the overlay runs */
+const requiredParams: Record<string, string[]> = {
+{{#each uniqueOverlays}}
+  '{{name}}': [{{#each params}}{{#if required}}'{{name}}', {{/if}}{{/each~}} ],
+{{/each}}
+};
+
 // ==========================================================================
 // Endpoint → Overlay Mapping
 // ==========================================================================
@@ -308,6 +320,17 @@ export async function runOverlays(
     // The extractor builds the input the handler is declared with, from the
     // same parameters; looked up by name, TypeScript cannot pair the two.
     const input = extract(req);
+    const missing = (requiredParams[name] ?? []).filter(param => input[param] === undefined);
+    if (missing.length > 0) {
+      return {
+        success: false,
+        error: {
+          type: '/errors/missing_parameter',
+          title: \`Missing required parameter: \${missing.join(', ')}\`,
+          status: 400,
+        },
+      };
+    }
     const result = await (handler as unknown as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
 
     if (!result.success) {

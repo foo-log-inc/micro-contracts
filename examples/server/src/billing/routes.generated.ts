@@ -7,6 +7,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/billing/schemas/index.js';
 import * as types from '@project/contract/billing/schemas/types.js';
+import { Billing_getInvoicesHeaderParams, Billing_createInvoiceHeaderParams, Billing_getInvoiceByIdHeaderParams, Billing_payInvoiceHeaderParams, } from '@project/contract/billing/schemas/validators.js';
 import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
@@ -29,6 +30,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/billing/invoices', {
     schema: {
       querystring: { $ref: 'Billing_getInvoicesQueryParams#' },
+      headers: Billing_getInvoicesHeaderParams,
       response: { '200': { $ref: 'InvoiceListResponse#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -45,6 +47,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/billing/invoices [PUBLISHED]
   fastify.post('/api/billing/invoices', {
     schema: {
+      headers: Billing_createInvoiceHeaderParams,
       body: { $ref: 'CreateInvoiceRequest#' },
       response: { '201': { $ref: 'Invoice#' } },
     },
@@ -63,6 +66,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/billing/invoices/:id', {
     schema: {
       params: { $ref: 'Billing_getInvoiceByIdPathParams#' },
+      headers: Billing_getInvoiceByIdHeaderParams,
       response: { '200': { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -80,6 +84,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/api/billing/invoices/:id/pay', {
     schema: {
       params: { $ref: 'Billing_payInvoicePathParams#' },
+      headers: Billing_payInvoiceHeaderParams,
       body: { $ref: 'PayInvoiceRequest#' },
       response: { '200': { $ref: 'PaymentResult#' } },
     },

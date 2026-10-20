@@ -7,6 +7,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/core/schemas/index.js';
 import * as types from '@project/contract/core/schemas/types.js';
+import { User_getUsersHeaderParams, User_createUserHeaderParams, User_getUserByIdHeaderParams, User_updateUserHeaderParams, User_deleteUserHeaderParams, Tenant_getDataHeaderParams, Tenant_createDataHeaderParams, Admin_getStatsHeaderParams, Admin_suspendUserHeaderParams, Health_checkHeaderParams, } from '@project/contract/core/schemas/validators.js';
 import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
@@ -29,6 +30,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/users', {
     schema: {
       querystring: { $ref: 'User_getUsersQueryParams#' },
+      headers: User_getUsersHeaderParams,
       response: { '200': { $ref: 'UserListResponse#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -45,6 +47,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/users [PUBLISHED]
   fastify.post('/api/users', {
     schema: {
+      headers: User_createUserHeaderParams,
       body: { $ref: 'CreateUserRequest#' },
       response: { '201': { $ref: 'User#' } },
     },
@@ -63,6 +66,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/users/:id', {
     schema: {
       params: { $ref: 'User_getUserByIdPathParams#' },
+      headers: User_getUserByIdHeaderParams,
       response: { '200': { $ref: 'User#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -80,6 +84,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.put('/api/users/:id', {
     schema: {
       params: { $ref: 'User_updateUserPathParams#' },
+      headers: User_updateUserHeaderParams,
       body: { $ref: 'UpdateUserRequest#' },
       response: { '200': { $ref: 'User#' } },
     },
@@ -99,6 +104,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.delete('/api/users/:id', {
     schema: {
       params: { $ref: 'User_deleteUserPathParams#' },
+      headers: User_deleteUserHeaderParams,
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('deleteUser', handlers, toHttpRequest(req));
@@ -114,6 +120,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/tenant/data
   fastify.get('/api/tenant/data', {
     schema: {
+      headers: Tenant_getDataHeaderParams,
       response: { '200': { $ref: 'TenantData#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -129,6 +136,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/tenant/data
   fastify.post('/api/tenant/data', {
     schema: {
+      headers: Tenant_createDataHeaderParams,
       body: { $ref: 'CreateTenantDataRequest#' },
       response: { '201': { $ref: 'TenantData#' } },
     },
@@ -146,6 +154,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/admin/stats
   fastify.get('/api/admin/stats', {
     schema: {
+      headers: Admin_getStatsHeaderParams,
       response: { '200': { $ref: 'SystemStats#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -162,6 +171,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/api/admin/users/:id/suspend', {
     schema: {
       params: { $ref: 'Admin_suspendUserPathParams#' },
+      headers: Admin_suspendUserHeaderParams,
       body: { $ref: 'SuspendUserRequest#' },
       response: { '200': { $ref: 'User#' } },
     },
@@ -180,6 +190,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/health [PUBLISHED]
   fastify.get('/api/health', {
     schema: {
+      headers: Health_checkHeaderParams,
       response: { '200': { $ref: 'HealthStatus#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {

@@ -54,8 +54,8 @@ export function generateSchemas(spec: OpenAPISpec): string {
     }
   }
 
-  for (const { name } of opSchemas) {
-    lines.push(`  ${name},`);
+  for (const { name, registered } of opSchemas) {
+    if (registered) lines.push(`  ${name},`);
   }
 
   lines.push('] as const;');
@@ -181,20 +181,27 @@ function convertSubschema(value: unknown, spec: OpenAPISpec): unknown {
 /**
  * The schemas operations need beyond components.schemas:
  *
- * - `<base>PathParams` and `<base>QueryParams`, one per request location,
- *   which is how Fastify validates them (`schema.params` and
- *   `schema.querystring`). A single schema holding both validates neither
- *   location: its required path parameters would be demanded of the query.
- * - an inline request body and success response, under the names types.ts
- *   gives them.
+ * - `<base>PathParams`, `<base>QueryParams` and `<base>HeaderParams`, one per
+ *   request location, which is how Fastify validates them (`schema.params`,
+ *   `schema.querystring` and `schema.headers`). A single schema holding them
+ *   all validates no location: its required path parameters would be
+ *   demanded of the query.
+ * - an inline request body and every inline response body, under the names
+ *   types.ts gives them.
+ *
+ * A header schema names its headers in lower case, as a request delivers
+ * them (header names are case-insensitive). It is not `registered` in
+ * allSchemas: a route gives it inline, since Fastify warns on a referenced
+ * headers schema and, for one with its own `$id`, validates against the
+ * registered copy.
  */
-function operationSchemas(spec: OpenAPISpec): Array<{ name: string; schema: SchemaObject }> {
-  const schemas: Array<{ name: string; schema: SchemaObject }> = [];
+function operationSchemas(spec: OpenAPISpec): Array<{ name: string; schema: SchemaObject; registered: boolean }> {
+  const schemas: Array<{ name: string; schema: SchemaObject; registered: boolean }> = [];
   const names = new Set<string>();
-  const add = (name: string, schema: SchemaObject) => {
+  const add = (name: string, schema: SchemaObject, registered = true) => {
     if (names.has(name)) return;
     names.add(name);
-    schemas.push({ name, schema });
+    schemas.push({ name, schema, registered });
   };
 
   for (const [apiPath, pathItem] of Object.entries(spec.paths)) {
@@ -203,12 +210,14 @@ function operationSchemas(spec: OpenAPISpec): Array<{ name: string; schema: Sche
       if (!operation) continue;
 
       const resolved = resolveOperation(spec, apiPath, method);
-      const { base, inline } = operationTypeNames(operation, resolved);
+      const { parameterSchemas, inline } = operationTypeNames(operation, resolved);
 
-      for (const [location, suffix] of [['path', 'PathParams'], ['query', 'QueryParams']] as const) {
+      for (const [location, name] of Object.entries(parameterSchemas)) {
         const params = resolved.parameters.filter(p => p.in === location);
-        if (params.length > 0) {
-          add(`${base}${suffix}`, parametersSchema(params));
+        if (location === 'header') {
+          add(name, parametersSchema(params.map(p => ({ ...p, name: p.name.toLowerCase() }))), false);
+        } else {
+          add(name, parametersSchema(params));
         }
       }
 

@@ -169,8 +169,8 @@ async function main() {
     console.log(`  curl -H "Authorization: Bearer test" http://localhost:${port}/api/users`);
     console.log(`  curl -H "Authorization: Bearer admin" http://localhost:${port}/api/admin/stats`);
     console.log(`\nBilling module endpoints (cross-module dependency demo):`);
-    console.log(`  curl -H "Authorization: Bearer test" -H "X-Tenant-Id: tenant-1" http://localhost:${port}/api/billing/invoices`);
-    console.log(`  curl -X POST -H "Authorization: Bearer test" -H "X-Tenant-Id: tenant-1" -H "Content-Type: application/json" -d '{"userId":"1","amount":99.99}' http://localhost:${port}/api/billing/invoices`);
+    console.log(`  curl -H "Authorization: Bearer test" -H "X-Tenant-Id: 3f0e4f5e-1111-4222-8333-444455556666" http://localhost:${port}/api/billing/invoices`);
+    console.log(`  curl -X POST -H "Authorization: Bearer test" -H "X-Tenant-Id: 3f0e4f5e-1111-4222-8333-444455556666" -H "Content-Type: application/json" -d '{"userId":"1","amount":99.99}' http://localhost:${port}/api/billing/invoices`);
   } catch (err: unknown) {
     server.log.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
