@@ -325,9 +325,10 @@ actions:
       const app = await serve({ user: { getUser: async (input: unknown) => { served.push(input); return { id: 'ab', name: 'n' }; } } }, { requireAuth });
 
       try {
+        // The route validates the parameter the overlay injected into the operation
         const refused = await app.inject({ method: 'GET', url: '/users/ab' });
         expect(refused.statusCode).toBe(400);
-        expect(refused.json()).toMatchObject({ status: 400, title: expect.stringContaining('session') });
+        expect(refused.json().message).toContain('session');
         expect([received, served]).toEqual([[], []]);
 
         const admitted = await app.inject({ method: 'GET', url: '/users/ab', headers: { cookie: 'session=s1' } });
@@ -336,6 +337,14 @@ actions:
       } finally {
         await app.close();
       }
+
+      // The adapter refuses it as well, for a route that hands it a request unvalidated
+      const { runOverlays } = await import(path.join(tmpDir, 'server/overlayAdapter.generated.ts'));
+      const outcome = await runOverlays('getUser', { requireAuth }, {
+        headers: {}, params: { id: 'ab' }, query: {}, cookies: new Map(), body: undefined,
+      });
+      expect(outcome).toMatchObject({ success: false, error: { status: 400, title: expect.stringContaining('session') } });
+      expect(received).toHaveLength(1);
     });
 
     it('fail generation on an overlay parameter in a location requests do not have', async () => {
@@ -487,6 +496,41 @@ components:
   });
 
   describe('request validation', () => {
+    it('reads the cookie parameters an operation declares, validated, into the service input', { timeout: 180_000 }, async () => {
+      await generateProject(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /cart:
+    get:
+      operationId: getCart
+      x-micro-contracts-service: Cart
+      x-micro-contracts-method: getCart
+      parameters:
+        - { name: cart_id, in: cookie, required: true, schema: { type: string, minLength: 2 } }
+        - { name: page, in: cookie, required: false, schema: { type: integer } }
+      responses:
+        '200':
+          description: ok
+          content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } }
+`);
+      const served: unknown[] = [];
+      const app = await serve({ cart: { getCart: async (input: unknown) => { served.push(input); return { ok: true }; } } });
+
+      try {
+        const statuses = [];
+        for (const cookie of [undefined, 'cart_id=c', 'cart_id=c1; page=x', 'theme=dark; cart_id=c1; page=3', 'cart_id=c2']) {
+          statuses.push((await app.inject({ method: 'GET', url: '/cart', headers: cookie ? { cookie } : {} })).statusCode);
+        }
+        expect(statuses).toEqual([400, 400, 400, 200, 200]);
+        expect(served).toEqual([{ cart_id: 'c1', page: 3 }, { cart_id: 'c2' }]);
+      } finally {
+        await app.close();
+      }
+      expect(typecheck()).toBe('');
+    });
+
+
     it('refuses a request without a required header the operation declares, before the service', { timeout: 180_000 }, async () => {
       await generateProject(`
 openapi: 3.0.3

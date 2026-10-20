@@ -18,7 +18,44 @@ import * as types from '{{contractPackage}}/schemas/types.js';
 {{!-- A header schema is given inline: Fastify matches header names case-insensitively only in an inline schema --}}
 import { {{#each routes}}{{#if parameterSchemas.header}}{{parameterSchemas.header}}, {{/if}}{{/each~}} } from '{{contractPackage}}/schemas/validators.js';
 {{#if extensionInfo.length}}
-import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
+import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
+{{/if}}
+{{#if readsCookies}}
+
+/**
+ * The cookies of a Cookie header (\`name=value; name=value\`), by name.
+ * Of two cookies with one name, the first is kept: it is the more specific.
+ */
+function parseCookies(header: string | string[] | undefined): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const pair of [header ?? []].flat().join('; ').split(';')) {
+    const separator = pair.indexOf('=');
+    const name = pair.slice(0, separator).trim();
+    if (separator < 0 || !name || cookies.has(name)) continue;
+
+    let value = pair.slice(separator + 1).trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+{{/if}}
+{{#if extensionInfo.length}}
+
+/** The request as the overlays read it */
+function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>): HttpRequest {
+  return {
+    headers: req.headers as Record<string, string | string[] | undefined>,
+    params: req.params as Record<string, string>,
+    query: req.query as Record<string, unknown>,
+    cookies,
+    body: req.body,
+  };
+}
 {{/if}}
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
@@ -41,6 +78,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 
 {{#each routes}}
   // {{uppercase method}} {{path}}{{#if isPublished}} [PUBLISHED]{{/if}}
+{{#if parameterSchemas.cookie}}
+  {{!-- Fastify parses no cookies: the route validates them, with the validator Fastify validates the rest with --}}
+  const {{parameterSchemas.cookie}} = { $ref: '{{parameterSchemas.cookie}}#' };
+{{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
 {{#if parameterSchemas.path}}
@@ -60,8 +101,25 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{/if}}
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
+{{#if (or cookieParams.length extensions.length)}}
+    const cookies = parseCookies(req.headers.cookie);
+{{/if}}
+{{#if parameterSchemas.cookie}}
+    const cookieParams: Record<string, unknown> = {};
+    for (const name of [{{#each cookieParams}}'{{name}}', {{/each~}} ]) {
+      const value = cookies.get(name);
+      if (value !== undefined) cookieParams[name] = value;
+    }
+    const validateCookies = req.compileValidationSchema({{parameterSchemas.cookie}});
+    if (!validateCookies(cookieParams)) {
+      throw Object.assign(
+        new Error((validateCookies.errors ?? []).map(e => \`cookies\${e.instancePath} \${e.message}\`).join(', ')),
+        { statusCode: 400, validation: validateCookies.errors, validationContext: 'cookies' },
+      );
+    }
+{{/if}}
 {{#if extensions.length}}
-    const result = await runOverlays('{{operationId}}', handlers, toHttpRequest(req));
+    const result = await runOverlays('{{operationId}}', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
 {{/if}}
     // Build input object (always required, even if empty)
@@ -71,6 +129,9 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{/if}}
 {{#if queryParams.length}}
       ...(req.query as types.{{typeNameBase}}Params),
+{{/if}}
+{{#if cookieParams.length}}
+      ...(cookieParams as unknown as types.{{typeNameBase}}Params),
 {{/if}}
 {{#if requestBody}}
       data: req.body as types.{{requestBody.schemaName}},
@@ -228,7 +289,7 @@ import type { ProblemDetails } from '{{contractPackage}}/schemas/types.js';
 // Types
 // ==========================================================================
 
-/** HTTP request abstraction */
+/** HTTP request abstraction: what a route hands the overlays */
 export interface HttpRequest {
   headers: Record<string, string | string[] | undefined>;
   params: Record<string, string>;
@@ -350,42 +411,6 @@ export async function runOverlays(
   }
 
   return { success: true, context };
-}
-
-/**
- * Build HttpRequest from Fastify request
- */
-export function toHttpRequest(req: { headers: unknown; params: unknown; query: unknown; body: unknown }): HttpRequest {
-  const headers = req.headers as Record<string, string | string[] | undefined>;
-  return {
-    headers,
-    params: req.params as Record<string, string>,
-    query: req.query as Record<string, unknown>,
-    cookies: parseCookies(headers.cookie),
-    body: req.body,
-  };
-}
-
-/**
- * The cookies of a Cookie header (\`name=value; name=value\`), by name.
- * Of two cookies with one name, the first is kept: it is the more specific.
- */
-function parseCookies(header: string | string[] | undefined): Map<string, string> {
-  const cookies = new Map<string, string>();
-  for (const pair of [header ?? []].flat().join('; ').split(';')) {
-    const separator = pair.indexOf('=');
-    const name = pair.slice(0, separator).trim();
-    if (separator < 0 || !name || cookies.has(name)) continue;
-
-    let value = pair.slice(separator + 1).trim();
-    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-    try {
-      cookies.set(name, decodeURIComponent(value));
-    } catch {
-      cookies.set(name, value);
-    }
-  }
-  return cookies;
 }
 
 /**

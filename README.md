@@ -622,16 +622,22 @@ export class UserService implements UserServiceApi {
 ### Validators
 
 `schemas/validators.ts` holds every schema as the JSON Schema Fastify validates requests and
-serializes responses with, plus the path, query and header parameter schemas of each
-operation (`<Service>_<method>PathParams`, `…QueryParams`, `…HeaderParams`) and its inline
-request body and response schemas (`…Body`; `…Response` for the success response, and
-`…404Response`, `…4XXResponse` or `…DefaultResponse` for another). `schemas/types.ts` names the
-inline body types the same way. A header parameter schema names headers in lower case, as a
+serializes responses with, plus the path, query, header and cookie parameter schemas of each
+operation (`<Service>_<method>PathParams`, `…QueryParams`, `…HeaderParams`, `…CookieParams`)
+and its inline request body and response schemas (`…Body`; `…Response` for the success
+response, and `…404Response`, `…4XXResponse` or `…DefaultResponse` for another).
+`schemas/types.ts` names the inline body types the same way. A header parameter schema names headers in lower case, as a
 request delivers them, and is not in `allSchemas`: the starter routes give it to Fastify
 inline (`schema.headers`), since Fastify matches header names case-insensitively only in an
-inline schema. A request missing a required header, or carrying one that does not match its
-schema, is answered with 400 before the service runs. Every validation keyword of the contract is kept. Only what JSON Schema spells
-differently is translated (`$ref`, `nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` /
+inline schema. Fastify does not parse cookies, so a starter route reads the cookie parameters
+from the Cookie header and validates them against `…CookieParams` with the validator Fastify
+validates the rest with (`request.compileValidationSchema`). A request missing a required
+header or cookie, or carrying one that does not match its schema, is answered with 400 before
+the service runs. The service's input holds the path, query and cookie parameters; headers
+are validated only.
+
+Every validation keyword of the contract is kept. Only what JSON Schema spells differently is
+translated (`$ref`, `nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` /
 `exclusiveMaximum`), and what never validates is left out: `x-*` extensions, the annotations
 `example`, `examples`, `xml`, `externalDocs` and `discriminator`, and `$id` / `$schema` (each
 schema is named by its component name). A `oneOf` selects its member by validating each one,

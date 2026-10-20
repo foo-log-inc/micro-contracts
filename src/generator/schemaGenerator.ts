@@ -181,11 +181,12 @@ function convertSubschema(value: unknown, spec: OpenAPISpec): unknown {
 /**
  * The schemas operations need beyond components.schemas:
  *
- * - `<base>PathParams`, `<base>QueryParams` and `<base>HeaderParams`, one per
- *   request location, which is how Fastify validates them (`schema.params`,
- *   `schema.querystring` and `schema.headers`). A single schema holding them
- *   all validates no location: its required path parameters would be
- *   demanded of the query.
+ * - `<base>PathParams`, `<base>QueryParams`, `<base>HeaderParams` and
+ *   `<base>CookieParams`, one per request location, which is how a route
+ *   validates them (Fastify's `schema.params`, `schema.querystring` and
+ *   `schema.headers`; cookies, which Fastify does not parse, by the route
+ *   itself). A single schema holding them all validates no location: its
+ *   required path parameters would be demanded of the query.
  * - an inline request body and every inline response body, under the names
  *   types.ts gives them.
  *

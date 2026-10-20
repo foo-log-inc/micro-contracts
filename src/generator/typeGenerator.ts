@@ -310,11 +310,16 @@ function getOperationTypeName(operation: OperationObject): string {
 }
 
 /** The request locations whose parameters are validated, and the suffix of each one's schema. */
-const PARAMETER_SCHEMA_SUFFIXES = { path: 'PathParams', query: 'QueryParams', header: 'HeaderParams' } as const;
+const PARAMETER_SCHEMA_SUFFIXES = {
+  path: 'PathParams', query: 'QueryParams', header: 'HeaderParams', cookie: 'CookieParams',
+} as const;
 
-/** The parameters an operation's Params type is made of: path and query. */
+/**
+ * The parameters an operation's Params type is made of: path, query and
+ * cookie. Headers are validated but left out of the service's input.
+ */
 function paramsTypeMembers(resolved: ResolvedOperation): ParameterObject[] {
-  return resolved.parameters.filter(p => p.in === 'query' || p.in === 'path');
+  return resolved.parameters.filter(p => p.in === 'query' || p.in === 'path' || p.in === 'cookie');
 }
 
 /**
@@ -402,7 +407,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
       }
 
       // Generate Input type that combines params and body
-      // - params are flattened (path + query combined)
+      // - params are flattened (path, query and cookie combined)
       // - body becomes 'data' (not HTTP-specific)
       // - Always generate (empty object for parameterless operations)
       if (!generatedTypes.has(inputTypeName)) {
@@ -418,7 +423,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
 
 /**
  * Generate Input type that combines params and body
- * - params (path + query) are flattened (HTTP details hidden)
+ * - params (path, query and cookie) are flattened (HTTP details hidden)
  * - body is renamed to 'data' (not HTTP-specific naming)
  * - parameterless operations get empty object type
  * 
@@ -435,7 +440,7 @@ function generateInputType(
 ): string {
   const parts: string[] = [];
   
-  // Flatten params (path + query parameters become direct properties)
+  // Flatten params (path, query and cookie parameters become direct properties)
   if (paramsType) {
     parts.push(paramsType);
   }
@@ -457,7 +462,7 @@ function generateInputType(
 }
 
 /**
- * Generate params interface (combines path + query parameters)
+ * Generate params interface (combines path, query and cookie parameters)
  */
 function generateParamsType(
   name: string,

@@ -8,7 +8,40 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/billing/schemas/index.js';
 import * as types from '@project/contract/billing/schemas/types.js';
 import { Billing_getInvoicesHeaderParams, Billing_createInvoiceHeaderParams, Billing_getInvoiceByIdHeaderParams, Billing_payInvoiceHeaderParams, } from '@project/contract/billing/schemas/validators.js';
-import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
+import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
+
+/**
+ * The cookies of a Cookie header (`name=value; name=value`), by name.
+ * Of two cookies with one name, the first is kept: it is the more specific.
+ */
+function parseCookies(header: string | string[] | undefined): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const pair of [header ?? []].flat().join('; ').split(';')) {
+    const separator = pair.indexOf('=');
+    const name = pair.slice(0, separator).trim();
+    if (separator < 0 || !name || cookies.has(name)) continue;
+
+    let value = pair.slice(separator + 1).trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+
+/** The request as the overlays read it */
+function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>): HttpRequest {
+  return {
+    headers: req.headers as Record<string, string | string[] | undefined>,
+    params: req.params as Record<string, string>,
+    query: req.query as Record<string, unknown>,
+    cookies,
+    body: req.body,
+  };
+}
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // A component referenced from a shared file is a schema of every module that
@@ -34,7 +67,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'InvoiceListResponse#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('getInvoices', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('getInvoices', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_getInvoicesInput = {
@@ -52,7 +86,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '201': { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('createInvoice', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('createInvoice', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_createInvoiceInput = {
@@ -70,7 +105,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('getInvoiceById', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('getInvoiceById', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_getInvoiceByIdInput = {
@@ -89,7 +125,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'PaymentResult#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('payInvoice', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('payInvoice', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_payInvoiceInput = {

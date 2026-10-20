@@ -452,7 +452,7 @@ actions:
         path.join(tmpDir, 'server/src/core/routes.generated.ts'),
         'utf-8'
       );
-      expect(routesContent).toContain("runOverlays('getUsers', handlers, toHttpRequest(req))");
+      expect(routesContent).toContain("runOverlays('getUsers', handlers, toHttpRequest(req, cookies))");
     });
 
     it('should filter to specific modules', async () => {

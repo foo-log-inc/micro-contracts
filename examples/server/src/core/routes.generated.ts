@@ -8,7 +8,40 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/core/schemas/index.js';
 import * as types from '@project/contract/core/schemas/types.js';
 import { User_getUsersHeaderParams, User_createUserHeaderParams, User_getUserByIdHeaderParams, User_updateUserHeaderParams, User_deleteUserHeaderParams, Tenant_getDataHeaderParams, Tenant_createDataHeaderParams, Admin_getStatsHeaderParams, Admin_suspendUserHeaderParams, Health_checkHeaderParams, } from '@project/contract/core/schemas/validators.js';
-import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
+import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
+
+/**
+ * The cookies of a Cookie header (`name=value; name=value`), by name.
+ * Of two cookies with one name, the first is kept: it is the more specific.
+ */
+function parseCookies(header: string | string[] | undefined): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const pair of [header ?? []].flat().join('; ').split(';')) {
+    const separator = pair.indexOf('=');
+    const name = pair.slice(0, separator).trim();
+    if (separator < 0 || !name || cookies.has(name)) continue;
+
+    let value = pair.slice(separator + 1).trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+
+/** The request as the overlays read it */
+function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>): HttpRequest {
+  return {
+    headers: req.headers as Record<string, string | string[] | undefined>,
+    params: req.params as Record<string, string>,
+    query: req.query as Record<string, unknown>,
+    cookies,
+    body: req.body,
+  };
+}
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // A component referenced from a shared file is a schema of every module that
@@ -34,7 +67,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'UserListResponse#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('getUsers', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('getUsers', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.User_getUsersInput = {
@@ -52,7 +86,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '201': { $ref: 'User#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('createUser', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('createUser', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.User_createUserInput = {
@@ -70,7 +105,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'User#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('getUserById', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('getUserById', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.User_getUserByIdInput = {
@@ -89,7 +125,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'User#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('updateUser', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('updateUser', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.User_updateUserInput = {
@@ -107,7 +144,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       headers: User_deleteUserHeaderParams,
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('deleteUser', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('deleteUser', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.User_deleteUserInput = {
@@ -124,7 +162,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'TenantData#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('getTenantData', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('getTenantData', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Tenant_getDataInput = {
@@ -141,7 +180,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '201': { $ref: 'TenantData#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('createTenantData', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('createTenantData', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Tenant_createDataInput = {
@@ -158,7 +198,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'SystemStats#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('getSystemStats', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('getSystemStats', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Admin_getStatsInput = {
@@ -176,7 +217,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       response: { '200': { $ref: 'User#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('suspendUser', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('suspendUser', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Admin_suspendUserInput = {

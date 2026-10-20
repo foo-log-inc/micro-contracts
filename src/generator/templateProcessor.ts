@@ -49,6 +49,8 @@ export interface TemplateContext {
   schemaNames: string[];
   /** Unique overlays with their parameters (for overlay adapter generation) */
   uniqueOverlays: UniqueOverlayContext[];
+  /** Some route reads the request's cookies: for a cookie parameter, or for its overlays */
+  readsCookies: boolean;
   /** Screen contexts extracted from screen spec (populated when screen mode is enabled) */
   screens: ScreenContext[];
 }
@@ -147,12 +149,14 @@ interface RouteContext {
   queryParams: ParameterContext[];
   /** Path parameters */
   pathParams: ParameterContext[];
+  /** Cookie parameters */
+  cookieParams: ParameterContext[];
   /**
-   * The validation schema of the path, query and header parameters, for each
-   * location the operation has parameters in. A header schema names headers
-   * in lower case and is not registered: a route gives it inline.
+   * The validation schema of the path, query, header and cookie parameters,
+   * for each location the operation has parameters in. A header schema names
+   * headers in lower case and is not registered: a route gives it inline.
    */
-  parameterSchemas: { path?: string; query?: string; header?: string };
+  parameterSchemas: { path?: string; query?: string; header?: string; cookie?: string };
   /** Request body info */
   requestBody?: {
     schemaName: string;
@@ -299,6 +303,7 @@ export function buildTemplateContext(
     schemaTypes,
     schemaNames,
     uniqueOverlays,
+    readsCookies: routes.some(r => r.cookieParams.length > 0 || r.extensions.length > 0),
     screens,
   };
 }
@@ -487,6 +492,9 @@ function extractRoutes(
       const pathParams = resolved.parameters
         .filter(p => p.in === 'path')
         .map(p => ({ name: p.name, required: true }));
+      const cookieParams = resolved.parameters
+        .filter(p => p.in === 'cookie')
+        .map(p => ({ name: p.name, required: p.required || false }));
 
       // Extract request body, under the name types.ts and validators.ts give it
       let requestBody: RouteContext['requestBody'];
@@ -541,6 +549,7 @@ function extractRoutes(
         extensionParams,
         queryParams,
         pathParams,
+        cookieParams,
         parameterSchemas: typeNames.parameterSchemas,
         requestBody,
         responses,
