@@ -64,11 +64,12 @@ declare module 'fastify' {
 async function buildServer(): Promise<FastifyInstance> {
   const fastify = Fastify({
     logger: true,
+    // Fastify's default validator options, except removeAdditional: removing
+    // properties while trying each member of a oneOf / anyOf rejects or
+    // changes valid values (see the README, Validators).
     ajv: {
       customOptions: {
-        removeAdditional: 'all',
-        coerceTypes: true,
-        useDefaults: true,
+        removeAdditional: false,
       },
     },
   });

@@ -11,7 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execFileSync } from 'child_process';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { generate } from '../src/generator/index.js';
 import { getStarterTemplates } from '../src/cli/templates.js';
 import type { MultiModuleConfig, OutputConfig } from '../src/types.js';
@@ -122,9 +122,10 @@ describe('starter templates', () => {
   async function serve(
     services: Record<string, Record<string, unknown>>,
     overlayHandlers?: Record<string, unknown>,
+    options: FastifyServerOptions = {},
   ): Promise<FastifyInstance> {
     const { registerRoutes } = await import(path.join(tmpDir, 'server/routes.generated.ts'));
-    const app = Fastify();
+    const app = Fastify(options);
     app.decorate('services', { m: services });
     if (overlayHandlers) app.decorate('overlayHandlers', overlayHandlers);
     await registerRoutes(app);
@@ -419,6 +420,99 @@ components:
       expect(stubs).toContain('export class OrderService implements OrderServiceApi {');
       expect(stubs).toContain('export class StatsService implements StatsServiceApi {');
       expect(typecheck()).toBe('');
+    });
+  });
+
+  describe('request validation', () => {
+    it('accepts every oneOf member, tagged or not, unchanged, with the validator options the README gives', async () => {
+      await generateProject(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /messages:
+    post:
+      operationId: postMessage
+      x-micro-contracts-service: Msg
+      x-micro-contracts-method: postMessage
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } }
+      responses:
+        '200': { description: ok }
+  /notes:
+    post:
+      operationId: postNote
+      x-micro-contracts-service: Msg
+      x-micro-contracts-method: postNote
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Note' } } }
+      responses:
+        '200': { description: ok }
+  /plain:
+    post:
+      operationId: postPlain
+      x-micro-contracts-service: Msg
+      x-micro-contracts-method: postPlain
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Plain' } } }
+      responses:
+        '200': { description: ok }
+components:
+  schemas:
+    Ping:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties: { kind: { type: string, enum: [ping] } }
+    Text:
+      type: object
+      additionalProperties: false
+      required: [kind, text]
+      properties: { kind: { type: string, enum: [text] }, text: { type: string } }
+    TextOptional:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties: { kind: { type: string, enum: [text] }, text: { type: string } }
+    Message:
+      oneOf: [ { $ref: '#/components/schemas/Ping' }, { $ref: '#/components/schemas/Text' } ]
+      discriminator: { propertyName: kind }
+    Note:
+      oneOf: [ { $ref: '#/components/schemas/Ping' }, { $ref: '#/components/schemas/TextOptional' } ]
+      discriminator: { propertyName: kind }
+    Plain:
+      oneOf: [ { $ref: '#/components/schemas/Ping' }, { $ref: '#/components/schemas/TextOptional' } ]
+`);
+      const received: unknown[] = [];
+      const record = async (input: unknown) => { received.push(input); };
+      // README, Validators: Fastify's default validator options, with removeAdditional: false
+      const app = await serve(
+        { msg: { postMessage: record, postNote: record, postPlain: record } },
+        undefined,
+        { ajv: { customOptions: { removeAdditional: false } } },
+      );
+
+      try {
+        const statuses = [];
+        for (const url of ['/messages', '/notes', '/plain']) {
+          for (const payload of [{ kind: 'text', text: 'hello' }, { kind: 'ping' }]) {
+            statuses.push((await app.inject({ method: 'POST', url, payload })).statusCode);
+          }
+        }
+        expect(statuses).toEqual([200, 200, 200, 200, 200, 200]);
+        expect(received).toEqual([
+          { data: { kind: 'text', text: 'hello' } }, { data: { kind: 'ping' } },
+          { data: { kind: 'text', text: 'hello' } }, { data: { kind: 'ping' } },
+          { data: { kind: 'text', text: 'hello' } }, { data: { kind: 'ping' } },
+        ]);
+
+        const invalid = await app.inject({ method: 'POST', url: '/messages', payload: { kind: 'nope' } });
+        expect(invalid.statusCode).toBe(400);
+      } finally {
+        await app.close();
+      }
     });
   });
 });

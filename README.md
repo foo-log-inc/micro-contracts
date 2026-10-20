@@ -623,19 +623,30 @@ export class UserService implements UserServiceApi {
 serializes responses with, plus the path, query, inline request body and inline success
 response schemas of each operation (`<Service>_<method>PathParams`, `…QueryParams`, `…Body`,
 `…Response`). `schemas/types.ts` names the inline request body and success response types
-the same way. Every validation keyword
-of the contract is kept. Only what JSON Schema spells differently is translated (`$ref`,
-`nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` / `exclusiveMaximum`), and what never
-validates is left out: `x-*` extensions, the annotations `example`, `examples`, `xml`,
-`externalDocs` and `discriminator`, and `$id` / `$schema` (each schema is named by its
-component name).
+the same way. Every validation keyword of the contract is kept. Only what JSON Schema spells
+differently is translated (`$ref`, `nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` /
+`exclusiveMaximum`), and what never validates is left out: `x-*` extensions, the annotations
+`example`, `examples`, `xml`, `externalDocs` and `discriminator`, and `$id` / `$schema` (each
+schema is named by its component name). A `oneOf` selects its member by validating each one,
+so a member is chosen by its `discriminator` tag when each member fixes the tag with `enum` or
+`const`.
+
+Validate with Fastify's default validator options except `removeAdditional`, set to `false`.
+Ajv validates each member of a `oneOf` or `anyOf` against the value itself, and with
+`removeAdditional: true` — Fastify's default — validating a member removes every property that
+member's `additionalProperties: false` does not allow, whether or not the member matches: a
+valid value is rejected, or reaches the service with properties missing. With `false`, a
+property a schema does not allow is rejected rather than removed.
+
+```typescript
+const fastify = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
+```
 
 Fastify validates with Ajv on JSON Schema draft-07. A contract using the keywords JSON Schema
 2019-09 / 2020-12 added — `prefixItems`, `dependentRequired`, `dependentSchemas`,
 `minContains` / `maxContains`, `unevaluatedProperties` / `unevaluatedItems` — stops Fastify
 from starting (`strict mode: unknown keyword`). To use them, validate with Ajv on the 2020-12
-dialect, with the options Fastify validates with by default (add `ajv` and `ajv-formats` to
-your dependencies). A validator set this way does not read `fastify.addSchema`, so it is given
+dialect, with the options above (add `ajv` and `ajv-formats` to your dependencies). A validator set this way does not read `fastify.addSchema`, so it is given
 the generated schemas itself; the generated routes still register them with Fastify, which
 serializes responses with them.
 
@@ -645,8 +656,8 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import ajvFormats from 'ajv-formats';
 import { allSchemas } from '@project/contract/core/schemas/index.js';
 
-// The options Fastify validates with by default, on the 2020-12 dialect.
-const ajv = new Ajv2020({ coerceTypes: 'array', useDefaults: true, removeAdditional: true, allErrors: false });
+// Fastify's default validator options with removeAdditional: false, on the 2020-12 dialect.
+const ajv = new Ajv2020({ coerceTypes: 'array', useDefaults: true, removeAdditional: false, allErrors: false });
 ajvFormats.default(ajv);
 // A custom validator does not read fastify.addSchema: give it every module's schemas, once each.
 for (const schema of allSchemas) {
