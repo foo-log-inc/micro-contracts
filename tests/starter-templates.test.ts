@@ -524,6 +524,13 @@ paths:
         }
         expect(statuses).toEqual([400, 400, 400, 200, 200]);
         expect(served).toEqual([{ cart_id: 'c1', page: 3 }, { cart_id: 'c2' }]);
+
+        // The error handler receives a cookie validation error as it receives Fastify's own
+        const missing = await app.inject({ method: 'GET', url: '/cart' });
+        expect(missing.json()).toEqual({
+          statusCode: 400, code: 'FST_ERR_VALIDATION', error: 'Bad Request',
+          message: "cookies must have required property 'cart_id'",
+        });
       } finally {
         await app.close();
       }

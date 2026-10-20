@@ -247,7 +247,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     if (!validateCookies(cookieParams)) {
       throw Object.assign(
         new Error((validateCookies.errors ?? []).map(e => `cookies${e.instancePath} ${e.message}`).join(', ')),
-        { statusCode: 400, validation: validateCookies.errors, validationContext: 'cookies' },
+        { statusCode: 400, code: 'FST_ERR_VALIDATION', validation: validateCookies.errors, validationContext: 'cookies' },
       );
     }
     // Build input object (always required, even if empty)

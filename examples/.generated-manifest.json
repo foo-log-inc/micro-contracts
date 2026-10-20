@@ -159,9 +159,9 @@
       "sha256": "c2d65bd7d4e69417beadf7230ba43debbb8845babe098fde72b7f09168f84394"
     },
     "server/src/core/routes.generated.ts": {
-      "sha256": "40351070f4a889384108abbead0d311d11b433e36ac1a0671315e1ac54e8ecfb"
+      "sha256": "897da698e40a6390e7589ba0726baa275ff91f3c5c7925b5dcded873840395e3"
     }
   },
-  "inputHash": "0793744448ece6dc22a6b188840a61548882b4c62c8e189b060da2d235aa44a1",
-  "updatedAt": "2026-10-20T08:06:18.162Z"
+  "inputHash": "3f787ba55bba909b22786b7c5e053261c30259473d517bb300eb94fbe050693d",
+  "updatedAt": "2026-10-20T08:21:37.900Z"
 }

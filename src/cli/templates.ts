@@ -112,9 +112,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     }
     const validateCookies = req.compileValidationSchema({{parameterSchemas.cookie}});
     if (!validateCookies(cookieParams)) {
+      {{!-- The error Fastify itself raises for a schema it validates --}}
       throw Object.assign(
         new Error((validateCookies.errors ?? []).map(e => \`cookies\${e.instancePath} \${e.message}\`).join(', ')),
-        { statusCode: 400, validation: validateCookies.errors, validationContext: 'cookies' },
+        { statusCode: 400, code: 'FST_ERR_VALIDATION', validation: validateCookies.errors, validationContext: 'cookies' },
       );
     }
 {{/if}}
