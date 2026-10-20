@@ -179,10 +179,19 @@ interface RouteExtension {
 interface ExtensionParameterContext {
   extensionName: string;
   name: string;
-  location: 'headers' | 'query' | 'params';
+  /** The property of the overlay adapter's request the parameter is read from */
+  location: 'headers' | 'query' | 'params' | 'cookies';
   tsType: string;
   required: boolean;
 }
+
+/** The request property each OpenAPI parameter location (`in`) is read from. */
+const REQUEST_LOCATIONS: Record<ParameterObject['in'], ExtensionParameterContext['location']> = {
+  header: 'headers',
+  query: 'query',
+  path: 'params',
+  cookie: 'cookies',
+};
 
 interface ParameterContext {
   name: string;
@@ -436,16 +445,18 @@ function extractRoutes(
 
         // Add parameters injected by this extension
         for (const param of info.injectedParameters) {
-          // Map OpenAPI 'in' values to HTTP request property names
-          const locationMap: Record<string, 'headers' | 'query' | 'params'> = {
-            header: 'headers',
-            query: 'query',
-            path: 'params',
-          };
+          // A parameter is read from where it is declared, or not at all:
+          // reading it from anywhere else lets a client supply it there.
+          if (!Object.hasOwn(REQUEST_LOCATIONS, param.in)) {
+            throw new Error(
+              `Overlay '${info.name}' injects parameter '${param.name}' in '${param.in}', ` +
+              `which is not a request location (${Object.keys(REQUEST_LOCATIONS).join(', ')}).`
+            );
+          }
           extensionParams.push({
             extensionName: info.name,
             name: param.name,
-            location: locationMap[param.in] || 'headers',
+            location: REQUEST_LOCATIONS[param.in],
             tsType: parameterToTsType(param),
             required: param.required || false,
           });

@@ -17,6 +17,8 @@ export interface HttpRequest {
   headers: Record<string, string | string[] | undefined>;
   params: Record<string, string>;
   query: Record<string, unknown>;
+  /** The cookies the request carries, by name */
+  cookies: ReadonlyMap<string, string>;
   body: unknown;
 }
 
@@ -33,6 +35,8 @@ const getHeader = (req: HttpRequest, name: string): string | undefined =>
 const getQuery = (req: HttpRequest, name: string): unknown => req.query[name];
 
 const getParam = (req: HttpRequest, name: string): string | undefined => req.params[name];
+
+const getCookie = (req: HttpRequest, name: string): string | undefined => req.cookies.get(name);
 
 /** Overlay parameter extractors - each overlay defined once */
 const extractors: Record<string, ParamExtractor> = {
@@ -125,12 +129,36 @@ export async function runOverlays(
  * Build HttpRequest from Fastify request
  */
 export function toHttpRequest(req: { headers: unknown; params: unknown; query: unknown; body: unknown }): HttpRequest {
+  const headers = req.headers as Record<string, string | string[] | undefined>;
   return {
-    headers: req.headers as Record<string, string | string[] | undefined>,
+    headers,
     params: req.params as Record<string, string>,
     query: req.query as Record<string, unknown>,
+    cookies: parseCookies(headers.cookie),
     body: req.body,
   };
+}
+
+/**
+ * The cookies of a Cookie header (`name=value; name=value`), by name.
+ * Of two cookies with one name, the first is kept: it is the more specific.
+ */
+function parseCookies(header: string | string[] | undefined): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const pair of [header ?? []].flat().join('; ').split(';')) {
+    const separator = pair.indexOf('=');
+    const name = pair.slice(0, separator).trim();
+    if (separator < 0 || !name || cookies.has(name)) continue;
+
+    let value = pair.slice(separator + 1).trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
 }
 
 /**

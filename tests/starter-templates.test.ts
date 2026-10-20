@@ -167,5 +167,59 @@ actions:
         await app.close();
       }
     });
+
+    it('read an in: cookie parameter from the Cookie header, never from a header of that name', async () => {
+      await generateProject(userSpec, {
+        'auth.overlay.yaml': `
+overlay: 1.0.0
+info: { title: auth, version: 1.0.0 }
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'requireAuth')]"
+    update:
+      parameters:
+        - { name: Authorization, in: header, required: true, schema: { type: string } }
+        - { name: session, in: cookie, required: false, schema: { type: string } }
+      responses:
+        '401': { description: Unauthorized }
+`,
+      });
+      const received: Array<Record<string, unknown>> = [];
+      const requireAuth = async (input: Record<string, unknown>) => {
+        received.push(input);
+        return { success: true };
+      };
+      const app = await serve({ user: userService }, { requireAuth });
+
+      try {
+        await app.inject({
+          method: 'GET', url: '/users/ab',
+          headers: { authorization: 'Bearer x', cookie: 'theme=dark; session=s3cr3t%21' },
+        });
+        await app.inject({
+          method: 'GET', url: '/users/ab',
+          headers: { authorization: 'Bearer x', session: 'forged' },
+        });
+        expect(received).toEqual([
+          { Authorization: 'Bearer x', session: 's3cr3t!' },
+          { Authorization: 'Bearer x', session: undefined },
+        ]);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('fail generation on an overlay parameter in a location requests do not have', async () => {
+      await expect(generateProject(userSpec, {
+        'auth.overlay.yaml': `
+overlay: 1.0.0
+info: { title: auth, version: 1.0.0 }
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'requireAuth')]"
+    update:
+      parameters:
+        - { name: token, in: body, schema: { type: string } }
+`,
+      })).rejects.toThrow(/'token'.*'body'/);
+    });
   });
 });
