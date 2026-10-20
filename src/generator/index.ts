@@ -558,7 +558,10 @@ async function generateFromOutputs(
     const expandPlaceholder = (val: string | undefined, fallback: string) =>
       (val?.replace(/{module}/g, config.name) ?? fallback);
 
-    const templateContext = buildTemplateContext(spec, config.name, {
+    // An output under hasPublicEndpoints exists for the published contract, and
+    // is rendered over what that contract carries: its operations and schemas.
+    const renderedSpec = output.condition === 'hasPublicEndpoints' ? filterPublicSpec(spec) : spec;
+    const templateContext = buildTemplateContext(renderedSpec, config.name, {
       servicesPath: expandPlaceholder(output.config?.servicesPath as string | undefined, `fastify.services.${config.name}`),
       contractPackage: expandPlaceholder(output.config?.contractPackage as string | undefined, `@project/contract/${config.name}`),
       extensionInfo: overlayResult?.extensionInfo,

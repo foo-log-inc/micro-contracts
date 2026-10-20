@@ -35,8 +35,10 @@ describe('starter templates', () => {
    * Generate module `m` from `spec` (and `overlays`, by file name) with the
    * starter templates as init writes them, into tmpDir:
    * contract/m, server/{routes,overlayAdapter,lambda}.generated.ts,
-   * server/{services,overlays}.stubs.ts and frontend/api.generated.ts. The
-   * project resolves packages from this repository's node_modules.
+   * server/{services,overlays}.stubs.ts and frontend/api.generated.ts, and for
+   * a module with published operations contract-published/m and init's shared
+   * client of it, frontend/shared.api.generated.ts. The project resolves
+   * packages from this repository's node_modules.
    */
   async function generateProject(spec: string, overlays: Record<string, string> = {}): Promise<void> {
     const templatesDir = path.join(tmpDir, 'templates');
@@ -71,6 +73,11 @@ describe('starter templates', () => {
           'lambda-routes': output('server/lambda.generated.ts', 'lambda-routes.hbs'),
           'overlay-adapter': output('server/overlayAdapter.generated.ts', 'overlay-adapter.hbs', { condition: 'hasOverlays' }),
           'frontend-client': output('frontend/api.generated.ts', 'fetch-client.hbs'),
+          // init's shared client: the fetch client of the published contract
+          'shared-client': output('frontend/shared.api.generated.ts', 'fetch-client.hbs', {
+            condition: 'hasPublicEndpoints',
+            config: { contractPackage: '../contract-published/{module}' },
+          }),
           'service-stubs': output('server/services.stubs.ts', 'service-stubs.hbs'),
           'overlay-stubs': output('server/overlays.stubs.ts', 'overlay-stubs.hbs', { condition: 'hasOverlays' }),
         },
@@ -105,7 +112,7 @@ describe('starter templates', () => {
     const common = { target: 'ES2022', lib: ['ES2022', 'DOM'], strict: true, noEmit: true, skipLibCheck: true };
     const projects = {
       'tsconfig.server.json': { compilerOptions: { ...common, module: 'NodeNext', moduleResolution: 'NodeNext' }, include: ['server', 'contract'] },
-      'tsconfig.frontend.json': { compilerOptions: { ...common, module: 'ESNext', moduleResolution: 'bundler' }, include: ['frontend', 'contract'] },
+      'tsconfig.frontend.json': { compilerOptions: { ...common, module: 'ESNext', moduleResolution: 'bundler' }, include: ['frontend', 'contract', 'contract-published'] },
     };
 
     let diagnostics = '';
@@ -728,6 +735,50 @@ components:
       }
       expect(typecheck()).toBe('');
     });
+  });
+
+  it('generate the shared client over the published operations alone, against the published contract', { timeout: 180_000 }, async () => {
+    // A module mixing published and unpublished operations: the published
+    // contract carries neither the unpublished operations nor what only they use
+    await generateProject(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /pub:
+    get:
+      operationId: pub
+      x-micro-contracts-service: P
+      x-micro-contracts-method: pub
+      x-micro-contracts-published: true
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Pub' } } } }
+  /priv:
+    get:
+      operationId: priv
+      x-micro-contracts-service: P
+      x-micro-contracts-method: priv
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Priv' } } } }
+  /priv-events:
+    get:
+      operationId: privEvents
+      x-micro-contracts-service: P
+      x-micro-contracts-method: privEvents
+      responses:
+        '200': { description: events, content: { text/event-stream: { x-stream-event: { $ref: '#/components/schemas/Ev' } } } }
+components:
+  schemas:
+    Pub: { type: object, properties: { a: { type: string } } }
+    Priv: { type: object, properties: { b: { type: string } } }
+    Ev:
+      oneOf: [ { $ref: '#/components/schemas/EvA' } ]
+      discriminator: { propertyName: type }
+    EvA: { type: object, required: [type], properties: { type: { type: string, enum: [a] } } }
+`);
+    expect(typecheck()).toBe('');
+    const shared = fs.readFileSync(path.join(tmpDir, 'frontend/shared.api.generated.ts'), 'utf-8');
+    expect(shared).toContain('async pub(');
+    expect(shared).not.toMatch(/priv/i);
   });
 
   it('reach a service named ...Service under its ServiceRegistry key', { timeout: 180_000 }, async () => {

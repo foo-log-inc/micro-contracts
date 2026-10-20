@@ -303,7 +303,7 @@ Create `micro-contracts.config.yaml`. All paths support `{module}` placeholder.
 | `outputs.<id>.output` | string | yes | Output file path |
 | `outputs.<id>.template` | string | yes | Handlebars template file path, used as written (resolved from the working directory) |
 | `outputs.<id>.overwrite` | boolean | no | Overwrite existing files (default: `true`) |
-| `outputs.<id>.condition` | string | no | `hasPublicEndpoints` \| `hasOverlays` \| `always` (default: `always`) |
+| `outputs.<id>.condition` | string | no | `hasPublicEndpoints` \| `hasOverlays` \| `always` (default: `always`). An output under `hasPublicEndpoints` is generated for a module with published operations, and rendered over what `contract-published` carries: those operations and their schemas |
 | `outputs.<id>.enabled` | boolean | no | Enable/disable this output (default: `true`) |
 | `outputs.<id>.config` | object | no | Template-specific configuration passed to context |
 
