@@ -32,8 +32,8 @@ describe('starter templates', () => {
   /**
    * Generate module `m` from `spec` (and `overlays`, by file name) with the
    * starter templates as init writes them, into tmpDir:
-   * contract/m, server/{routes,overlayAdapter}.generated.ts and
-   * frontend/api.generated.ts.
+   * contract/m, server/{routes,overlayAdapter}.generated.ts,
+   * server/{services,overlays}.stubs.ts and frontend/api.generated.ts.
    */
   async function generateProject(spec: string, overlays: Record<string, string> = {}): Promise<void> {
     const templatesDir = path.join(tmpDir, 'templates');
@@ -66,6 +66,8 @@ describe('starter templates', () => {
           'server-routes': output('server/routes.generated.ts', 'fastify-routes.hbs'),
           'overlay-adapter': output('server/overlayAdapter.generated.ts', 'overlay-adapter.hbs', { condition: 'hasOverlays' }),
           'frontend-client': output('frontend/api.generated.ts', 'fetch-client.hbs'),
+          'service-stubs': output('server/services.stubs.ts', 'service-stubs.hbs'),
+          'overlay-stubs': output('server/overlays.stubs.ts', 'overlay-stubs.hbs', { condition: 'hasOverlays' }),
         },
       },
       modules: { m: { openapi: specPath } },
@@ -251,6 +253,27 @@ actions:
       }
     });
 
+    it('generate handler stubs that implement the overlay registry', { timeout: 180_000 }, async () => {
+      await generateProject(userSpec, {
+        'auth.overlay.yaml': authOverlay,
+        'audit.overlay.yaml': `
+overlay: 1.0.0
+info: { title: audit, version: 1.0.0 }
+actions:
+  - target: "$.paths[*][*]"
+    x-micro-contracts-overlay-name: audit
+    update:
+      parameters:
+        - { name: session, in: cookie, schema: { type: string } }
+`,
+      });
+
+      const stubs = fs.readFileSync(path.join(tmpDir, 'server/overlays.stubs.ts'), 'utf-8');
+      expect(stubs).toContain('export async function requireAuth(input: RequireAuthOverlayInput)');
+      expect(stubs).toContain('export async function audit(input: AuditOverlayInput)');
+      expect(typecheck()).toBe('');
+    });
+
     it('fail generation on an overlay parameter in a location requests do not have', async () => {
       await expect(generateProject(userSpec, {
         'auth.overlay.yaml': `
@@ -389,5 +412,13 @@ components:
       expect(typecheck()).toBe('');
     });
 
+    it('generate service stubs that implement the service interfaces', { timeout: 180_000 }, async () => {
+      await generateProject(orderSpec.replace('x-micro-contracts-service: Order\n      x-micro-contracts-method: getStats', 'x-micro-contracts-service: Stats\n      x-micro-contracts-method: getStats'));
+
+      const stubs = fs.readFileSync(path.join(tmpDir, 'server/services.stubs.ts'), 'utf-8');
+      expect(stubs).toContain('export class OrderService implements OrderServiceApi {');
+      expect(stubs).toContain('export class StatsService implements StatsServiceApi {');
+      expect(typecheck()).toBe('');
+    });
   });
 });

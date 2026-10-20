@@ -1,26 +1,24 @@
-{{!-- Service implementation stubs template --}}
-{{!-- Generates skeleton implementations for service methods --}}
+{{!-- Service implementation stubs: a class per service, implementing its generated interface --}}
 // Auto-generated service stubs - Edit to implement business logic
-import type { {{#each services}}{{this}}ServiceApi{{#unless @last}}, {{/unless}}{{/each}} } from '{{config.contractPackage}}/services';
-import type * as types from '{{config.contractPackage}}/schemas/types';
+import type { {{#each services}}{{name}}ServiceApi{{#unless @last}}, {{/unless}}{{/each}} } from '{{contractPackage}}/services/index.js';
+import type * as types from '{{contractPackage}}/schemas/types.js';
 
 {{#each services}}
 /**
- * {{this}} Service Implementation
- * 
+ * {{name}} Service Implementation
+ *
  * Implement the methods below with your business logic.
- * Generated methods receive HTTP-agnostic input objects.
+ * Methods receive HTTP-agnostic input objects.
  */
-export class {{this}}Service implements {{this}}ServiceApi {
-{{#each ../operations}}
-{{#if (eq service ../this)}}
+export class {{name}}Service implements {{name}}ServiceApi {
+{{#each ../routes}}
+{{#if (eq service ../name)}}
   /**
-   * {{summary}}
-   * {{method}} {{path}}
+   * {{httpMethod}} {{path}}{{#if summary}}: {{summary}}{{/if}}
    */
-  async {{serviceMethod}}({{#if inputType}}input: types.{{inputType}}{{/if}}): Promise<types.{{responseType}}> {
+  async {{serviceMethod}}(input: types.{{inputType}}): Promise<{{#if (eq responseType "void")}}void{{else}}types.{{responseType}}{{/if}}> {
     // TODO: Implement {{serviceMethod}}
-    throw new Error('Not implemented: {{serviceMethod}}');
+    throw new Error('Not implemented: {{service}}.{{serviceMethod}}');
   }
 
 {{/if}}

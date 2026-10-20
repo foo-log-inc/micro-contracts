@@ -179,29 +179,27 @@ export const {{key}}Api: {{name}}ServiceApi = {
 {{/each}}
 `;
 
-const STARTER_SERVICE_STUBS_TEMPLATE = `{{!-- Service implementation stubs template --}}
-{{!-- Generates skeleton implementations for service methods --}}
+const STARTER_SERVICE_STUBS_TEMPLATE = `{{!-- Service implementation stubs: a class per service, implementing its generated interface --}}
 // Auto-generated service stubs - Edit to implement business logic
-import type { {{#each services}}{{this}}ServiceApi{{#unless @last}}, {{/unless}}{{/each}} } from '{{config.contractPackage}}/services';
-import type * as types from '{{config.contractPackage}}/schemas/types';
+import type { {{#each services}}{{name}}ServiceApi{{#unless @last}}, {{/unless}}{{/each}} } from '{{contractPackage}}/services/index.js';
+import type * as types from '{{contractPackage}}/schemas/types.js';
 
 {{#each services}}
 /**
- * {{this}} Service Implementation
- * 
+ * {{name}} Service Implementation
+ *
  * Implement the methods below with your business logic.
- * Generated methods receive HTTP-agnostic input objects.
+ * Methods receive HTTP-agnostic input objects.
  */
-export class {{this}}Service implements {{this}}ServiceApi {
-{{#each ../operations}}
-{{#if (eq service ../this)}}
+export class {{name}}Service implements {{name}}ServiceApi {
+{{#each ../routes}}
+{{#if (eq service ../name)}}
   /**
-   * {{summary}}
-   * {{method}} {{path}}
+   * {{httpMethod}} {{path}}{{#if summary}}: {{summary}}{{/if}}
    */
-  async {{serviceMethod}}({{#if inputType}}input: types.{{inputType}}{{/if}}): Promise<types.{{responseType}}> {
+  async {{serviceMethod}}(input: types.{{inputType}}): Promise<{{#if (eq responseType "void")}}void{{else}}types.{{responseType}}{{/if}}> {
     // TODO: Implement {{serviceMethod}}
-    throw new Error('Not implemented: {{serviceMethod}}');
+    throw new Error('Not implemented: {{service}}.{{serviceMethod}}');
   }
 
 {{/if}}
@@ -373,45 +371,33 @@ export function sendError(reply: FastifyReply, error: ProblemDetails): void {
 }
 `;
 
-const STARTER_OVERLAY_STUBS_TEMPLATE = `{{!-- Extension implementation stubs template --}}
-{{!-- Generates skeleton implementations for overlay handlers --}}
-// Auto-generated extension stubs - Edit to implement overlay logic
+const STARTER_OVERLAY_STUBS_TEMPLATE = `{{!-- Overlay handler stubs: a handler per overlay, registered in OverlayRegistry --}}
+// Auto-generated overlay handler stubs - Edit to implement overlay logic
 import type {
   OverlayResult,
-{{#each extensionTypes}}
-  {{this}}OverlayInput,
-  {{this}}Overlay,
+{{#each extensionInfo}}
+  {{capitalize name}}OverlayInput,
 {{/each}}
   OverlayRegistry,
-} from '{{config.contractPackage}}/overlays';
+} from '{{contractPackage}}/overlays/index.js';
 
-{{#each extensions}}
+{{#each extensionInfo}}
 /**
  * {{name}} overlay handler
- * 
- * Called when an endpoint has x-middleware: [{{name}}]
- * Returns OverlayResult with success/error status
- */
-export async function {{camelCase name}}(
-  input: {{pascalCase name}}OverlayInput
-): Promise<OverlayResult> {
-  // TODO: Implement {{name}} logic
-{{#if injectedParameters}}
-  // Input parameters:
+ *
+ * Runs before every operation the overlay applies to. Return
+ * { success: false, error: { status, message, code } } to refuse the request.
+{{#if injectedParameters.length}}
+ *
+ * Input parameters:
 {{#each injectedParameters}}
-  // - {{name}}: {{schema.type}}{{#if required}} (required){{/if}}
+ * - {{name}} (in: {{this.in}}){{#if required}} required{{/if}}
 {{/each}}
 {{/if}}
-
-  // Example implementation:
-  // if (!validateSomething(input)) {
-  //   return {
-  //     success: false,
-  //     error: { status: 4xx, message: 'Error message', code: 'ERROR_CODE' },
-  //   };
-  // }
-
-  return { success: true, context: { /* optional context for service */ } };
+ */
+export async function {{name}}(input: {{capitalize name}}OverlayInput): Promise<OverlayResult> {
+  // TODO: Implement {{name}}
+  throw new Error('Not implemented: {{name}}');
 }
 
 {{/each}}
@@ -420,8 +406,8 @@ export async function {{camelCase name}}(
  * Register this with your server framework
  */
 export const overlayHandlers: OverlayRegistry = {
-{{#each extensions}}
-  {{camelCase name}}: {{camelCase name}},
+{{#each extensionInfo}}
+  {{name}},
 {{/each}}
 };
 `;
