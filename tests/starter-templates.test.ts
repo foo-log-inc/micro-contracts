@@ -6,7 +6,7 @@
  * — the content init writes — and run the code they generate.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -722,6 +722,204 @@ components:
       } finally {
         await app.close();
       }
+      expect(typecheck()).toBe('');
+    });
+  });
+
+  describe('stream responses', () => {
+    const chatSpec = `
+openapi: 3.0.3
+info: { title: Chat, version: 1.0.0 }
+paths:
+  /chat:
+    post:
+      operationId: chat
+      x-micro-contracts-service: Chat
+      x-micro-contracts-method: chat
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ChatRequest' } } } }
+      responses:
+        '200':
+          description: events
+          content:
+            text/event-stream:
+              x-stream-event:
+                oneOf: [ { $ref: '#/components/schemas/TextDelta' }, { $ref: '#/components/schemas/StreamEnd' } ]
+                discriminator: { propertyName: type }
+  /lines:
+    get:
+      operationId: lines
+      x-micro-contracts-service: Chat
+      x-micro-contracts-method: lines
+      responses:
+        '200':
+          description: events
+          content:
+            application/x-ndjson:
+              x-stream-event: { $ref: '#/components/schemas/ChatEvent' }
+components:
+  schemas:
+    ChatRequest: { type: object, required: [prompt], properties: { prompt: { type: string } } }
+    TextDelta: { type: object, required: [type, text], properties: { type: { type: string, enum: [text] }, text: { type: string } } }
+    StreamEnd: { type: object, required: [type], properties: { type: { type: string, enum: [end] } } }
+    ChatEvent:
+      oneOf: [ { $ref: '#/components/schemas/TextDelta' }, { $ref: '#/components/schemas/StreamEnd' } ]
+      discriminator: { propertyName: type }
+`;
+
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    /** The services closed, by prompt: an iterator's finally block ran. */
+    let closed: string[];
+    const chatService = {
+      async *chat({ data }: { data: { prompt: string } }) {
+        try {
+          if (data.prompt === 'fail') throw Object.assign(new Error('unavailable'), { statusCode: 503 });
+          for (const text of data.prompt.split(' ')) {
+            yield { type: 'text', text, internalNote: 'not in the contract' };
+            await sleep(50);
+          }
+          if (data.prompt.startsWith('bad')) yield { type: 'nope' };
+          while (data.prompt.startsWith('slow')) {
+            yield { type: 'text', text: '.' };
+            await sleep(50);
+          }
+          yield { type: 'end' };
+        } finally {
+          closed.push(data.prompt);
+        }
+      },
+      async *lines() {
+        yield { type: 'text', text: 'a', internalNote: 'not in the contract' };
+        yield { type: 'end' };
+      },
+    };
+
+    /**
+     * Serve the chat spec on a port; returns its base URL. Closing the server
+     * closes every connection: the client opens a spare one after an abort.
+     */
+    async function listen(): Promise<{ app: FastifyInstance; base: string }> {
+      await generateProject(chatSpec);
+      const app = await serve({ chat: chatService }, undefined, { forceCloseConnections: true });
+      await app.listen({ port: 0, host: '127.0.0.1' });
+      return { app, base: `http://127.0.0.1:${(app.server.address() as { port: number }).port}` };
+    }
+
+    /** The body's chunks as they arrive, and how reading ended. */
+    async function chunks(res: Response): Promise<{ received: string[]; ended: 'done' | 'aborted' }> {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      const received: string[] = [];
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) return { received, ended: 'done' };
+          received.push(decoder.decode(value));
+        }
+      } catch {
+        return { received, ended: 'aborted' };
+      }
+    }
+
+    const chat = (base: string, prompt: string, init: RequestInit = {}) => fetch(`${base}/chat`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt }), ...init,
+    });
+
+    beforeEach(() => {
+      closed = [];
+    });
+
+    it('send each event as an SSE frame as the service yields it, shaped by the event schema', async () => {
+      const { app, base } = await listen();
+      try {
+        const res = await chat(base, 'hello world');
+        expect(res.status).toBe(200);
+        expect(res.headers.get('content-type')).toBe('text/event-stream');
+        const { received, ended } = await chunks(res);
+        expect(ended).toBe('done');
+        // The first frame arrives on its own, before the service yields the next event
+        expect(received[0]).toBe('event: text\ndata: {"type":"text","text":"hello"}\n\n');
+        expect(received.join('')).toBe(
+          'event: text\ndata: {"type":"text","text":"hello"}\n\n' +
+          'event: text\ndata: {"type":"text","text":"world"}\n\n' +
+          'event: end\ndata: {"type":"end"}\n\n'
+        );
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('send each event as an NDJSON line', async () => {
+      const { app, base } = await listen();
+      try {
+        const res = await fetch(`${base}/lines`);
+        expect(res.headers.get('content-type')).toBe('application/x-ndjson');
+        expect(await res.text()).toBe('{"type":"text","text":"a"}\n{"type":"end"}\n');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('end the stream at an event the contract does not declare, and close the service', async () => {
+      const { app, base } = await listen();
+      try {
+        const { received, ended } = await chunks(await chat(base, 'bad one'));
+        expect(ended).toBe('aborted');
+        expect(received.join('')).toBe(
+          'event: text\ndata: {"type":"text","text":"bad"}\n\n' +
+          'event: text\ndata: {"type":"text","text":"one"}\n\n'
+        );
+        await vi.waitFor(() => expect(closed).toContain('bad one'));
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('close the service when the client goes away', async () => {
+      const { app, base } = await listen();
+      try {
+        const abort = new AbortController();
+        const res = await chat(base, 'slow', { signal: abort.signal });
+        await res.body!.getReader().read();
+        abort.abort();
+        await vi.waitFor(() => expect(closed).toEqual(['slow']));
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('fail before the first event through the error handler, as a JSON operation does', async () => {
+      const { app, base } = await listen();
+      try {
+        const res = await chat(base, 'fail');
+        expect(res.status).toBe(503);
+        expect(res.headers.get('content-type')).toContain('application/json');
+        expect(await res.json()).toMatchObject({ statusCode: 503, message: 'unavailable' });
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('deliver the events to the generated client as a typed AsyncIterable', async () => {
+      const { app, base } = await listen();
+      vi.stubEnv('VITE_API_BASE_URL', base);
+      try {
+        const { chatApi } = await import(path.join(tmpDir, 'frontend/api.generated.ts'));
+        const events: unknown[] = [];
+        for await (const event of chatApi.chat({ data: { prompt: 'hello world' } })) events.push(event);
+        expect(events).toEqual([{ type: 'text', text: 'hello' }, { type: 'text', text: 'world' }, { type: 'end' }]);
+
+        const lines: unknown[] = [];
+        for await (const event of chatApi.lines({})) lines.push(event);
+        expect(lines).toEqual([{ type: 'text', text: 'a' }, { type: 'end' }]);
+      } finally {
+        vi.unstubAllEnvs();
+        await app.close();
+      }
+    });
+
+    it('generate routes, a client and stubs that type-check', { timeout: 180_000 }, async () => {
+      await generateProject(chatSpec);
       expect(typecheck()).toBe('');
     });
   });

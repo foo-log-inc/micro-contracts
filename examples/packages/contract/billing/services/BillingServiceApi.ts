@@ -9,7 +9,9 @@ import type {
   Billing_getInvoiceByIdInput,
   Billing_getInvoicesInput,
   Billing_payInvoiceInput,
+  Billing_watchInvoiceInput,
   Invoice,
+  InvoiceEvent,
   InvoiceListResponse,
   PaymentResult,
 } from '../schemas/types.js';
@@ -29,6 +31,12 @@ export interface BillingServiceApi {
    * GET /api/billing/invoices/{id}
    */
   getInvoiceById(input: Billing_getInvoiceByIdInput): Promise<Invoice>;
+
+  /**
+   * GET /api/billing/invoices/{id}/events
+   * @internal Not included in public contract
+   */
+  watchInvoice(input: Billing_watchInvoiceInput): AsyncIterable<InvoiceEvent>;
 
   /**
    * POST /api/billing/invoices/{id}/pay

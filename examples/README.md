@@ -166,7 +166,7 @@ modules:
 
 The following variables are available in templates:
 
-- `{{routes}}` - Array of operations, each with `operationId`, `httpMethod`, `path`, `service`, `serviceMethod`, `inputType`, `responseType`, `successStatus` and more
+- `{{routes}}` - Array of operations, each with `operationId`, `httpMethod`, `path`, `service`, `serviceMethod`, `inputType`, `responseType`, `successStatus` and more; an operation whose success response streams has `stream` (`format`: `sse` or `ndjson`, `mediaType`, `eventType`, `discriminator`)
 - `{{services}}` - Array of services, each with `name`, `key` and `methods`
 - `{{contractPackage}}` - Path to contract package
 - `{{servicesPath}}` - Path to the services object in Fastify
@@ -197,6 +197,7 @@ The following is an auto-generated list of APIs from OpenAPI spec.
 | billing | GET | /api/billing/invoices | List all invoices | ✅ | requireAuth, tenantIsolation | [Billing.getInvoices](server/src/billing/services/BillingService.ts) |
 | billing | POST | /api/billing/invoices | Create a new invoice | ✅ | requireAuth, tenantIsolation | [Billing.createInvoice](server/src/billing/services/BillingService.ts) |
 | billing | GET | /api/billing/invoices/{id} | Get invoice by ID | ✅ | requireAuth, tenantIsolation | [Billing.getInvoiceById](server/src/billing/services/BillingService.ts) |
+| billing | GET | /api/billing/invoices/{id}/events | Watch an invoice |  | requireAuth, tenantIsolation | [Billing.watchInvoice](server/src/billing/services/BillingService.ts) |
 | billing | POST | /api/billing/invoices/{id}/pay | Pay an invoice | ✅ | requireAuth, tenantIsolation | [Billing.payInvoice](server/src/billing/services/BillingService.ts) |
 <!--@embedoc:end-->
 

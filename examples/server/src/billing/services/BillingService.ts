@@ -12,6 +12,8 @@ import type {
   Billing_createInvoiceInput,
   Billing_getInvoiceByIdInput,
   Billing_payInvoiceInput,
+  Billing_watchInvoiceInput,
+  InvoiceEvent,
   InvoiceListResponse,
   Invoice,
   PaymentResult,
@@ -110,6 +112,25 @@ export class BillingService implements BillingServiceApi {
       throw new Error(`Invoice not found: ${input.id}`);
     }
     return invoice;
+  }
+
+  async *watchInvoice(input: Billing_watchInvoiceInput): AsyncGenerator<InvoiceEvent> {
+    const invoice = invoices.find(inv => inv.id === input.id);
+    if (!invoice) {
+      throw new Error(`Invoice not found: ${input.id}`);
+    }
+
+    // Mock: the invoice's current status, then each change until it is paid
+    let status = invoice.status;
+    yield { type: 'status_changed', invoiceId: invoice.id, status };
+    while (invoice.status !== 'paid') {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (invoice.status !== status) {
+        status = invoice.status;
+        yield { type: 'status_changed', invoiceId: invoice.id, status };
+      }
+    }
+    yield { type: 'settled', invoiceId: invoice.id, paidAt: invoice.paidAt ?? new Date().toISOString() };
   }
 
   async payInvoice(input: Billing_payInvoiceInput): Promise<PaymentResult> {

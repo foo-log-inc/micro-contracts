@@ -51,6 +51,8 @@ export interface TemplateContext {
   uniqueOverlays: UniqueOverlayContext[];
   /** Some route reads the request's cookies: for a cookie parameter, or for its overlays */
   readsCookies: boolean;
+  /** Some route's success response streams (see RouteContext.stream) */
+  streams: boolean;
   /** Screen contexts extracted from screen spec (populated when screen mode is enabled) */
   screens: ScreenContext[];
 }
@@ -175,8 +177,16 @@ interface RouteContext {
   typeNameBase: string;
   /** The status code a successful call is answered with (200 for a `2XX` or `default` response) */
   successStatus: number;
-  /** The success response body's type, or 'void' when it has none */
+  /** The success response's JSON body type, or 'void' when it has none — or streams (see stream) */
   responseType: string;
+  /**
+   * For an operation whose success response streams: how it sends its events.
+   * The service returns `AsyncIterable<eventType>`; each event is sent as a
+   * frame of `format` (`sse`: `event: <name>` and `data: <json>`; `ndjson`:
+   * one JSON value per line) under `mediaType`, its `discriminator` property
+   * naming it.
+   */
+  stream?: { format: 'sse' | 'ndjson'; mediaType: string; eventType: string; discriminator: string };
   /** Request body type (if exists) */
   requestType?: string;
   /** Params type (path + query combined, if exists) */
@@ -306,6 +316,7 @@ export function buildTemplateContext(
     schemaNames,
     uniqueOverlays,
     readsCookies: routes.some(r => r.cookieParams.length > 0 || r.extensions.length > 0),
+    streams: routes.some(r => r.stream),
     screens,
   };
 }
@@ -374,6 +385,7 @@ function extractSchemaTypes(routes: RouteContext[]): string[] {
     // Add unified input type (for service-aligned templates), and the client's
     types.add(route.inputType);
     types.add(route.clientInputType);
+    if (route.stream) types.add(route.stream.eventType);
   }
   
   return Array.from(types).sort();
@@ -559,6 +571,14 @@ function extractRoutes(
         responseSchemas,
         typeNameBase,
         successStatus: resolved.success.status,
+        stream: resolved.success.body?.kind === 'stream' && typeNames.event
+          ? {
+              format: resolved.success.body.format,
+              mediaType: resolved.success.body.mediaType,
+              eventType: typeNames.event,
+              discriminator: resolved.success.body.discriminator,
+            }
+          : undefined,
         responseType,
         requestType,
         paramsType,
@@ -759,8 +779,9 @@ function extractScreens(spec: OpenAPISpec): ScreenContext[] {
 
     // A declared 200 is always the success response (the lowest 2xx code)
     let viewModelSchema = operation['x-view-model'] || '';
-    if (!viewModelSchema && resolvedGet.success.statusCode === '200') {
-      const schema = resolvedGet.success.body?.schema;
+    const getBody = resolvedGet.success.body;
+    if (!viewModelSchema && resolvedGet.success.statusCode === '200' && getBody?.kind === 'json') {
+      const schema = getBody.schema;
       if (schema && isReference(schema)) {
         viewModelSchema = getRefName(schema.$ref);
       }

@@ -67,6 +67,7 @@ export const endpointOverlays: Record<string, string[]> = {
   'getInvoices': ['requireAuth', 'tenantIsolation'],
   'createInvoice': ['requireAuth', 'tenantIsolation'],
   'getInvoiceById': ['requireAuth', 'tenantIsolation'],
+  'watchInvoice': ['requireAuth', 'tenantIsolation'],
   'payInvoice': ['requireAuth', 'tenantIsolation', 'validatePaymentMethod'],
 };
 

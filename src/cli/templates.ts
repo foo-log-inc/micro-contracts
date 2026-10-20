@@ -20,6 +20,10 @@ import { {{#each routes}}{{#if parameterSchemas.header}}{{parameterSchemas.heade
 {{#if extensionInfo.length}}
 import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
 {{/if}}
+{{#if streams}}
+import { Readable } from 'node:stream';
+import { encodeStream } from '{{contractPackage}}/streams/index.js';
+{{/if}}
 {{#if readsCookies}}
 
 /**
@@ -82,6 +86,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   {{!-- Fastify parses no cookies: the route validates them, with the validator Fastify validates the rest with --}}
   const {{parameterSchemas.cookie}} = { $ref: '{{parameterSchemas.cookie}}#' };
 {{/if}}
+{{#if stream}}
+  {{!-- Events are serialized as a JSON response is: by the schema of one event --}}
+  const {{typeNameBase}}EventSchema = { $ref: '{{stream.eventType}}#' };
+{{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
 {{#if parameterSchemas.path}}
@@ -139,7 +147,14 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{/if}}
     };
 {{!-- The success status is set once the service has returned: an error it throws keeps its own status. --}}
-{{#if (eq responseType "void")}}
+{{#if stream}}
+{{!-- A stream's first event is awaited before anything is sent: a service that fails at once fails through the error handler --}}
+    const events = {{serviceKey}}.{{serviceMethod}}(input)[Symbol.asyncIterator]();
+    const first = await events.next();
+    const serialize = reply.compileSerializationSchema({{typeNameBase}}EventSchema);
+    reply.code({{successStatus}}).header('content-type', '{{stream.mediaType}}').header('cache-control', 'no-cache');
+    return reply.send(Readable.from(encodeStream('{{stream.format}}', first, events, serialize, '{{stream.discriminator}}')));
+{{else if (eq responseType "void")}}
     await {{serviceKey}}.{{serviceMethod}}(input);
     return reply.code({{successStatus}}).send();
 {{else}}
@@ -174,6 +189,9 @@ import type {
 {{/each}}
 } from '{{contractPackage}}/schemas';
 import { ApiError } from '{{contractPackage}}/errors';
+{{#if streams}}
+import { decodeStream } from '{{contractPackage}}/streams';
+{{/if}}
 
 // BASE_URL derived from OpenAPI servers[0].url: {{baseUrl}}
 // Can be overridden via environment variable (Vite: VITE_API_BASE_URL)
@@ -197,6 +215,26 @@ async function handleResponse<T>(res: Response): Promise<T> {
   }
   return res.json();
 }
+{{#if streams}}
+
+/** The text of a response body in order; reading stopped early cancels the body */
+async function* bodyText(res: Response): AsyncGenerator<string> {
+  if (!res.body) return;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let done = false;
+  try {
+    while (!done) {
+      const chunk = await reader.read();
+      done = chunk.done;
+      const text = decoder.decode(chunk.value, { stream: !done });
+      if (text) yield text;
+    }
+  } finally {
+    if (!done) await reader.cancel();
+  }
+}
+{{/if}}
 
 {{#each services}}
 // ==========================================================================
@@ -210,7 +248,7 @@ export const {{key}}Api = {
    {{#if summary}}* {{summary}}{{/if}}
    {{#if isPublished}}* @published{{/if}}
    */
-  async {{serviceMethod}}(input: {{clientInputType}}): Promise<{{responseType}}> {
+  async {{#if stream}}*{{/if}}{{serviceMethod}}(input: {{clientInputType}}): {{#if stream}}AsyncGenerator<{{stream.eventType}}>{{else}}Promise<{{responseType}}>{{/if}} {
 {{#if queryParams.length}}
     const searchParams = new URLSearchParams();
 {{#each queryParams}}
@@ -233,7 +271,10 @@ export const {{key}}Api = {
 {{else}}
     const res = await fetch(url, { method: '{{httpMethod}}' });
 {{/if}}
-{{#if (eq responseType "void")}}
+{{#if stream}}
+    if (!res.ok) await handleResponse<void>(res);
+    yield* decodeStream<{{stream.eventType}}>('{{stream.format}}', bodyText(res));
+{{else if (eq responseType "void")}}
     await handleResponse<void>(res);
 {{else}}
     return handleResponse<{{responseType}}>(res);
@@ -265,7 +306,7 @@ export class {{name}}Service implements {{name}}ServiceApi {
   /**
    * {{httpMethod}} {{path}}{{#if summary}}: {{summary}}{{/if}}
    */
-  async {{serviceMethod}}(input: types.{{inputType}}): Promise<{{#if (eq responseType "void")}}void{{else}}types.{{responseType}}{{/if}}> {
+  async {{#if stream}}*{{/if}}{{serviceMethod}}(input: types.{{inputType}}): {{#if stream}}AsyncGenerator<types.{{stream.eventType}}>{{else}}Promise<{{#if (eq responseType "void")}}void{{else}}types.{{responseType}}{{/if}}>{{/if}} {
     // TODO: Implement {{serviceMethod}}
     throw new Error('Not implemented: {{service}}.{{serviceMethod}}');
   }

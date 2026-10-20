@@ -172,6 +172,7 @@ project/
 │   │   ├── schemas/                   #    Types, validators
 │   │   ├── services/                  #    Service interfaces
 │   │   ├── overlays/                  #    Overlay handler interfaces
+│   │   ├── streams/                   #    Stream framing (modules with stream responses)
 │   │   └── deps/                      #    Re-exports from dependencies
 │   └── contract-published/{module}/   #    Public API subset
 │
@@ -441,12 +442,15 @@ do not apply.
 An operation's success response is its lowest 2xx status code, else its `2XX` range, else
 `default`: the service returns that response's body and the generated route answers with
 that status (200 for `2XX` and `default`). An operation that declares none of them is an
-error: declare the response a successful call returns. Its request body and success response
-must be in a media type generated code carries — `application/json` — since a body in any
-other media type would be dropped from every generated artifact; one declared otherwise is an
-error: remove that media type, and declare the body as `application/json`. A response of any
-other status, which documents an error, may use any media type; generated code has a schema
-only for an `application/json` one.
+error: declare the response a successful call returns. Its request body must be
+`application/json`, and its success response `application/json` or a stream —
+`text/event-stream`, `application/x-ndjson` or `application/jsonl` — since a body in any other
+media type would be dropped from every generated artifact; one declared otherwise is an
+error: remove that media type, and declare the body in one of them. A stream declares the
+schema of one event under `x-stream-event`, as a `oneOf` with `discriminator.propertyName`:
+a stream without `x-stream-event`, or whose events have no discriminator, is an error. A
+response of any other status, which documents an error, may use any media type; generated
+code has a schema only for an `application/json` one.
 
 `<input>` is linted under the rules of the module in `micro-contracts.config.yaml` whose
 `openapi` it is — the rules `generate` applies to it — and as a service API spec when no
@@ -619,13 +623,57 @@ export class UserService implements UserServiceApi {
 }
 ```
 
+### Stream Responses
+
+An operation whose success response is `text/event-stream` (server-sent events) or
+`application/x-ndjson` / `application/jsonl` (one JSON value per line) streams events. The
+schema of one event is declared under `x-stream-event`: a `oneOf` whose `discriminator`
+names each event's type.
+
+```yaml
+responses:
+  '200':
+    description: Reply, as it is written
+    content:
+      text/event-stream:
+        x-stream-event:
+          oneOf:
+            - $ref: '#/components/schemas/TextDelta'
+            - $ref: '#/components/schemas/StreamEnd'
+          discriminator: { propertyName: type }
+```
+
+The event type is the referenced component, or `<Service>_<method>Event` for an inline schema,
+in `schemas/types.ts` and among the validators. The service returns its events as an
+`AsyncIterable`:
+
+```typescript
+export interface ChatServiceApi {
+  reply(input: Chat_replyInput): AsyncIterable<Chat_replyEvent>;
+}
+```
+
+The contract package carries the framing, `streams/index.ts`: routes encode events with
+`encodeStream` and clients decode them with `decodeStream`. A server-sent event is
+`event: <discriminator value>`, `data: <the event as JSON>` and a blank line; NDJSON is one
+event per line.
+
+The starter Fastify route awaits the service's first event before sending anything, so a
+service that fails at once answers through the error handler, as a JSON operation does. It
+then sends the success status with the declared media type, and each event as the service
+yields it, serialized by the event schema as a JSON response is: a property the schema does
+not declare is not sent, and an event no member of the schema accepts ends the stream. When
+the client goes away, the service's iterator is closed. The starter fetch client returns the
+events as an `AsyncIterable` to read with `for await`.
+
 ### Validators
 
 `schemas/validators.ts` holds every schema as the JSON Schema Fastify validates requests and
 serializes responses with, plus the path, query, header and cookie parameter schemas of each
 operation (`<Service>_<method>PathParams`, `…QueryParams`, `…HeaderParams`, `…CookieParams`)
-and its inline request body and response schemas (`…Body`; `…Response` for the success
-response, and `…404Response`, `…4XXResponse` or `…DefaultResponse` for another).
+and its inline request body, response and stream event schemas (`…Body`; `…Response` for the
+success response, and `…404Response`, `…4XXResponse` or `…DefaultResponse` for another;
+`…Event`).
 `schemas/types.ts` names the inline body types the same way. A header parameter schema names headers in lower case, as a
 request delivers them, and is not in `allSchemas`: the starter routes give it to Fastify
 inline (`schema.headers`), since Fastify matches header names case-insensitively only in an

@@ -10,7 +10,6 @@ import type {
   OperationObject,
   OpenAPIType,
   ResolvedOperation,
-  OperationBody,
 } from '../types.js';
 import { isReference, getRefName, isTsIdentifier, resolveOperation } from '../types.js';
 
@@ -343,8 +342,10 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
   clientInput?: { name: string; cookies: string[] };
   /** The request body's type */
   body?: string;
-  /** The success response body's type; absent when the response has no body */
+  /** The success response's JSON body type; absent when the response has none or streams */
   response?: string;
+  /** For a success response that streams, the type of one event */
+  event?: string;
   /** The body type of every other response with a body generated code carries */
   otherResponses: Array<{ statusCode: string; type: string }>;
   /** The inline schemas named after the operation, with their names */
@@ -359,29 +360,31 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
   }
 
   const inline: Array<{ name: string; schema: SchemaObject }> = [];
-  // A $ref body is its component's type; an inline one, of any shape, is
+  // A $ref schema is its component's type; an inline one, of any shape, is
   // generated under the operation's name.
-  const nameBody = (body: OperationBody | undefined, inlineName: string): string | undefined => {
-    if (!body) return undefined;
-    if (isReference(body.schema)) return getRefName(body.schema.$ref);
-    inline.push({ name: inlineName, schema: body.schema });
+  const nameSchema = (schema: SchemaObject | ReferenceObject | undefined, inlineName: string): string | undefined => {
+    if (!schema) return undefined;
+    if (isReference(schema)) return getRefName(schema.$ref);
+    inline.push({ name: inlineName, schema });
     return inlineName;
   };
 
-  const body = nameBody(resolved.body, `${base}Body`);
-  const response = nameBody(resolved.success.body, `${base}Response`);
+  const body = nameSchema(resolved.body?.schema, `${base}Body`);
+  const success = resolved.success.body;
+  const response = nameSchema(success?.kind === 'json' ? success.schema : undefined, `${base}Response`);
+  const event = nameSchema(success?.kind === 'stream' ? success.event : undefined, `${base}Event`);
   // Another response's inline body is named by its status: <base>404Response,
   // <base>4XXResponse, <base>DefaultResponse.
   const otherResponses = resolved.otherResponses.flatMap(({ statusCode, body: responseBody }) => {
     const suffix = statusCode === 'default' ? 'Default' : statusCode;
-    const type = nameBody(responseBody, `${base}${suffix}Response`);
+    const type = nameSchema(responseBody?.schema, `${base}${suffix}Response`);
     return type ? [{ statusCode, type }] : [];
   });
 
   const cookies = resolved.parameters.filter(p => p.in === 'cookie').map(p => p.name);
   const clientInput = cookies.length > 0 ? { name: `${base}ClientInput`, cookies } : undefined;
 
-  return { base, input: `${base}Input`, params, parameterSchemas, clientInput, body, response, otherResponses, inline };
+  return { base, input: `${base}Input`, params, parameterSchemas, clientInput, body, response, event, otherResponses, inline };
 }
 
 /**

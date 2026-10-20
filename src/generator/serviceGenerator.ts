@@ -157,7 +157,8 @@ function extractMethodInfo(
     httpMethod,
     path,
     isPublished,
-    responseType: typeNames.response ?? 'void',
+    responseType: typeNames.event ?? typeNames.response ?? 'void',
+    returnType: typeNames.event ? `AsyncIterable<${typeNames.event}>` : `Promise<${typeNames.response ?? 'void'}>`,
     inputType: typeNames.input,
     paramsType: typeNames.params,
     parameters: resolved.parameters,
@@ -210,7 +211,7 @@ function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): str
     
     // Method signature with single Input parameter (always present)
     const inputTypeName = method.inputType;
-    const returnTypeStr = `Promise<${method.responseType}>`;
+    const returnTypeStr = method.returnType;
     
     lines.push(`  ${method.name}(input: ${inputTypeName}): ${returnTypeStr};`);
     lines.push('');
@@ -234,7 +235,7 @@ function generateServiceInterfaceFromTemplate(
   const methods: ServiceMethodTemplateContext[] = service.methods.map(method => {
     const inputType = method.inputType;
     const returnType = method.responseType;
-    const returnTypeStr = `Promise<${returnType}>`;
+    const returnTypeStr = method.returnType;
     
     return {
       name: method.name,

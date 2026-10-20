@@ -7,8 +7,10 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/billing/schemas/index.js';
 import * as types from '@project/contract/billing/schemas/types.js';
-import { Billing_getInvoicesHeaderParams, Billing_createInvoiceHeaderParams, Billing_getInvoiceByIdHeaderParams, Billing_payInvoiceHeaderParams, } from '@project/contract/billing/schemas/validators.js';
+import { Billing_getInvoicesHeaderParams, Billing_createInvoiceHeaderParams, Billing_getInvoiceByIdHeaderParams, Billing_watchInvoiceHeaderParams, Billing_payInvoiceHeaderParams, } from '@project/contract/billing/schemas/validators.js';
 import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
+import { Readable } from 'node:stream';
+import { encodeStream } from '@project/contract/billing/streams/index.js';
 
 /**
  * The cookies of a Cookie header (`name=value; name=value`), by name.
@@ -114,6 +116,28 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     };
     const output = await billing.getInvoiceById(input);
     return reply.code(200).send(output);
+  });
+
+  // GET /api/billing/invoices/{id}/events
+  const Billing_watchInvoiceEventSchema = { $ref: 'InvoiceEvent#' };
+  fastify.get('/api/billing/invoices/:id/events', {
+    schema: {
+      params: { $ref: 'Billing_watchInvoicePathParams#' },
+      headers: Billing_watchInvoiceHeaderParams,
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('watchInvoice', handlers, toHttpRequest(req, cookies));
+    if (!result.success) return sendError(reply, result.error);
+    // Build input object (always required, even if empty)
+    const input: types.Billing_watchInvoiceInput = {
+      ...(req.params as types.Billing_watchInvoiceParams),
+    };
+    const events = billing.watchInvoice(input)[Symbol.asyncIterator]();
+    const first = await events.next();
+    const serialize = reply.compileSerializationSchema(Billing_watchInvoiceEventSchema);
+    reply.code(200).header('content-type', 'text/event-stream').header('cache-control', 'no-cache');
+    return reply.send(Readable.from(encodeStream('sse', first, events, serialize, 'type')));
   });
 
   // POST /api/billing/invoices/{id}/pay [PUBLISHED]

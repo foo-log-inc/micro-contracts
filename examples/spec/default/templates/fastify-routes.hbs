@@ -12,6 +12,10 @@ import { {{#each routes}}{{#if parameterSchemas.header}}{{parameterSchemas.heade
 {{#if extensionInfo.length}}
 import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
 {{/if}}
+{{#if streams}}
+import { Readable } from 'node:stream';
+import { encodeStream } from '{{contractPackage}}/streams/index.js';
+{{/if}}
 {{#if readsCookies}}
 
 /**
@@ -74,6 +78,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   {{!-- Fastify parses no cookies: the route validates them, with the validator Fastify validates the rest with --}}
   const {{parameterSchemas.cookie}} = { $ref: '{{parameterSchemas.cookie}}#' };
 {{/if}}
+{{#if stream}}
+  {{!-- Events are serialized as a JSON response is: by the schema of one event --}}
+  const {{typeNameBase}}EventSchema = { $ref: '{{stream.eventType}}#' };
+{{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
 {{#if parameterSchemas.path}}
@@ -131,7 +139,14 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{/if}}
     };
 {{!-- The success status is set once the service has returned: an error it throws keeps its own status. --}}
-{{#if (eq responseType "void")}}
+{{#if stream}}
+{{!-- A stream's first event is awaited before anything is sent: a service that fails at once fails through the error handler --}}
+    const events = {{serviceKey}}.{{serviceMethod}}(input)[Symbol.asyncIterator]();
+    const first = await events.next();
+    const serialize = reply.compileSerializationSchema({{typeNameBase}}EventSchema);
+    reply.code({{successStatus}}).header('content-type', '{{stream.mediaType}}').header('cache-control', 'no-cache');
+    return reply.send(Readable.from(encodeStream('{{stream.format}}', first, events, serialize, '{{stream.discriminator}}')));
+{{else if (eq responseType "void")}}
     await {{serviceKey}}.{{serviceMethod}}(input);
     return reply.code({{successStatus}}).send();
 {{else}}
