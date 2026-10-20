@@ -1216,14 +1216,16 @@ function readBody(
   content: Record<string, MediaTypeObject> | undefined,
   location: string
 ): OperationBody | undefined {
+  const body = carriedBody(content);
   const uncarried = Object.keys(content ?? {}).filter(m => !Object.hasOwn(BODY_MEDIA_TYPES, m));
   if (uncarried.length > 0) {
     throw new Error(
-      `${location} declares ${uncarried.map(m => `'${m}'`).join(', ')}, which generated code cannot carry ` +
-      `(supported: ${Object.keys(BODY_MEDIA_TYPES).join(', ')}).`
+      `${location} declares ${uncarried.map(m => `'${m}'`).join(', ')}, which generated code cannot carry. ` +
+      `Remove ${uncarried.length === 1 ? 'it' : 'them'}` +
+      `${body ? '' : `, and declare the body as ${Object.keys(BODY_MEDIA_TYPES).join(' or ')}`}.`
     );
   }
-  return carriedBody(content);
+  return body;
 }
 
 /** Statuses whose response carries no content (RFC 9110). */
@@ -1245,13 +1247,19 @@ function selectSuccessResponse(
     .sort((a, b) => Number(a) - Number(b));
   const statusCode = lowest ?? ['2XX', 'default'].find(key => key in responses);
   if (statusCode === undefined) {
-    throw new Error(`${location} declares no success response (a 2xx status code, the 2XX range or default).`);
+    throw new Error(
+      `${location} declares no success response. Declare the response a successful call returns ` +
+      `under a 2xx status code (or the 2XX range, or default).`
+    );
   }
 
   const status = statusCode === lowest ? Number(statusCode) : 200;
   const body = readBody(responses[statusCode].content, `${location} response ${statusCode}`);
   if (body && NO_CONTENT_STATUSES.has(status)) {
-    throw new Error(`${location} response ${statusCode} declares content, which a ${status} response cannot carry.`);
+    throw new Error(
+      `${location} response ${statusCode} declares content, which a ${status} response cannot carry. ` +
+      `Remove the content, or declare the response under a status that carries one (such as 200).`
+    );
   }
   return { statusCode, status, body };
 }

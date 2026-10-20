@@ -1903,14 +1903,14 @@ paths:
           multipart/form-data:
             schema: { type: object, properties: { file: { type: string, format: binary } } }
       responses:
-        '200': { description: ok }`, /POST \/files requestBody declares 'multipart\/form-data'/],
+        '200': { description: ok }`, /POST \/files requestBody declares 'multipart\/form-data', which generated code cannot carry\. Remove it, and declare the body as application\/json\./],
       ['success response', `
       responses:
         '200':
           description: ok
           content:
             application/pdf:
-              schema: { type: string, format: binary }`, /POST \/files response 200 declares 'application\/pdf'/],
+              schema: { type: string, format: binary }`, /POST \/files response 200 declares 'application\/pdf', which generated code cannot carry\. Remove it, and declare the body as application\/json\./],
     ])('fails on a %s in a media type generated code cannot carry', async (_label, operation, message) => {
       const { specPath, config } = setupSpec(`
 openapi: 3.0.3

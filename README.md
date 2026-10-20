@@ -441,11 +441,12 @@ do not apply.
 An operation's success response is its lowest 2xx status code, else its `2XX` range, else
 `default`: the service returns that response's body and the generated route answers with
 that status (200 for `2XX` and `default`). An operation that declares none of them is an
-error. Its request body and success response must be in a media type generated code
-carries — `application/json` — since a body in any other media type would be dropped from
-every generated artifact; one declared otherwise is an error. A response of any other
-status, which documents an error, may use any media type; generated code has a schema only
-for an `application/json` one.
+error: declare the response a successful call returns. Its request body and success response
+must be in a media type generated code carries — `application/json` — since a body in any
+other media type would be dropped from every generated artifact; one declared otherwise is an
+error: remove that media type, and declare the body as `application/json`. A response of any
+other status, which documents an error, may use any media type; generated code has a schema
+only for an `application/json` one.
 
 `<input>` is linted under the rules of the module in `micro-contracts.config.yaml` whose
 `openapi` it is — the rules `generate` applies to it — and as a service API spec when no
