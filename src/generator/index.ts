@@ -443,6 +443,11 @@ export { allSchemas } from './validators.js';
   const errorsContent = hasEndpoints ? generateErrors() : generateEmptyErrors();
   writeAndLog(path.join(outputDir, 'errors', 'index.ts'), errorsContent);
 
+  // Generate the reading of HTTP requests the routes share
+  if (hasEndpoints) {
+    writeAndLog(path.join(outputDir, 'http', 'index.ts'), generateHttp());
+  }
+
   // Generate the stream framing, for a module whose operations stream
   const hasStreams = hasStreamOperations(targetSpec);
   if (hasStreams) {
@@ -469,7 +474,7 @@ export { allSchemas } from './validators.js';
 export * from './services/index.js';
 export * from './schemas/index.js';
 export * from './errors/index.js';
-${hasOverlays ? "export * from './overlays/index.js';" : ''}${hasStreams ? "\nexport * from './streams/index.js';" : ''}
+${hasEndpoints ? "export * from './http/index.js';\n" : ''}${hasOverlays ? "export * from './overlays/index.js';" : ''}${hasStreams ? "\nexport * from './streams/index.js';" : ''}
 `;
   writeAndLog(path.join(outputDir, 'index.ts'), indexContent);
   
@@ -850,6 +855,19 @@ export type { ProblemDetails, ValidationError } from '../schemas/types.js';
 import type { ProblemDetails } from '../schemas/types.js';
 
 /**
+ * An error as a server answers it: its status, its message as the title, and
+ * its code, in lower case, naming its type (\`/errors/<code>\`, or
+ * \`/errors/error\` without one).
+ */
+export function toProblemDetails(error: { status: number; message: string; code?: string }): ProblemDetails {
+  return {
+    type: \`/errors/\${error.code?.toLowerCase() ?? 'error'}\`,
+    title: error.message,
+    status: error.status,
+  };
+}
+
+/**
  * API Error wrapper
  */
 export class ApiError extends Error {
@@ -873,6 +891,41 @@ export class ApiError extends Error {
   get isServerError(): boolean {
     return this.status >= 500;
   }
+}
+`;
+}
+
+/**
+ * Generate the reading of HTTP requests that every route template shares, so
+ * each reads a request the same way whichever server it runs on.
+ */
+function generateHttp(): string {
+  return `/**
+ * Reading HTTP requests
+ * Auto-generated - DO NOT EDIT
+ */
+
+/**
+ * The cookies of a request, by name: from a Cookie header (\`name=value; name=value\`),
+ * or a list of \`name=value\` entries. Of two cookies with one name, the first is kept:
+ * it is the more specific.
+ */
+export function parseCookies(cookie: string | string[] | undefined): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const pair of [cookie ?? []].flat().join('; ').split(';')) {
+    const separator = pair.indexOf('=');
+    const name = pair.slice(0, separator).trim();
+    if (separator < 0 || !name || cookies.has(name)) continue;
+
+    let value = pair.slice(separator + 1).trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
 }
 `;
 }

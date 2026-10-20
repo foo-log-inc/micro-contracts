@@ -453,11 +453,8 @@ generated:
       expect(exitCode).toBe(1);
     });
 
-    it('runs the documented quick start end to end', () => {
-      // init scaffolds a config, and the rules generate enforces have tightened
-      // repeatedly; without this the two drift apart silently — a scaffolded
-      // project referencing an overlay init never wrote, or a template path that
-      // no longer resolves, only shows up when someone follows the README.
+    /** The spec the quick start hands init */
+    function writeQuickStartSpec(): void {
       fs.writeFileSync(
         path.join(tempDir, 'my-spec.json'),
         JSON.stringify({
@@ -475,6 +472,14 @@ generated:
           },
         }),
       );
+    }
+
+    it('runs the documented quick start end to end', () => {
+      // init scaffolds a config, and the rules generate enforces have tightened
+      // repeatedly; without this the two drift apart silently — a scaffolded
+      // project referencing an overlay init never wrote, or a template path that
+      // no longer resolves, only shows up when someone follows the README.
+      writeQuickStartSpec();
 
       const init = runCli('init core --openapi my-spec.json');
       expect(init.exitCode).toBe(0);
@@ -485,6 +490,21 @@ generated:
 
       expect(fs.existsSync(path.join(tempDir, 'packages/contract/core/schemas/types.ts'))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, 'server/src/core/routes.generated.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'spec/default/templates/lambda-routes.hbs'))).toBe(false);
+    });
+
+    it('runs the quick start with --lambda end to end, generating the Lambda handler as the server', () => {
+      writeQuickStartSpec();
+
+      expect(runCli('init core --openapi my-spec.json --lambda').exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, 'spec/default/templates/lambda-routes.hbs'))).toBe(true);
+
+      const generate = runCli('generate');
+      expect(generate.stdout).toContain('Generation complete');
+      expect(generate.exitCode).toBe(0);
+
+      expect(fs.existsSync(path.join(tempDir, 'server/src/core/lambda.generated.ts'))).toBe(true);
+      expect(fs.existsSync(path.join(tempDir, 'server/src/core/routes.generated.ts'))).toBe(false);
     });
 
     it('answers impact by module and by operation, and rejects unknown refs', () => {

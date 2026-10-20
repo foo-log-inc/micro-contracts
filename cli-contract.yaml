@@ -248,6 +248,7 @@ command_sets:
           - micro-contracts init core
           - micro-contracts init core --openapi path/to/spec.yaml
           - micro-contracts init myScreens --screens
+          - micro-contracts init billing --lambda
           - micro-contracts init users --skip-templates
 
         arguments:
@@ -294,6 +295,14 @@ command_sets:
 
           - name: screens
             description: Initialize as screen spec module (generates screen templates and starter spec).
+            schema:
+              type: boolean
+              default: false
+
+          - name: lambda
+            description: >-
+              Also create the AWS Lambda handler template (lambda-routes.hbs), and configure it as
+              the server output in place of the Fastify routes.
             schema:
               type: boolean
               default: false

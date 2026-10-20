@@ -115,6 +115,7 @@ examples/
 │   │   ├── overlays/              # Overlay handlers
 │   │   └── routes.generated.ts    # Generated routes
 │   └── billing/
+│       └── lambda.generated.ts    # Generated AWS Lambda handler
 ├── frontend/src/                  # Frontend implementation
 │   ├── core/api.generated.ts      # Generated API client
 │   └── billing/api.generated.ts
@@ -130,13 +131,14 @@ The `spec/default/templates/` directory contains Handlebars templates for genera
 
 ### Template List
 
-These are exactly the files `micro-contracts init` writes to `spec/default/templates/`.
+These are exactly the files `micro-contracts init --lambda` writes to `spec/default/templates/` (without `--lambda`, all but `lambda-routes.hbs`).
 
 | File | Generated File | Description |
 |------|----------------|-------------|
 | `fastify-routes.hbs` | `server/src/{module}/routes.generated.ts` | Fastify route definitions. Validates the request, runs the operation's overlays and calls the service method, answering with the operation's success status |
 | `fetch-client.hbs` | `frontend/src/{module}/api.generated.ts` | Frontend HTTP client. Executes fetch with the same signature as the service API |
 | `overlay-adapter.hbs` | `server/src/{module}/overlayAdapter.generated.ts` | Overlay execution runtime. Extracts overlay parameters from requests and executes handlers; an operation whose handler is not registered is refused |
+| `lambda-routes.hbs` | `server/src/billing/lambda.generated.ts` | AWS Lambda handler (API Gateway HTTP API, function URL), without Fastify. Routes, validates and runs overlays as the Fastify routes do; `createStreamHandler` streams the billing module's invoice events |
 | `service-stubs.hbs` | (not configured here) | Skeleton classes implementing each service interface. Used as initial implementation scaffold |
 | `overlay-stubs.hbs` | (not configured here) | Skeleton overlay handlers and the `overlayHandlers` registry. Used as initial implementation scaffold |
 

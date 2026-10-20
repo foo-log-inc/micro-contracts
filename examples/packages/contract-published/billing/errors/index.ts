@@ -8,6 +8,19 @@ export type { ProblemDetails, ValidationError } from '../schemas/types.js';
 import type { ProblemDetails } from '../schemas/types.js';
 
 /**
+ * An error as a server answers it: its status, its message as the title, and
+ * its code, in lower case, naming its type (`/errors/<code>`, or
+ * `/errors/error` without one).
+ */
+export function toProblemDetails(error: { status: number; message: string; code?: string }): ProblemDetails {
+  return {
+    type: `/errors/${error.code?.toLowerCase() ?? 'error'}`,
+    title: error.message,
+    status: error.status,
+  };
+}
+
+/**
  * API Error wrapper
  */
 export class ApiError extends Error {

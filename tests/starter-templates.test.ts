@@ -2,8 +2,9 @@
  * Starter template tests
  *
  * The starter templates are what `micro-contracts init` writes to
- * spec/default/templates/. These tests render them from getStarterTemplates()
- * — the content init writes — and run the code they generate.
+ * spec/default/templates/ (the Lambda handler's with --lambda). These tests
+ * render them from getStarterTemplates() and getLambdaStarterTemplates() — the
+ * content init writes — and run the code they generate.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -11,9 +12,10 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execFileSync } from 'child_process';
+import { Writable } from 'stream';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { generate } from '../src/generator/index.js';
-import { getStarterTemplates } from '../src/cli/templates.js';
+import { getStarterTemplates, getLambdaStarterTemplates } from '../src/cli/templates.js';
 import type { MultiModuleConfig, OutputConfig } from '../src/types.js';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -32,15 +34,17 @@ describe('starter templates', () => {
   /**
    * Generate module `m` from `spec` (and `overlays`, by file name) with the
    * starter templates as init writes them, into tmpDir:
-   * contract/m, server/{routes,overlayAdapter}.generated.ts,
-   * server/{services,overlays}.stubs.ts and frontend/api.generated.ts.
+   * contract/m, server/{routes,overlayAdapter,lambda}.generated.ts,
+   * server/{services,overlays}.stubs.ts and frontend/api.generated.ts. The
+   * project resolves packages from this repository's node_modules.
    */
   async function generateProject(spec: string, overlays: Record<string, string> = {}): Promise<void> {
     const templatesDir = path.join(tmpDir, 'templates');
     fs.mkdirSync(templatesDir, { recursive: true });
-    for (const [file, content] of Object.entries(getStarterTemplates())) {
+    for (const [file, content] of Object.entries({ ...getStarterTemplates(), ...getLambdaStarterTemplates() })) {
       fs.writeFileSync(path.join(templatesDir, file), content);
     }
+    fs.symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(tmpDir, 'node_modules'), 'dir');
 
     const specPath = path.join(tmpDir, 'spec.yaml');
     fs.writeFileSync(specPath, spec);
@@ -64,6 +68,7 @@ describe('starter templates', () => {
         overlays: { shared: overlayPaths, collision: 'error' },
         outputs: {
           'server-routes': output('server/routes.generated.ts', 'fastify-routes.hbs'),
+          'lambda-routes': output('server/lambda.generated.ts', 'lambda-routes.hbs'),
           'overlay-adapter': output('server/overlayAdapter.generated.ts', 'overlay-adapter.hbs', { condition: 'hasOverlays' }),
           'frontend-client': output('frontend/api.generated.ts', 'fetch-client.hbs'),
           'service-stubs': output('server/services.stubs.ts', 'service-stubs.hbs'),
@@ -83,7 +88,6 @@ describe('starter templates', () => {
    */
   function typecheck(): string {
     fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ type: 'module' }));
-    fs.symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(tmpDir, 'node_modules'), 'dir');
     const overlays = fs.existsSync(path.join(tmpDir, 'contract/m/overlays'));
     fs.writeFileSync(path.join(tmpDir, 'server/fastify.d.ts'), [
       "import type { ServiceRegistry } from '../contract/m/services/index.js';",
@@ -133,10 +137,10 @@ describe('starter templates', () => {
   }
 
   it('are exactly the templates in examples/spec/default/templates', () => {
-    // The example project is generated with what init writes, so the code it
-    // type-checks is the code every new project starts from.
+    // The example project is generated with what init --lambda writes, so the
+    // code it type-checks is the code every new project starts from.
     const examplesDir = path.join(REPO_ROOT, 'examples/spec/default/templates');
-    const starter = getStarterTemplates();
+    const starter = { ...getStarterTemplates(), ...getLambdaStarterTemplates() };
 
     expect(fs.readdirSync(examplesDir).sort()).toEqual(Object.keys(starter).sort());
     for (const [file, content] of Object.entries(starter)) {
@@ -945,6 +949,346 @@ components:
     it('generate routes, a client and stubs that type-check', { timeout: 180_000 }, async () => {
       await generateProject(chatSpec);
       expect(typecheck()).toBe('');
+    });
+  });
+
+  describe('lambda handler', () => {
+    // /items/{id} comes before /items/latest: the literal segment must still win
+    const shopSpec = `
+openapi: 3.0.3
+info: { title: Shop, version: 1.0.0 }
+paths:
+  /items/{id}:
+    get:
+      operationId: getItem
+      x-micro-contracts-service: Item
+      x-micro-contracts-method: getItem
+      x-middleware: [requireAuth]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: fields, in: query, required: false, schema: { type: string } }
+        - { name: X-Tenant-Id, in: header, required: true, schema: { type: string, format: uuid } }
+        - { name: cart_id, in: cookie, required: true, schema: { type: string, minLength: 2 } }
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Item' } } } }
+        '404': { description: missing, content: { application/json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+    delete:
+      operationId: deleteItem
+      x-micro-contracts-service: Item
+      x-micro-contracts-method: deleteItem
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: deleted }
+  /items/latest:
+    get:
+      operationId: latestItem
+      x-micro-contracts-service: Item
+      x-micro-contracts-method: latestItem
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Item' } } } }
+  /items:
+    post:
+      operationId: createItem
+      x-micro-contracts-service: Item
+      x-micro-contracts-method: createItem
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/NewItem' } } } }
+      responses:
+        '201': { description: created, content: { application/json: { schema: { $ref: '#/components/schemas/Item' } } } }
+        '4XX': { description: refused, content: { application/json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+  /items/{id}/events:
+    get:
+      operationId: watchItem
+      x-micro-contracts-service: Item
+      x-micro-contracts-method: watchItem
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: events
+          content:
+            text/event-stream:
+              x-stream-event:
+                oneOf: [ { $ref: '#/components/schemas/Changed' }, { $ref: '#/components/schemas/Removed' } ]
+                discriminator: { propertyName: type }
+components:
+  schemas:
+    NewItem: { type: object, required: [name], properties: { name: { type: string, minLength: 1 }, qty: { type: integer } } }
+    Item: { type: object, required: [id, name], properties: { id: { type: integer }, name: { type: string } } }
+    Changed: { type: object, required: [type, qty], properties: { type: { type: string, enum: [changed] }, qty: { type: integer } } }
+    Removed: { type: object, required: [type], properties: { type: { type: string, enum: [removed] } } }
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+`;
+
+    const authOverlay = `
+overlay: 1.0.0
+info: { title: auth, version: 1.0.0 }
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'requireAuth')]"
+    update:
+      parameters:
+        - { name: Authorization, in: header, required: true, schema: { type: string } }
+      responses:
+        '401': { description: Unauthorized }
+`;
+
+    const TENANT = '3f0e4f5e-1111-4222-8333-444455556666';
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    /** The inputs the services were called with, and the stream services closed, by id */
+    let calls: unknown[];
+    let closed: number[];
+    /** What the stream service did, in order, with what the response stream received */
+    let log: string[];
+
+    const itemService = {
+      async getItem(input: { id: number }) {
+        calls.push(input);
+        if (input.id === 404) throw Object.assign(new Error('not found'), { statusCode: 404 });
+        if (input.id === 500) throw new Error('database down');
+        return { id: input.id, name: 'n', secret: 'not in the contract' };
+      },
+      async deleteItem(input: unknown) {
+        calls.push(input);
+      },
+      async latestItem() {
+        return { id: 0, name: 'latest' };
+      },
+      async createItem(input: { data: { name: string } }) {
+        calls.push(input);
+        return { id: 1, name: input.data.name };
+      },
+      async *watchItem({ id }: { id: number }) {
+        try {
+          if (id === 503) throw Object.assign(new Error('unavailable'), { statusCode: 503 });
+          log.push('produce 1');
+          yield { type: 'changed', qty: 1, internalNote: 'not in the contract' };
+          await sleep(50);
+          log.push('produce 2');
+          yield { type: 'changed', qty: 2 };
+          while (id === 2) {
+            await sleep(20);
+            yield { type: 'changed', qty: 0 };
+          }
+          yield { type: 'removed' };
+        } finally {
+          closed.push(id);
+        }
+      },
+    };
+
+    const requireAuth = async (input: Record<string, unknown>) =>
+      input.Authorization === 'Bearer x'
+        ? { success: true }
+        : { success: false, error: { status: 401, message: 'Unauthorized', code: 'UNAUTHORIZED' } };
+
+    /** A synthetic API Gateway HTTP API (payload 2.0) event */
+    const event = (method: string, rawPath: string, parts: Record<string, unknown> = {}) => ({
+      rawPath, rawQueryString: '', headers: {}, isBase64Encoded: false, requestContext: { http: { method } }, ...parts,
+    });
+
+    /** getItem's event, carrying everything the operation requires */
+    const getItem = (id: string, parts: Record<string, unknown> = {}) => event('GET', `/items/${id}`, {
+      headers: { authorization: 'Bearer x', 'x-tenant-id': TENANT }, cookies: ['theme=dark', 'cart_id=c1'], ...parts,
+    });
+
+    /** Generate the shop project and create its buffered handler */
+    async function handler(options: { basePath?: string } = {}) {
+      await generateProject(shopSpec, { 'auth.overlay.yaml': authOverlay });
+      const { createHandler } = await import(path.join(tmpDir, 'server/lambda.generated.ts'));
+      return createHandler({ services: { item: itemService }, overlays: { requireAuth }, ...options });
+    }
+
+    const problem = (status: number, title: string, type = '/errors/error') => JSON.stringify({ type, title, status });
+
+    beforeEach(() => {
+      calls = [];
+      closed = [];
+      log = [];
+    });
+
+    it('route each event to its operation, answering with its success status and the body its schema shapes', { timeout: 180_000 }, async () => {
+      const handle = await handler();
+
+      expect(await handle(getItem('7', { rawQueryString: 'fields=name' }))).toEqual({
+        statusCode: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+        body: '{"id":7,"name":"n"}',
+      });
+      expect(calls).toEqual([{ id: 7, fields: 'name', cart_id: 'c1' }]);
+
+      expect((await handle(event('GET', '/items/latest'))).body).toBe('{"id":0,"name":"latest"}');
+      expect(await handle(event('DELETE', '/items/7'))).toEqual({ statusCode: 204, headers: {}, body: '' });
+
+      const created = await handle(event('POST', '/items', {
+        headers: { 'content-type': 'application/json' },
+        body: Buffer.from(JSON.stringify({ name: 'pen', qty: 2 })).toString('base64'),
+        isBase64Encoded: true,
+      }));
+      expect(created).toEqual({ statusCode: 201, headers: { 'content-type': 'application/json; charset=utf-8' }, body: '{"id":1,"name":"pen"}' });
+      expect(calls.at(-1)).toEqual({ data: { name: 'pen', qty: 2 } });
+
+      expect(typecheck()).toBe('');
+    });
+
+    it('answer a path no route has with 404, and another method of a route\'s path with 405 and Allow', async () => {
+      const handle = await handler();
+      expect(await handle(event('GET', '/nope'))).toEqual({
+        statusCode: 404, headers: { 'content-type': 'application/json; charset=utf-8' }, body: problem(404, 'Route GET:/nope not found'),
+      });
+      const notAllowed = await handle(event('PUT', '/items/7'));
+      expect(notAllowed.statusCode).toBe(405);
+      expect(notAllowed.headers.allow).toBe('GET, DELETE');
+    });
+
+    it('route under a base path, and nothing outside it', async () => {
+      const handle = await handler({ basePath: '/prod' });
+      expect((await handle(event('GET', '/prod/items/latest'))).statusCode).toBe(200);
+      expect((await handle(event('GET', '/items/latest'))).statusCode).toBe(404);
+      expect((await handle(event('GET', '/production/items/latest'))).statusCode).toBe(404);
+    });
+
+    it('answer a request its schemas refuse with 400, worded as Fastify words it, before the service', async () => {
+      const handle = await handler();
+      const json = { 'content-type': 'application/json' };
+      const refused = [
+        [getItem('abc'), 'params/id must be integer'],
+        [getItem('7', { rawQueryString: 'fields=a&fields=b' }), 'querystring/fields must be string'],
+        [getItem('7', { headers: { authorization: 'Bearer x' } }), "headers must have required property 'x-tenant-id'"],
+        [getItem('7', { headers: { authorization: 'Bearer x', 'x-tenant-id': 'tenant-1' } }), 'headers/x-tenant-id must match format "uuid"'],
+        [getItem('7', { cookies: ['theme=dark'] }), "cookies must have required property 'cart_id'"],
+        [getItem('7', { cookies: ['cart_id=c'] }), 'cookies/cart_id must NOT have fewer than 2 characters'],
+        [event('POST', '/items', { headers: json, body: '{"qty":1}' }), "body must have required property 'name'"],
+        [event('POST', '/items', { headers: json, body: '{"name":' }), "Body is not valid JSON but content-type is set to 'application/json'"],
+        [event('POST', '/items', { headers: json, body: '{"name":"a","__proto__":{"admin":true}}' }), 'Object contains forbidden prototype property'],
+        [event('POST', '/items'), 'body must be object'],
+      ] as const;
+      for (const [request, title] of refused) {
+        const res = await handle(request);
+        expect({ statusCode: res.statusCode, body: res.body }).toEqual({ statusCode: 400, body: problem(400, title) });
+      }
+      const unsupported = await handle(event('POST', '/items', { headers: { 'content-type': 'text/plain' }, body: 'pen' }));
+      expect(unsupported.statusCode).toBe(415);
+      expect(calls).toEqual([]);
+    });
+
+    it('run the operation\'s overlays, answering a refusal as the contract\'s error shape', async () => {
+      const handle = await handler();
+      const refused = await handle(getItem('7', { headers: { authorization: 'Bearer y', 'x-tenant-id': TENANT } }));
+      expect({ statusCode: refused.statusCode, body: refused.body }).toEqual({
+        statusCode: 401, body: problem(401, 'Unauthorized', '/errors/unauthorized'),
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it('answer a service\'s error with the status it carries, else 500', async () => {
+      const handle = await handler();
+      const failure = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        expect(await handle(getItem('404'))).toEqual({
+          statusCode: 404, headers: { 'content-type': 'application/json; charset=utf-8' }, body: problem(404, 'not found'),
+        });
+        expect(failure).not.toHaveBeenCalled();
+        const crashed = await handle(getItem('500'));
+        expect({ statusCode: crashed.statusCode, body: crashed.body }).toEqual({ statusCode: 500, body: problem(500, 'database down') });
+        expect(failure).toHaveBeenCalledOnce();
+      } finally {
+        failure.mockRestore();
+      }
+    });
+
+    it('answer a stream operation with its events together from the buffered handler', async () => {
+      const handle = await handler();
+      expect(await handle(event('GET', '/items/1/events'))).toEqual({
+        statusCode: 200,
+        headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
+        body: 'event: changed\ndata: {"type":"changed","qty":1}\n\n' +
+          'event: changed\ndata: {"type":"changed","qty":2}\n\n' +
+          'event: removed\ndata: {"type":"removed"}\n\n',
+      });
+    });
+
+    describe('stream handler', () => {
+      /** The prelude each response stream was opened with */
+      let preludes: unknown[];
+
+      beforeEach(() => {
+        preludes = [];
+        vi.stubGlobal('awslambda', {
+          streamifyResponse: <H>(streamed: H) => streamed,
+          HttpResponseStream: {
+            from: (responseStream: Writable, prelude: unknown) => {
+              preludes.push(prelude);
+              return responseStream;
+            },
+          },
+        });
+      });
+
+      afterEach(() => {
+        vi.unstubAllGlobals();
+      });
+
+      /** A response stream recording each write in the log; destroyed after `limit` writes */
+      function responseStream(limit = Infinity): Writable {
+        let writes = 0;
+        const stream: Writable = new Writable({
+          write(chunk, _encoding, done) {
+            log.push(`write ${String(chunk)}`);
+            done();
+            if (++writes === limit) stream.destroy();
+          },
+        });
+        return stream;
+      }
+
+      async function streamHandler() {
+        await generateProject(shopSpec, { 'auth.overlay.yaml': authOverlay });
+        const { createStreamHandler } = await import(path.join(tmpDir, 'server/lambda.generated.ts'));
+        return createStreamHandler({ services: { item: itemService }, overlays: { requireAuth } });
+      }
+
+      it('send each event as its service yields it, shaped by the event schema', async () => {
+        const handle = await streamHandler();
+        await handle(event('GET', '/items/1/events'), responseStream());
+        expect(preludes).toEqual([{ statusCode: 200, headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' } }]);
+        expect(log).toEqual([
+          'produce 1',
+          'write event: changed\ndata: {"type":"changed","qty":1}\n\n',
+          'produce 2',
+          'write event: changed\ndata: {"type":"changed","qty":2}\n\n',
+          'write event: removed\ndata: {"type":"removed"}\n\n',
+        ]);
+        expect(closed).toEqual([1]);
+      });
+
+      it('close the service when the response stream goes away', async () => {
+        const handle = await streamHandler();
+        await handle(event('GET', '/items/2/events'), responseStream(3)).catch(() => {});
+        await vi.waitFor(() => expect(closed).toEqual([2]));
+      });
+
+      it('answer an operation that fails before its first event, and any other, as the buffered handler does', async () => {
+        const handle = await streamHandler();
+        const failure = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+          await handle(event('GET', '/items/503/events'), responseStream());
+          await handle(event('GET', '/items/latest'), responseStream());
+        } finally {
+          failure.mockRestore();
+        }
+        expect(preludes).toEqual([
+          { statusCode: 503, headers: { 'content-type': 'application/json; charset=utf-8' } },
+          { statusCode: 200, headers: { 'content-type': 'application/json; charset=utf-8' } },
+        ]);
+        expect(log).toEqual([`write ${problem(503, 'unavailable')}`, 'write {"id":0,"name":"latest"}']);
+      });
     });
   });
 });

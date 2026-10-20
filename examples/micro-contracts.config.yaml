@@ -57,6 +57,13 @@ modules:
     # Module-specific overlays
     overlays:
       - spec/billing/overlays/payment.overlay.yaml
+    # The billing API also runs as an AWS Lambda function (init --lambda's template)
+    outputs:
+      lambda-routes:
+        output: server/src/{module}/lambda.generated.ts
+        template: spec/default/templates/lambda-routes.hbs
+        config:
+          contractPackage: "@project/contract/{module}"
     # Cross-module dependencies (must match x-micro-contracts-depend-on in OpenAPI)
     dependsOn:
       - core.User.getUsers

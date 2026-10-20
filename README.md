@@ -172,12 +172,15 @@ project/
 │   │   ├── schemas/                   #    Types, validators
 │   │   ├── services/                  #    Service interfaces
 │   │   ├── overlays/                  #    Overlay handler interfaces
+│   │   ├── errors/                    #    Error shape (ProblemDetails, ApiError)
+│   │   ├── http/                      #    Request reading the server templates share (cookies)
 │   │   ├── streams/                   #    Stream framing (modules with stream responses)
 │   │   └── deps/                      #    Re-exports from dependencies
 │   └── contract-published/{module}/   #    Public API subset
 │
 ├── server/src/{module}/
 │   ├── routes.generated.ts            # ❌ Auto-generated (template: fastify-routes.hbs)
+│   ├── lambda.generated.ts            # ❌ Auto-generated (template: lambda-routes.hbs, init --lambda)
 │   ├── services/                      # ✅ Human-edited (service implementations)
 │   └── overlays/                      # ✅ Human-edited (overlay implementations)
 │
@@ -422,6 +425,7 @@ Initialize a new module structure with starter templates.
 | `-o, --output <path>` | Output path for processed OpenAPI |
 | `--skip-templates` | Skip creating starter templates |
 | `--screens` | Initialize as screen spec module (generates screen templates and starter spec) |
+| `--lambda` | Also create the AWS Lambda handler template (`lambda-routes.hbs`), and configure it as the server output in place of the Fastify routes (see [AWS Lambda](#aws-lambda)) |
 
 ### lint \<input\>
 
@@ -751,6 +755,54 @@ for (const schema of allSchemas) {
 const fastify = Fastify();
 fastify.setValidatorCompiler(({ schema }) => ajv.compile(schema));
 ```
+
+### AWS Lambda
+
+`init --lambda` also writes `lambda-routes.hbs`, a handler for the events of an API Gateway
+HTTP API (payload format 2.0) and of a Lambda function URL, and configures it as the server
+output (`server/src/{module}/lambda.generated.ts`) in place of the Fastify routes. It runs a
+module's operations without Fastify — one Lambda function per module — and needs `ajv`,
+`ajv-formats` and `fast-json-stringify` in your dependencies.
+
+```typescript
+import { createHandler } from './billing/lambda.generated.js';
+import { BillingService } from './billing/services/index.js';
+import { requireAuth, tenantIsolation } from './billing/overlays/index.js';
+
+export const handler = createHandler({
+  services: { billing: new BillingService() },
+  overlays: { requireAuth, tenantIsolation },
+  basePath: '/prod', // what the event's path carries before the spec's paths, if anything
+});
+```
+
+The handler answers as the starter Fastify routes do:
+
+- It routes an event by `rawPath` and `requestContext.http.method`, a literal path segment
+  before a parameter. A path no operation has is answered with 404, and another method of an
+  operation's path with 405 and `Allow`.
+- It validates the path, query, header and cookie parameters and the body against the
+  schemas the Fastify routes use, with Fastify's default validator options except
+  `removeAdditional: false` (see [Validators](#validators)), and words a refusal (400) as
+  Fastify does (`querystring/limit must be integer`). The query is read from
+  `rawQueryString`, a key given more than once being an array; headers in lower case; cookies
+  from the event's `cookies`. A body is JSON — decoded first when `isBase64Encoded` — and
+  another content type is answered with 415.
+- It runs the operation's overlays (`overlayAdapter.generated.ts`), then the service, and
+  answers with the success status and the body serialized by the schema declared for it.
+
+An error — a refused request, an overlay's refusal, a service's throw — is answered as the
+contract's `ProblemDetails`, with `toProblemDetails` from the contract's `errors/`: a thrown
+error's `status` or `statusCode` (400–599) is the response's status, any other error is 500
+and logged, and its message is the title. The body is serialized by the schema declared for
+that status, as Fastify serializes an error.
+
+A [stream operation](#stream-responses) needs the response streaming of a function URL whose
+invoke mode is `RESPONSE_STREAM`. For one, the template exports `createStreamHandler` too, a
+handler wrapped in `awslambda.streamifyResponse` that sends each event as the service yields
+it and closes the service's iterator when the response stream closes; it answers the other
+operations as `createHandler` does. `createHandler` answers a stream operation with all its
+events at once, when the stream ends.
 
 ---
 
