@@ -21,6 +21,11 @@ npm run dev
 - **Server**: http://localhost:3001
 - **Frontend**: http://localhost:5173
 
+`npm run dev` points the frontend's client at the server's own origin (`VITE_API_BASE_URL`),
+which is not the page's, so its requests carry no cookies. With `VITE_API_BASE_URL` unset, the
+client calls `/api/...` on the page's origin, the Vite dev server proxies it to the server, and
+the browser sends the page's cookies.
+
 ## Available Commands
 
 ### Development

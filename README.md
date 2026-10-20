@@ -634,10 +634,18 @@ from the Cookie header and validates them against `…CookieParams` with the val
 validates the rest with (`request.compileValidationSchema`). A request missing a required
 header or cookie, or carrying one that does not match its schema, is answered with 400 before
 the service runs. The service's input holds the path, query and cookie parameters; headers
-are validated only. The browser sends cookies, so a client is called without them: an
-operation with cookie parameters gets a client input (`<Service>_<method>ClientInput`) — its
-input with the cookie parameters optional — which the starter fetch client takes. Being wider
-than the service's input, it lets the client still satisfy the service interface.
+are validated only. A client is called without cookies, which the browser sends: an operation
+with cookie parameters gets a client input (`<Service>_<method>ClientInput`) — its input with
+the cookie parameters optional — which the starter fetch client takes. Being wider than the
+service's input, it lets the client still satisfy the service interface.
+
+The starter fetch client calls `fetch` without a `credentials` option and takes no fetch
+options, so the browser sends cookies under fetch's default, `same-origin`: with a request to
+the page's own origin — directly, or through a dev-server proxy — and with no other. For an
+API on another origin, set `credentials: 'include'` on the `fetch` calls in your copy of
+`fetch-client.hbs`, and have the server allow credentialed CORS: an explicit allowed origin and
+`Access-Control-Allow-Credentials: true` (with `@fastify/cors`, `credentials: true`). A cookie
+sent to another site must also be `SameSite=None; Secure`.
 
 Every validation keyword of the contract is kept. Only what JSON Schema spells differently is
 translated (`$ref`, `nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` /
