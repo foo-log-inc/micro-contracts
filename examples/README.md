@@ -21,6 +21,11 @@ npm run dev
 - **Server**: http://localhost:3001
 - **Frontend**: http://localhost:5173
 
+`npm run dev` points the frontend's client at the server's own origin (`VITE_API_BASE_URL`),
+which is not the page's, so its requests carry no cookies. With `VITE_API_BASE_URL` unset, the
+client calls `/api/...` on the page's origin, the Vite dev server proxies it to the server, and
+the browser sends the page's cookies.
+
 ## Available Commands
 
 ### Development
@@ -125,63 +130,48 @@ The `spec/default/templates/` directory contains Handlebars templates for genera
 
 ### Template List
 
+These are exactly the files `micro-contracts init` writes to `spec/default/templates/`.
+
 | File | Generated File | Description |
 |------|----------------|-------------|
-| `fastify-routes.hbs` | `server/src/{module}/routes.generated.ts` | Fastify route definitions. Generates HTTP endpoints from OpenAPI and dispatches to Domain methods |
-| `fetch-client.hbs` | `frontend/src/{module}/api.generated.ts` | Frontend HTTP client. Executes fetch with the same signature as Domain API |
-| `overlay-adapter.hbs` | `server/src/{module}/overlayAdapter.generated.ts` | Overlay execution runtime. Extracts overlay parameters from requests and executes handlers |
-| `overlay-stubs.hbs` | (first time only) `server/src/{module}/overlays.ts` | Skeleton implementation of overlay handlers. Used as initial implementation scaffold |
-| `domain-stubs.hbs` | (first time only) `server/src/{module}/domains/*.ts` | Skeleton implementation of Domain classes. Used as initial implementation scaffold |
+| `fastify-routes.hbs` | `server/src/{module}/routes.generated.ts` | Fastify route definitions. Validates the request, runs the operation's overlays and calls the service method, answering with the operation's success status |
+| `fetch-client.hbs` | `frontend/src/{module}/api.generated.ts` | Frontend HTTP client. Executes fetch with the same signature as the service API |
+| `overlay-adapter.hbs` | `server/src/{module}/overlayAdapter.generated.ts` | Overlay execution runtime. Extracts overlay parameters from requests and executes handlers; an operation whose handler is not registered is refused |
+| `service-stubs.hbs` | (not configured here) | Skeleton classes implementing each service interface. Used as initial implementation scaffold |
+| `overlay-stubs.hbs` | (not configured here) | Skeleton overlay handlers and the `overlayHandlers` registry. Used as initial implementation scaffold |
 
 ### Generation Source Differences
 
 | Target | Command | Description |
 |--------|---------|-------------|
 | `spec/default/templates/` | `micro-contracts init` | Creates initial Handlebars template files |
-| `packages/contract/` | `micro-contracts generate` | Directly generates type definitions, validators, and Domain interfaces |
+| `packages/contract/` | `micro-contracts generate` | Directly generates type definitions, validators, and service interfaces |
 | `server/`, `frontend/` | `micro-contracts generate` | Generated from Handlebars templates. Customizable |
-
-### Are templates created by `micro-contracts init`?
-
-**All templates are created by `micro-contracts init`.**
-
-```bash
-# Initialize a new project
-npx micro-contracts init
-
-# The following are created:
-# spec/default/templates/
-#   ├── fastify-routes.hbs
-#   ├── fetch-client.hbs
-#   ├── domain-stubs.hbs
-#   ├── overlay-adapter.hbs
-#   └── overlay-stubs.hbs
-```
 
 ### Customizing Templates
 
-Templates can be customized for project-specific requirements:
+Each entry under `outputs` in `micro-contracts.config.yaml` names the template it renders.
+A module renders its own template for an output by overriding `template` under
+`modules.<name>.outputs.<id>` — this example does so for the core module's frontend client:
 
-- **Module-specific templates**: Place in `spec/{module}/templates/` to apply only to that module
-- **Default templates**: `spec/default/templates/` applies to all modules (fallback when no module-specific template exists)
-
-```
-spec/
-├── default/templates/          # Common to all modules (fallback)
-│   └── fastify-routes.hbs
-└── billing/templates/          # billing module only (priority)
-    └── fastify-routes.hbs      # billing-specific customization
+```yaml
+modules:
+  core:
+    outputs:
+      frontend-client:
+        template: spec/core/templates/client.hbs
 ```
 
 ### Available Template Variables
 
 The following variables are available in templates:
 
-- `{{routes}}` - Array of route information
-- `{{domains}}` - Array of Domain information
+- `{{routes}}` - Array of operations, each with `operationId`, `httpMethod`, `path`, `service`, `serviceMethod`, `inputType`, `responseType`, `successStatus` and more
+- `{{services}}` - Array of services, each with `name`, `key` and `methods`
 - `{{contractPackage}}` - Path to contract package
-- `{{domainsPath}}` - Path to Fastify's domains object
-- `{{extensionInfo}}` - Overlay information
+- `{{servicesPath}}` - Path to the services object in Fastify
+- `{{extensionInfo}}` / `{{uniqueOverlays}}` - Overlay information
+- `{{outputConfig}}` - The output's `config`
 - Other Handlebars helpers (`uppercase`, `camelCase`, `pascalCase`, `kebabCase`, `snakeCase`, `eq`, `if`, `each`, etc.)
 
 ---
@@ -202,6 +192,7 @@ The following is an auto-generated list of APIs from OpenAPI spec.
 | core | POST | /api/tenant/data | Create tenant data |  | requireAuth, tenantIsolation, rateLimit | [Tenant.createData](server/src/core/services/TenantService.ts) |
 | core | GET | /api/admin/stats | Get system statistics |  | requireAuth, requireAdmin | [Admin.getStats](server/src/core/services/AdminService.ts) |
 | core | POST | /api/admin/users/{id}/suspend | Suspend user account |  | requireAuth, requireAdmin | [Admin.suspendUser](server/src/core/services/AdminService.ts) |
+| core | GET | /api/session | Current session |  |  | [User.getSession](server/src/core/services/UserService.ts) |
 | core | GET | /api/health | Health check | ✅ |  | [Health.check](server/src/core/services/HealthService.ts) |
 | billing | GET | /api/billing/invoices | List all invoices | ✅ | requireAuth, tenantIsolation | [Billing.getInvoices](server/src/billing/services/BillingService.ts) |
 | billing | POST | /api/billing/invoices | Create a new invoice | ✅ | requireAuth, tenantIsolation | [Billing.createInvoice](server/src/billing/services/BillingService.ts) |
@@ -329,11 +320,11 @@ curl -H "Authorization: Bearer admin" http://localhost:3001/api/admin/stats
 
 ```bash
 # Get invoices (requires auth + tenant)
-curl -H "Authorization: Bearer test" -H "X-Tenant-Id: tenant-1" \
+curl -H "Authorization: Bearer test" -H "X-Tenant-Id: 3f0e4f5e-1111-4222-8333-444455556666" \
   http://localhost:3001/api/billing/invoices
 
 # Create invoice
-curl -X POST -H "Authorization: Bearer test" -H "X-Tenant-Id: tenant-1" \
+curl -X POST -H "Authorization: Bearer test" -H "X-Tenant-Id: 3f0e4f5e-1111-4222-8333-444455556666" \
   -H "Content-Type: application/json" \
   -d '{"userId":"1","amount":99.99}' \
   http://localhost:3001/api/billing/invoices

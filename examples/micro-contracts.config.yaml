@@ -47,10 +47,6 @@ modules:
       - spec/core/overlays/cache.overlay.yaml
     # Module-specific output overrides (optional)
     outputs:
-      overlay-adapter:
-        template: spec/core/templates/overlay-adapter.hbs
-      server-routes:
-        template: spec/core/templates/routes.hbs
       frontend-client:
         template: spec/core/templates/client.hbs
     # No external dependencies

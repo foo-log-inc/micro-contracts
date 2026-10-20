@@ -12,11 +12,13 @@ import type { ProblemDetails } from '@project/contract/billing/schemas/types.js'
 // Types
 // ==========================================================================
 
-/** HTTP request abstraction */
+/** HTTP request abstraction: what a route hands the overlays */
 export interface HttpRequest {
   headers: Record<string, string | string[] | undefined>;
   params: Record<string, string>;
   query: Record<string, unknown>;
+  /** The cookies the request carries, by name */
+  cookies: ReadonlyMap<string, string>;
   body: unknown;
 }
 
@@ -34,6 +36,8 @@ const getQuery = (req: HttpRequest, name: string): unknown => req.query[name];
 
 const getParam = (req: HttpRequest, name: string): string | undefined => req.params[name];
 
+const getCookie = (req: HttpRequest, name: string): string | undefined => req.cookies.get(name);
+
 /** Overlay parameter extractors - each overlay defined once */
 const extractors: Record<string, ParamExtractor> = {
   'requireAuth': (req) => ({
@@ -45,6 +49,13 @@ const extractors: Record<string, ParamExtractor> = {
   'validatePaymentMethod': (req) => ({
     'X-Payment-Token': getHeader(req, 'X-Payment-Token'),
   }),
+};
+
+/** The parameters each overlay requires: a request without one is refused before the overlay runs */
+const requiredParams: Record<string, string[]> = {
+  'requireAuth': [],
+  'tenantIsolation': ['X-Tenant-Id', ],
+  'validatePaymentMethod': ['X-Payment-Token', ],
 };
 
 // ==========================================================================
@@ -91,8 +102,21 @@ export async function runOverlays(
       );
     }
 
+    // The extractor builds the input the handler is declared with, from the
+    // same parameters; looked up by name, TypeScript cannot pair the two.
     const input = extract(req);
-    const result = await (handler as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
+    const missing = (requiredParams[name] ?? []).filter(param => input[param] === undefined);
+    if (missing.length > 0) {
+      return {
+        success: false,
+        error: {
+          type: '/errors/missing_parameter',
+          title: `Missing required parameter: ${missing.join(', ')}`,
+          status: 400,
+        },
+      };
+    }
+    const result = await (handler as unknown as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
 
     if (!result.success) {
       return {
@@ -111,18 +135,6 @@ export async function runOverlays(
   }
 
   return { success: true, context };
-}
-
-/**
- * Build HttpRequest from Fastify request
- */
-export function toHttpRequest(req: { headers: unknown; params: unknown; query: unknown; body: unknown }): HttpRequest {
-  return {
-    headers: req.headers as Record<string, string | string[] | undefined>,
-    params: req.params as Record<string, string>,
-    query: req.query as Record<string, unknown>,
-    body: req.body,
-  };
 }
 
 /**

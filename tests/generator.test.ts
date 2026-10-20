@@ -14,6 +14,7 @@ import {
   generate,
   collectInputFiles,
   buildTemplateContext,
+  lintSpec,
 } from '../src/generator/index.js';
 import { getStarterTemplates } from '../src/cli/templates.js';
 import type { MultiModuleConfig } from '../src/types.js';
@@ -451,7 +452,7 @@ actions:
         path.join(tmpDir, 'server/src/core/routes.generated.ts'),
         'utf-8'
       );
-      expect(routesContent).toContain("runOverlays('getUsers', handlers, toHttpRequest(req))");
+      expect(routesContent).toContain("runOverlays('getUsers', handlers, toHttpRequest(req, cookies))");
     });
 
     it('should filter to specific modules', async () => {
@@ -1039,7 +1040,10 @@ export interface {{interfaceName}} {
               operationId: 'getInternal',
               'x-micro-contracts-service': 'Internal',
               'x-micro-contracts-method': 'get',
-              responses: { '500': { $ref: '#/components/responses/InternalError' } },
+              responses: {
+                '200': { description: 'ok' },
+                '500': { $ref: '#/components/responses/InternalError' },
+              },
             },
           },
         },
@@ -1720,8 +1724,9 @@ paths:
       responses:
         '200': { description: ok }
 `);
+      const received: unknown[] = [];
       const app = await serveWithStarterRoutes(config, {
-        patient: { getPatient: async (input: unknown) => input },
+        patient: { getPatient: async (input: unknown) => { received.push(input); } },
       });
 
       try {
@@ -1730,7 +1735,7 @@ paths:
 
         const valid = await app.inject({ method: 'GET', url: '/patients/p1?phrPeriod=1W' });
         expect(valid.statusCode).toBe(200);
-        expect(valid.json()).toEqual({ patientId: 'p1', phrPeriod: '1W' });
+        expect(received).toEqual([{ patientId: 'p1', phrPeriod: '1W' }]);
       } finally {
         await app.close();
       }
@@ -1758,8 +1763,9 @@ paths:
       responses:
         '201': { description: created }
 `);
+      const received: unknown[] = [];
       const app = await serveWithStarterRoutes(config, {
-        order: { createOrder: async (input: unknown) => input },
+        order: { createOrder: async (input: unknown) => { received.push(input); } },
       });
 
       try {
@@ -1767,12 +1773,158 @@ paths:
         expect(invalid.statusCode).toBe(400);
 
         const valid = await app.inject({ method: 'POST', url: '/orders', payload: { qty: 2 } });
-        expect(valid.statusCode).toBe(200);
-        expect(valid.json()).toEqual({ data: { qty: 2 } });
+        expect(valid.statusCode).toBe(201);
+        expect(received).toEqual([{ data: { qty: 2 } }]);
       } finally {
         await app.close();
       }
     });
+
+    it('names an inline request body of any shape, and validates and passes it (starter Fastify routes)', async () => {
+      const { config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /tags:
+    put:
+      operationId: setTags
+      x-micro-contracts-service: Tag
+      x-micro-contracts-method: setTags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: array, items: { type: string } }
+      responses:
+        '204': { description: ok }
+`);
+      const received: unknown[] = [];
+      const app = await serveWithStarterRoutes(config, {
+        tag: { setTags: async (input: unknown) => { received.push(input); } },
+      });
+
+      try {
+        const types = read('contracts/core/schemas/types.ts');
+        expect(types).toContain('export type Tag_setTagsBody = string[];');
+        expect(types).toContain('export type Tag_setTagsInput = { data: Tag_setTagsBody };');
+
+        const invalid = await app.inject({ method: 'PUT', url: '/tags', payload: { tags: 'a' } });
+        expect(invalid.statusCode).toBe(400);
+
+        await app.inject({ method: 'PUT', url: '/tags', payload: ['a', 'b'] });
+        expect(received).toEqual([{ data: ['a', 'b'] }]);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('answers a 202 or 2XX operation with that response, in the service and the route alike', async () => {
+      const { specPath, config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /jobs:
+    post:
+      operationId: startJob
+      x-micro-contracts-service: Job
+      x-micro-contracts-method: startJob
+      responses:
+        '202':
+          description: accepted
+          content: { application/json: { schema: { $ref: '#/components/schemas/Job' } } }
+  /things:
+    get:
+      operationId: listThings
+      x-micro-contracts-service: Job
+      x-micro-contracts-method: listThings
+      responses:
+        '2XX':
+          description: ok
+          content: { application/json: { schema: { $ref: '#/components/schemas/Things' } } }
+        '400':
+          description: bad
+          content: { application/json: { schema: { $ref: '#/components/schemas/Problem' } } }
+components:
+  schemas:
+    Job: { type: object, properties: { id: { type: string } } }
+    Things: { type: object, properties: { items: { type: array, items: { type: string } } } }
+    Problem: { type: object, properties: { title: { type: string } } }
+`);
+
+      await generate(config, { contractsOnly: true });
+      const service = read('contracts/core/services/JobServiceApi.ts');
+      expect(service).toContain('startJob(input: Job_startJobInput): Promise<Job>;');
+      expect(service).toContain('listThings(input: Job_listThingsInput): Promise<Things>;');
+
+      const { routes } = buildTemplateContext(loadOpenAPISpec(specPath), 'core');
+      const route = (id: string) => routes.find(r => r.operationId === id)!;
+      expect(route('startJob')).toMatchObject({ responseType: 'Job', successStatus: 202 });
+      expect(route('listThings')).toMatchObject({ responseType: 'Things', successStatus: 200 });
+    });
+
+    it('names an inline success response, and types, validates and routes it by that name', async () => {
+      const { specPath, config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /stats:
+    get:
+      operationId: getStats
+      x-micro-contracts-service: Stats
+      x-micro-contracts-method: getStats
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer }
+`);
+
+      await generate(config, { contractsOnly: true });
+      expect(read('contracts/core/schemas/types.ts'))
+        .toMatch(/export interface Stats_getStatsResponse \{\n {2}count: number;\n\}/);
+      expect(read('contracts/core/schemas/validators.ts')).toContain('"$id": "Stats_getStatsResponse"');
+      expect(read('contracts/core/services/StatsServiceApi.ts'))
+        .toContain('getStats(input: Stats_getStatsInput): Promise<Stats_getStatsResponse>;');
+
+      const [route] = buildTemplateContext(loadOpenAPISpec(specPath), 'core').routes;
+      expect(route).toMatchObject({ responseType: 'Stats_getStatsResponse', successStatus: 200 });
+    });
+
+    it.each([
+      ['request body', `
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, properties: { file: { type: string, format: binary } } }
+      responses:
+        '200': { description: ok }`, /POST \/files requestBody declares 'multipart\/form-data', which generated code cannot carry\. Remove it, and declare the body as application\/json\./],
+      ['success response', `
+      responses:
+        '200':
+          description: ok
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }`, /POST \/files response 200 declares 'application\/pdf', which generated code cannot carry\. Remove it, and declare the body as application\/json\./],
+    ])('fails on a %s in a media type generated code cannot carry', async (_label, operation, message) => {
+      const { specPath, config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /files:
+    post:
+      operationId: upload
+      x-micro-contracts-service: File
+      x-micro-contracts-method: upload${operation}
+`);
+
+      expect(() => lintSpec(loadOpenAPISpec(specPath))).toThrow(message);
+      await expect(generate(config, { skipLint: true, contractsOnly: true })).rejects.toThrow(message);
+    });
   });
 });
-

@@ -5,10 +5,12 @@
  */
 
 import type {
+  Session,
   User,
   UserListResponse,
   User_createUserInput,
   User_deleteUserInput,
+  User_getSessionInput,
   User_getUserByIdInput,
   User_getUsersInput,
   User_updateUserInput,
@@ -41,5 +43,11 @@ export interface UserServiceApi {
    * @internal Not included in public contract
    */
   deleteUser(input: User_deleteUserInput): Promise<void>;
+
+  /**
+   * GET /api/session
+   * @internal Not included in public contract
+   */
+  getSession(input: User_getSessionInput): Promise<Session>;
 
 }

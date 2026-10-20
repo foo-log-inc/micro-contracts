@@ -290,6 +290,41 @@ paths:
                 $ref: '#/components/schemas/User'
 
   # ==========================================================================
+  # Session (identified by the session cookie the browser sends)
+  # ==========================================================================
+  /api/session:
+    get:
+      tags: [Users]
+      summary: Current session
+      description: |
+        The session the request's session cookie identifies. The browser sends
+        the cookie, so a client calls this without passing it.
+      operationId: getSession
+      x-micro-contracts-service: User
+      x-micro-contracts-method: getSession
+      parameters:
+        - name: session_id
+          in: cookie
+          required: true
+          description: Session identifier (an HttpOnly cookie)
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: The current session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '404':
+          description: No session with that identifier
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../_shared/openapi/problem-details.yaml#/components/schemas/ProblemDetails'
+
+  # ==========================================================================
   # Health Check (No auth required)
   # ==========================================================================
   /api/health:
@@ -340,6 +375,16 @@ components:
         internalNotes:
           type: string
           x-micro-contracts-non-exportable: true
+
+    Session:
+      type: object
+      required: [userId, expiresAt]
+      properties:
+        userId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
 
     UserListResponse:
       type: object

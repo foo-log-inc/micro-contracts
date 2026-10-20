@@ -7,7 +7,41 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '@project/contract/billing/schemas/index.js';
 import * as types from '@project/contract/billing/schemas/types.js';
-import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
+import { Billing_getInvoicesHeaderParams, Billing_createInvoiceHeaderParams, Billing_getInvoiceByIdHeaderParams, Billing_payInvoiceHeaderParams, } from '@project/contract/billing/schemas/validators.js';
+import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
+
+/**
+ * The cookies of a Cookie header (`name=value; name=value`), by name.
+ * Of two cookies with one name, the first is kept: it is the more specific.
+ */
+function parseCookies(header: string | string[] | undefined): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const pair of [header ?? []].flat().join('; ').split(';')) {
+    const separator = pair.indexOf('=');
+    const name = pair.slice(0, separator).trim();
+    if (separator < 0 || !name || cookies.has(name)) continue;
+
+    let value = pair.slice(separator + 1).trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+
+/** The request as the overlays read it */
+function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>): HttpRequest {
+  return {
+    headers: req.headers as Record<string, string | string[] | undefined>,
+    params: req.params as Record<string, string>,
+    query: req.query as Record<string, unknown>,
+    cookies,
+    body: req.body,
+  };
+}
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // A component referenced from a shared file is a schema of every module that
@@ -29,66 +63,78 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/billing/invoices', {
     schema: {
       querystring: { $ref: 'Billing_getInvoicesQueryParams#' },
-      response: { 200: { $ref: 'InvoiceListResponse#' },  },
+      headers: Billing_getInvoicesHeaderParams,
+      response: { '200': { $ref: 'InvoiceListResponse#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('getInvoices', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('getInvoices', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_getInvoicesInput = {
       ...(req.query as types.Billing_getInvoicesParams),
     };
-    return billing.getInvoices(input);
+    const output = await billing.getInvoices(input);
+    return reply.code(200).send(output);
   });
 
   // POST /api/billing/invoices [PUBLISHED]
   fastify.post('/api/billing/invoices', {
     schema: {
+      headers: Billing_createInvoiceHeaderParams,
       body: { $ref: 'CreateInvoiceRequest#' },
-      response: { 201: { $ref: 'Invoice#' },  },
+      response: { '201': { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('createInvoice', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('createInvoice', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_createInvoiceInput = {
       data: req.body as types.CreateInvoiceRequest,
     };
-    return billing.createInvoice(input);
+    const output = await billing.createInvoice(input);
+    return reply.code(201).send(output);
   });
 
   // GET /api/billing/invoices/{id} [PUBLISHED]
   fastify.get('/api/billing/invoices/:id', {
     schema: {
       params: { $ref: 'Billing_getInvoiceByIdPathParams#' },
-      response: { 200: { $ref: 'Invoice#' },  },
+      headers: Billing_getInvoiceByIdHeaderParams,
+      response: { '200': { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('getInvoiceById', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('getInvoiceById', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_getInvoiceByIdInput = {
       ...(req.params as types.Billing_getInvoiceByIdParams),
     };
-    return billing.getInvoiceById(input);
+    const output = await billing.getInvoiceById(input);
+    return reply.code(200).send(output);
   });
 
   // POST /api/billing/invoices/{id}/pay [PUBLISHED]
   fastify.post('/api/billing/invoices/:id/pay', {
     schema: {
       params: { $ref: 'Billing_payInvoicePathParams#' },
+      headers: Billing_payInvoiceHeaderParams,
       body: { $ref: 'PayInvoiceRequest#' },
-      response: { 200: { $ref: 'PaymentResult#' },  },
+      response: { '200': { $ref: 'PaymentResult#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await runOverlays('payInvoice', handlers, toHttpRequest(req));
+    const cookies = parseCookies(req.headers.cookie);
+    const result = await runOverlays('payInvoice', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_payInvoiceInput = {
       ...(req.params as types.Billing_payInvoiceParams),
       data: req.body as types.PayInvoiceRequest,
     };
-    return billing.payInvoice(input);
+    const output = await billing.payInvoice(input);
+    return reply.code(200).send(output);
   });
 
 }

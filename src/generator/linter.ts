@@ -388,13 +388,12 @@ function checkPublicEndpointComposition(
   // Collect all referenced schemas
   const referencedSchemas = new Set<string>();
   
-  const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
-  if (bodySchema) {
-    collectReferencedSchemas(bodySchema, spec, referencedSchemas);
+  if (resolved.body) {
+    collectReferencedSchemas(resolved.body.schema, spec, referencedSchemas);
   }
   
-  for (const response of Object.values(resolved.responses)) {
-    const schema = response.content?.['application/json']?.schema;
+  for (const response of [resolved.success, ...resolved.otherResponses]) {
+    const schema = response.body?.schema;
     if (schema) {
       collectReferencedSchemas(schema, spec, referencedSchemas);
     }

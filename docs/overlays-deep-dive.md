@@ -183,6 +183,11 @@ export async function requireAuth(input: RequireAuthOverlayInput): Promise<Overl
 
 > **📦 Full examples**: See [`examples/server/src/core/overlays/`](../examples/server/src/core/overlays/)
 
+A parameter the overlay declares `required: true` is always in the input: the generated
+adapter refuses a request without it — header, query or cookie — with 400 (a ProblemDetails
+naming the missing parameter) before the handler runs. The generated route also validates an
+injected header, query or cookie parameter against its schema, before any overlay runs.
+
 ### Layer Responsibilities
 
 | Layer | Responsibility | Touches HTTP objects | Knows HTTP concepts |
@@ -285,7 +290,9 @@ operations get a handler:
 
 A named action gets an `OverlayRegistry` entry, a handler type, an extractor in the overlay
 adapter, and a `runOverlays` call on every operation its target selected — through a marker or
-through `$.paths[*][*]`. An unnamed action injects its parameters, responses and extension
+through `$.paths[*][*]`. The registry entry is keyed by the name as written; the types are named
+by its words, capitalized: `requireAuth` gets `RequireAuthOverlayInput`, and `tenant-isolation`
+gets `TenantIsolationOverlayInput` under the registry key `'tenant-isolation'`. An unnamed action injects its parameters, responses and extension
 properties into the spec and stops there, which is what a documentation-only header such as
 `X-Correlation-Id` needs.
 

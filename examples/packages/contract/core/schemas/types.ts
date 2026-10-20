@@ -50,6 +50,11 @@ export interface User {
   internalNotes?: string;
 }
 
+export interface Session {
+  userId: string;
+  expiresAt: string;
+}
+
 export interface UserListResponse {
   users: User[];
   total: number;
@@ -142,5 +147,14 @@ export interface Admin_suspendUserParams {
 }
 
 export type Admin_suspendUserInput = Admin_suspendUserParams & { data: SuspendUserRequest };
+
+export interface User_getSessionParams {
+  /** Session identifier (an HttpOnly cookie) */
+  session_id: string;
+}
+
+export type User_getSessionInput = User_getSessionParams;
+
+export type User_getSessionClientInput = Omit<User_getSessionInput, 'session_id'> & Partial<Pick<User_getSessionInput, 'session_id'>>;
 
 export type Health_checkInput = Record<string, never>;

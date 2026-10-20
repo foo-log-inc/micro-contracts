@@ -9,7 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import Handlebars from 'handlebars';
 import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
-import { operationKey } from './overlayProcessor.js';
+import { operationKey, overlayTypeName } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
 import { isReference, getRefName, parseComponentRef, resolveOperation } from '../types.js';
 import { operationTypeNames } from './typeGenerator.js';
@@ -49,6 +49,8 @@ export interface TemplateContext {
   schemaNames: string[];
   /** Unique overlays with their parameters (for overlay adapter generation) */
   uniqueOverlays: UniqueOverlayContext[];
+  /** Some route reads the request's cookies: for a cookie parameter, or for its overlays */
+  readsCookies: boolean;
   /** Screen contexts extracted from screen spec (populated when screen mode is enabled) */
   screens: ScreenContext[];
 }
@@ -147,16 +149,33 @@ interface RouteContext {
   queryParams: ParameterContext[];
   /** Path parameters */
   pathParams: ParameterContext[];
+  /** Cookie parameters */
+  cookieParams: ParameterContext[];
+  /**
+   * The validation schema of the path, query, header and cookie parameters,
+   * for each location the operation has parameters in. A header schema names
+   * headers in lower case and is not registered: a route gives it inline.
+   */
+  parameterSchemas: { path?: string; query?: string; header?: string; cookie?: string };
   /** Request body info */
   requestBody?: {
     schemaName: string;
     required: boolean;
   };
-  /** Response info */
+  /** Every declared response, by status code */
   responses: ResponseContext[];
+  /**
+   * The schemas a route serializes its responses with: the success response's
+   * body under successStatus, and every other declared response's body under
+   * its status code — a range in the form Fastify reads it (`4xx`), or
+   * `default`. Only bodies generated code carries have one.
+   */
+  responseSchemas: Array<{ status: string; schemaName: string }>;
   /** Type name base for this route (e.g., 'User_getUsers') */
   typeNameBase: string;
-  /** Response type (for return type) */
+  /** The status code a successful call is answered with (200 for a `2XX` or `default` response) */
+  successStatus: number;
+  /** The success response body's type, or 'void' when it has none */
   responseType: string;
   /** Request body type (if exists) */
   requestType?: string;
@@ -164,6 +183,8 @@ interface RouteContext {
   paramsType?: string;
   /** Unified input type (e.g., User_getUsersInput) */
   inputType: string;
+  /** The input a client calls the operation with: inputType, with its cookie parameters optional */
+  clientInputType: string;
   /** URL pattern for client using input object (with ${input.xxx} template syntax) */
   clientUrlPatternInput: string;
   /** Parameters injected by extensions for this route */
@@ -179,10 +200,19 @@ interface RouteExtension {
 interface ExtensionParameterContext {
   extensionName: string;
   name: string;
-  location: 'headers' | 'query' | 'params';
+  /** The property of the overlay adapter's request the parameter is read from */
+  location: 'headers' | 'query' | 'params' | 'cookies';
   tsType: string;
   required: boolean;
 }
+
+/** The request property each OpenAPI parameter location (`in`) is read from. */
+const REQUEST_LOCATIONS: Record<ParameterObject['in'], ExtensionParameterContext['location']> = {
+  header: 'headers',
+  query: 'query',
+  path: 'params',
+  cookie: 'cookies',
+};
 
 interface ParameterContext {
   name: string;
@@ -191,7 +221,9 @@ interface ParameterContext {
 }
 
 interface ResponseContext {
+  /** The response's key under `responses`: a status code, a range or `default` */
   statusCode: string;
+  /** The type of its body, when generated code carries the body */
   schemaName?: string;
 }
 
@@ -273,6 +305,7 @@ export function buildTemplateContext(
     schemaTypes,
     schemaNames,
     uniqueOverlays,
+    readsCookies: routes.some(r => r.cookieParams.length > 0 || r.extensions.length > 0),
     screens,
   };
 }
@@ -338,8 +371,9 @@ function extractSchemaTypes(routes: RouteContext[]): string[] {
     if (route.paramsType) {
       types.add(route.paramsType);
     }
-    // Add unified input type (for service-aligned templates)
+    // Add unified input type (for service-aligned templates), and the client's
     types.add(route.inputType);
+    types.add(route.clientInputType);
   }
   
   return Array.from(types).sort();
@@ -436,16 +470,18 @@ function extractRoutes(
 
         // Add parameters injected by this extension
         for (const param of info.injectedParameters) {
-          // Map OpenAPI 'in' values to HTTP request property names
-          const locationMap: Record<string, 'headers' | 'query' | 'params'> = {
-            header: 'headers',
-            query: 'query',
-            path: 'params',
-          };
+          // A parameter is read from where it is declared, or not at all:
+          // reading it from anywhere else lets a client supply it there.
+          if (!Object.hasOwn(REQUEST_LOCATIONS, param.in)) {
+            throw new Error(
+              `Overlay '${info.name}' injects parameter '${param.name}' in '${param.in}', ` +
+              `which is not a request location (${Object.keys(REQUEST_LOCATIONS).join(', ')}).`
+            );
+          }
           extensionParams.push({
             extensionName: info.name,
             name: param.name,
-            location: locationMap[param.in] || 'headers',
+            location: REQUEST_LOCATIONS[param.in],
             tsType: parameterToTsType(param),
             required: param.required || false,
           });
@@ -459,6 +495,9 @@ function extractRoutes(
       const pathParams = resolved.parameters
         .filter(p => p.in === 'path')
         .map(p => ({ name: p.name, required: true }));
+      const cookieParams = resolved.parameters
+        .filter(p => p.in === 'cookie')
+        .map(p => ({ name: p.name, required: p.required || false }));
 
       // Extract request body, under the name types.ts and validators.ts give it
       let requestBody: RouteContext['requestBody'];
@@ -466,17 +505,21 @@ function extractRoutes(
         requestBody = { schemaName: typeNames.body, required: resolved.requestBody.required || false };
       }
 
-      // Extract responses
-      const responses: ResponseContext[] = [];
-      for (const [statusCode, response] of Object.entries(resolved.responses)) {
-        const schema = response.content?.['application/json']?.schema;
-        if (schema) {
-          const schemaName = isReference(schema) ? getRefName(schema.$ref) : undefined;
-          responses.push({ statusCode, schemaName });
-        } else {
-          responses.push({ statusCode });
-        }
-      }
+      // Extract responses, each body under the name types.ts gives it
+      const bodyTypes = new Map(typeNames.otherResponses.map(r => [r.statusCode, r.type]));
+      if (typeNames.response) bodyTypes.set(resolved.success.statusCode, typeNames.response);
+      const responses: ResponseContext[] = Object.keys(resolved.responses).map(statusCode => {
+        const schemaName = bodyTypes.get(statusCode);
+        return schemaName ? { statusCode, schemaName } : { statusCode };
+      });
+      const responseSchemas = responses.flatMap(({ statusCode, schemaName }) => schemaName
+        ? [{
+            status: statusCode === resolved.success.statusCode
+              ? String(resolved.success.status)
+              : statusCode.toLowerCase(),
+            schemaName,
+          }]
+        : []);
 
       // Client URL pattern: /users/{id} -> /users/${params.id}
       const clientUrlPattern = apiPath.replace(/\{([^}]+)\}/g, '${params.$1}');
@@ -484,9 +527,7 @@ function extractRoutes(
       const clientUrlPatternInput = apiPath.replace(/\{([^}]+)\}/g, '${input.$1}');
       
       // Calculate type names
-      const responseType = responses.length > 0 && responses[0].schemaName 
-        ? responses[0].schemaName 
-        : 'void';
+      const responseType = typeNames.response ?? 'void';
       const requestType = requestBody?.schemaName;
       // Params type combines both path and query parameters
       const paramsType = typeNames.params;
@@ -511,13 +552,18 @@ function extractRoutes(
         extensionParams,
         queryParams,
         pathParams,
+        cookieParams,
+        parameterSchemas: typeNames.parameterSchemas,
         requestBody,
         responses,
+        responseSchemas,
         typeNameBase,
+        successStatus: resolved.success.status,
         responseType,
         requestType,
         paramsType,
         inputType,
+        clientInputType: typeNames.clientInput?.name ?? typeNames.input,
       });
     }
   }
@@ -665,7 +711,7 @@ function deriveEventParams(
  * Extract schema $ref name from a mutation operation's request body.
  */
 function extractSchemaRef(resolved: ResolvedOperation): string {
-  const schema = resolved.requestBody?.content?.['application/json']?.schema;
+  const schema = resolved.body?.schema;
   return schema && isReference(schema) ? getRefName(schema.$ref) : '';
 }
 
@@ -708,13 +754,15 @@ function extractScreens(spec: OpenAPISpec): ScreenContext[] {
       ? operation.security.length > 0 && operation.security.some(s => Object.keys(s).length > 0)
       : false;
 
-    const response200 = resolveOperation(spec, apiPath, 'get').responses['200'];
+    const resolvedGet = resolveOperation(spec, apiPath, 'get');
+    const response200 = resolvedGet.responses['200'];
 
+    // A declared 200 is always the success response (the lowest 2xx code)
     let viewModelSchema = operation['x-view-model'] || '';
-    if (!viewModelSchema) {
-      const jsonContent = response200?.content?.['application/json'];
-      if (jsonContent?.schema && isReference(jsonContent.schema)) {
-        viewModelSchema = getRefName(jsonContent.schema.$ref);
+    if (!viewModelSchema && resolvedGet.success.statusCode === '200') {
+      const schema = resolvedGet.success.body?.schema;
+      if (schema && isReference(schema)) {
+        viewModelSchema = getRefName(schema.$ref);
       }
     }
 
@@ -848,6 +896,10 @@ Handlebars.registerHelper('kebabCase', (str) => {
 Handlebars.registerHelper('snakeCase', (str: string) => {
   return str?.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/-/g, '_').toLowerCase();
 });
+
+// Overlay helper: the stem of the type names generated for an overlay
+// (`{{overlayTypeName name}}OverlayInput`)
+Handlebars.registerHelper('overlayTypeName', (name: string) => overlayTypeName(name));
 
 // Ref helper: the component name of a reference; no reference, no name
 Handlebars.registerHelper('refName', (ref: string) => {

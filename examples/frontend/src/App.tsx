@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { healthApi, userApi } from './core/api.generated';
 
 // Import types from contract
-import type { HealthStatus, User, UserListResponse } from '@project/contract/core/schemas/types';
+import type { HealthStatus, Session, User, UserListResponse } from '@project/contract/core/schemas/types';
 
 // CSS styles
 const styles = {
@@ -171,6 +171,12 @@ function App() {
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
 
+  // Current session: the browser sends the session cookie, so the client is called without it
+  const [session, setSession] = useState<Session | null>(null);
+  useEffect(() => {
+    userApi.getSession({}).then(setSession, () => setSession(null));
+  }, []);
+
   // Fetch health status
   useEffect(() => {
     const fetchHealth = async () => {
@@ -287,6 +293,14 @@ function App() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Session Section */}
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>🔑 Session</h2>
+        <div style={styles.cardValue}>
+          {session ? `User ${session.userId} until ${session.expiresAt}` : 'No session'}
+        </div>
       </section>
 
       {/* Users Section */}

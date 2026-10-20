@@ -847,15 +847,15 @@ export interface ServiceMethodInfo {
   httpMethod: string;
   path: string;
   isPublished: boolean;
-  requestType?: string;
-  responseType?: string;
+  /** Success response body type (see operationTypeNames), or 'void' when it has none */
+  responseType: string;
   /** Input type (see operationTypeNames) */
   inputType: string;
   /** Params type (path + query combined; see operationTypeNames) */
   paramsType?: string;
   /** All parameters (path, query, header) from the operation */
   parameters: ParameterObject[];
-  /** Request body schema name (if exists) */
+  /** Request body type (see operationTypeNames) */
   requestBodySchema?: string;
   /** All x-* extension properties from the operation */
   extensions: Record<string, unknown>;
@@ -1142,6 +1142,36 @@ export function resolveParameter(
 }
 
 /**
+ * The media types generated code carries a body in, and the kind of body each
+ * one is. A request body or success response declared in any other media type
+ * is an error: generated code would drop it.
+ */
+const BODY_MEDIA_TYPES: Readonly<Record<string, OperationBody['kind']>> = {
+  'application/json': 'json',
+};
+
+/** A request or response body, in a media type generated code carries. */
+export interface OperationBody {
+  kind: 'json';
+  mediaType: string;
+  /** The body's schema: `{}` (any value) when the contract gives none */
+  schema: SchemaObject | ReferenceObject;
+}
+
+/** A response an operation declares. */
+interface DeclaredResponse {
+  /** Its key under `responses`: a status code, a range (`4XX`) or `default` */
+  statusCode: string;
+  body?: OperationBody;
+}
+
+/** The response an operation answers a successful call with. */
+interface SuccessResponse extends DeclaredResponse {
+  /** The status code it is sent with: the code itself, or 200 for `2XX` and `default` */
+  status: number;
+}
+
+/**
  * What an operation takes and returns, with every $ref into
  * components.parameters, components.requestBodies and components.responses
  * resolved.
@@ -1154,6 +1184,84 @@ export interface ResolvedOperation {
   parameters: ParameterObject[];
   requestBody?: RequestBodyObject;
   responses: Record<string, ResponseObject>;
+  /** The request body, as generated code carries it */
+  body?: OperationBody;
+  /** The response a successful call returns */
+  success: SuccessResponse;
+  /**
+   * Every other response, in declaration order. Its body is given when it is
+   * in a media type generated code carries; a response that documents an
+   * error may declare any other besides.
+   */
+  otherResponses: DeclaredResponse[];
+}
+
+/**
+ * The body `content` declares in a media type generated code carries, if it
+ * declares one there.
+ */
+function carriedBody(content: Record<string, MediaTypeObject> | undefined): OperationBody | undefined {
+  const mediaType = Object.keys(content ?? {}).find(m => Object.hasOwn(BODY_MEDIA_TYPES, m));
+  if (mediaType === undefined) return undefined;
+  return { kind: BODY_MEDIA_TYPES[mediaType], mediaType, schema: content![mediaType].schema ?? {} };
+}
+
+/**
+ * The body `content` declares, as generated code carries it; none when it
+ * declares no media type. Generated code reads a request body and returns a
+ * success response, so a media type it cannot carry is an error, never
+ * skipped: a skipped body vanishes from every artifact.
+ */
+function readBody(
+  content: Record<string, MediaTypeObject> | undefined,
+  location: string
+): OperationBody | undefined {
+  const body = carriedBody(content);
+  const uncarried = Object.keys(content ?? {}).filter(m => !Object.hasOwn(BODY_MEDIA_TYPES, m));
+  if (uncarried.length > 0) {
+    throw new Error(
+      `${location} declares ${uncarried.map(m => `'${m}'`).join(', ')}, which generated code cannot carry. ` +
+      `Remove ${uncarried.length === 1 ? 'it' : 'them'}` +
+      `${body ? '' : `, and declare the body as ${Object.keys(BODY_MEDIA_TYPES).join(' or ')}`}.`
+    );
+  }
+  return body;
+}
+
+/** Statuses whose response carries no content (RFC 9110). */
+const NO_CONTENT_STATUSES = new Set([204, 205]);
+
+/**
+ * The response a successful call returns: the lowest 2xx status code the
+ * operation declares, or else its `2XX` range, or else `default` — which
+ * covers every status code the operation does not declare. A generated route
+ * answers with one status and a service returns one value, so this is the one
+ * response both are generated for.
+ */
+function selectSuccessResponse(
+  responses: Record<string, ResponseObject>,
+  location: string
+): SuccessResponse {
+  const [lowest] = Object.keys(responses)
+    .filter(code => /^2\d\d$/.test(code))
+    .sort((a, b) => Number(a) - Number(b));
+  const statusCode = lowest ?? ['2XX', 'default'].find(key => key in responses);
+  if (statusCode === undefined) {
+    throw new Error(
+      `${location} declares no success response. Declare the response a successful call returns ` +
+      `under a 2xx status code (or the 2XX range, or default).`
+    );
+  }
+
+  const status = statusCode === lowest ? Number(statusCode) : 200;
+  const body = readBody(responses[statusCode].content, `${location} response ${statusCode}`);
+  if (body && NO_CONTENT_STATUSES.has(status)) {
+    throw new Error(
+      `${location} response ${statusCode} declares content, which a ${status} response cannot carry. ` +
+      `Remove the content, or declare the response under a status that carries one (such as 200).`
+    );
+  }
+  return { statusCode, status, body };
 }
 
 /**
@@ -1161,7 +1269,9 @@ export interface ResolvedOperation {
  *
  * Every generator and check reads parameters, request bodies and responses
  * through here, so a parameter declared on the path item or a response held in
- * components cannot reach one artifact while missing from another.
+ * components cannot reach one artifact while missing from another — and the
+ * request body and success response each artifact is generated for are the
+ * same ones.
  */
 export function resolveOperation(
   spec: OpenAPISpec,
@@ -1206,7 +1316,17 @@ export function resolveOperation(
     );
   }
 
-  return { parameters, requestBody, responses };
+  const success = selectSuccessResponse(responses, location);
+  return {
+    parameters,
+    requestBody,
+    responses,
+    body: readBody(requestBody?.content, `${location} requestBody`),
+    success,
+    otherResponses: Object.entries(responses)
+      .filter(([statusCode]) => statusCode !== success.statusCode)
+      .map(([statusCode, response]) => ({ statusCode, body: carriedBody(response.content) })),
+  };
 }
 
 // Collect all schemas referenced by a schema

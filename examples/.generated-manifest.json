@@ -1,12 +1,12 @@
 {
   "version": "1.0",
-  "generatorVersion": "0.19.0",
+  "generatorVersion": "0.20.0",
   "files": {
     "frontend/src/billing/api.generated.ts": {
-      "sha256": "8e3d5b75d6a30a1ea19f0c57135cb1c4913c8c344ae9ad83d9095db2e5bc4fea"
+      "sha256": "2b3eacca56412cc2d9287f1449676f8b4542d672a8113d60208af546778fdd8b"
     },
     "frontend/src/core/api.generated.ts": {
-      "sha256": "51bf79523f6c621d4e78f871713c9843dfa1773f2922201c324d64aa83123c93"
+      "sha256": "8e284c5fad1db72a615bda7c7d8d37715207c8c44c84404968bf04d212f564df"
     },
     "packages/contract-published/billing/docs/api-reference.html": {
       "sha256": "5b69e88fc9f60578261a8231132678550a40a70eb52dfcc611f48937f448ca44"
@@ -27,7 +27,7 @@
       "sha256": "ea571835e95b7dce8599046781526339405e69461473f5b139879f958fe6afdb"
     },
     "packages/contract-published/billing/schemas/validators.ts": {
-      "sha256": "42b59fd00f514b575a95bf0be89b8799e2a2ba4931fbedbb18c68230f4682221"
+      "sha256": "14c8b9325afa1c3b85be1df498810d09cdb4c5fbc2818046bc23204178b570f0"
     },
     "packages/contract-published/billing/services/BillingServiceApi.ts": {
       "sha256": "4230d7a55e19a117a1c696c6790f14a6ff5f08898a682ff2543804decab5888f"
@@ -54,7 +54,7 @@
       "sha256": "f1d8435e1fdb2f7689103489aaaba4025cf29f78b68ea71b4f991d176d78450b"
     },
     "packages/contract-published/core/schemas/validators.ts": {
-      "sha256": "cba4e921b85f7b8f8e13575517e3d44961c40746683cebfc67de345834701002"
+      "sha256": "69115d6d92b56bdd8867f80b59ff8e41c9651946a17682cf8685430c176d7d85"
     },
     "packages/contract-published/core/services/HealthServiceApi.ts": {
       "sha256": "97fe8b49940b4f82dc9ea43d077cb479195b8ba070ebff2457f926ec77550b95"
@@ -96,7 +96,7 @@
       "sha256": "ea571835e95b7dce8599046781526339405e69461473f5b139879f958fe6afdb"
     },
     "packages/contract/billing/schemas/validators.ts": {
-      "sha256": "42b59fd00f514b575a95bf0be89b8799e2a2ba4931fbedbb18c68230f4682221"
+      "sha256": "14c8b9325afa1c3b85be1df498810d09cdb4c5fbc2818046bc23204178b570f0"
     },
     "packages/contract/billing/services/BillingServiceApi.ts": {
       "sha256": "4230d7a55e19a117a1c696c6790f14a6ff5f08898a682ff2543804decab5888f"
@@ -108,7 +108,7 @@
       "sha256": "e26ecf17dc435dc504900e6529e46016447f9998dc2f13b600092169746d3dc3"
     },
     "packages/contract/core/docs/openapi.generated.yaml": {
-      "sha256": "a20e72d13d80c7294c882022891322257b70947e924fdb7eb7753d2e6cbcf30a"
+      "sha256": "38612cd5bde2f9b98c8dc7819c0cd948f568397167552348fc3270c1a04edcbd"
     },
     "packages/contract/core/errors/index.ts": {
       "sha256": "e448e50128b60b19eebfcee30127a426b69d0919b8219bfd6d38ff3628a62ac7"
@@ -123,10 +123,10 @@
       "sha256": "7bc8d5ef473d819f1466ed70422b325da29da0313fd7f54a9a1d657d97794f2a"
     },
     "packages/contract/core/schemas/types.ts": {
-      "sha256": "96c0219d24c79baaeff2b1260bb35c17aacb6f46c72816a76b9557f33b5aca93"
+      "sha256": "d053c32d4054b81f574ebe74eafbac1b915a971e100ba2ba1e7e7b0ab711bbcb"
     },
     "packages/contract/core/schemas/validators.ts": {
-      "sha256": "782f5b28fd38785cd7e943aecd4154801f215779abd13fc23d0da1feb1025d65"
+      "sha256": "b257b09dacc3a273ce215f48319f0d20df99fbb52b45ed26735cafb7ec190190"
     },
     "packages/contract/core/services/AdminServiceApi.ts": {
       "sha256": "78370d2d66333978d5151ced3698aa1ef70dc6eb468e873838e44e0401b3f18f"
@@ -138,7 +138,7 @@
       "sha256": "ed09d2013f4f46493d95535a32f807bc3c7468147ce0982bbc60370d6ae790dd"
     },
     "packages/contract/core/services/UserServiceApi.ts": {
-      "sha256": "e666f2cd336e80f9e5fcdd234ac083099f4f27d7aca1116d96dcc76be7f381ab"
+      "sha256": "41d7865f6c98d9b9159e10a7fbf1315cfec17897b9557e5e2978e579313a54ed"
     },
     "packages/contract/core/services/index.ts": {
       "sha256": "c1055c73f3c3ed15da852848663d20684218a3077c6ef172b96d8a6cb7d303e3"
@@ -150,18 +150,18 @@
       "sha256": "d791f51b36215aba3e7cf7c5f69fc4b9fd6d4f2cf515718fdc93589fa05e2608"
     },
     "server/src/billing/overlayAdapter.generated.ts": {
-      "sha256": "64b73a56a7404caedc869de6b6b1ffea3f3526b4e484b7d67be0ad6bed9d8e1f"
+      "sha256": "fa7457b2c3f435643be3f76c79fad86e261dc755e7f320a9de946b2400468c96"
     },
     "server/src/billing/routes.generated.ts": {
-      "sha256": "101370e96cebce5e26b59902731c2cc12294d406850db44a4c6c04f5d6edb059"
+      "sha256": "8546c9d4d9cee80764e0391d28a6f2e67f958017f000910d7a77e98a0734d2be"
     },
     "server/src/core/overlayAdapter.generated.ts": {
-      "sha256": "84479d865b663348fb8e95ca72c14a9273acf66989ee061ef7c18e01b64b4098"
+      "sha256": "c2d65bd7d4e69417beadf7230ba43debbb8845babe098fde72b7f09168f84394"
     },
     "server/src/core/routes.generated.ts": {
-      "sha256": "559bc0672d2c8a1eefdfa8b7750fa5d04a9e46a00c87dfca7bac0f29db8a5bda"
+      "sha256": "897da698e40a6390e7589ba0726baa275ff91f3c5c7925b5dcded873840395e3"
     }
   },
-  "inputHash": "69d82681793c3cbb106b1f1312263b90ef40c2319ebcc5744776a0c99aa99ab2",
-  "updatedAt": "2026-10-19T13:16:25.169Z"
+  "inputHash": "5f87739dc061448922a60964f79ab3e389ae647bf5d0d84061e5180b10267db1",
+  "updatedAt": "2026-10-20T08:26:53.964Z"
 }

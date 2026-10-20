@@ -1,8 +1,9 @@
 /**
  * Starter Templates for micro-contracts init command
- * 
+ *
  * These templates are created in spec/default/templates/ and can be customized.
- * Keep in sync with examples/spec/default/templates/
+ * examples/spec/default/templates/ holds exactly these files, as init writes
+ * them: the example project is generated and type-checked with them.
  */
 
 const STARTER_FASTIFY_ROUTES_TEMPLATE = `/**
@@ -14,8 +15,47 @@ const STARTER_FASTIFY_ROUTES_TEMPLATE = `/**
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { allSchemas } from '{{contractPackage}}/schemas/index.js';
 import * as types from '{{contractPackage}}/schemas/types.js';
+{{!-- A header schema is given inline: Fastify matches header names case-insensitively only in an inline schema --}}
+import { {{#each routes}}{{#if parameterSchemas.header}}{{parameterSchemas.header}}, {{/if}}{{/each~}} } from '{{contractPackage}}/schemas/validators.js';
 {{#if extensionInfo.length}}
-import { runOverlays, toHttpRequest, sendError } from './overlayAdapter.generated.js';
+import { runOverlays, sendError, type HttpRequest } from './overlayAdapter.generated.js';
+{{/if}}
+{{#if readsCookies}}
+
+/**
+ * The cookies of a Cookie header (\`name=value; name=value\`), by name.
+ * Of two cookies with one name, the first is kept: it is the more specific.
+ */
+function parseCookies(header: string | string[] | undefined): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const pair of [header ?? []].flat().join('; ').split(';')) {
+    const separator = pair.indexOf('=');
+    const name = pair.slice(0, separator).trim();
+    if (separator < 0 || !name || cookies.has(name)) continue;
+
+    let value = pair.slice(separator + 1).trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
+  }
+  return cookies;
+}
+{{/if}}
+{{#if extensionInfo.length}}
+
+/** The request as the overlays read it */
+function toHttpRequest(req: FastifyRequest, cookies: ReadonlyMap<string, string>): HttpRequest {
+  return {
+    headers: req.headers as Record<string, string | string[] | undefined>,
+    params: req.params as Record<string, string>,
+    query: req.query as Record<string, unknown>,
+    cookies,
+    body: req.body,
+  };
+}
 {{/if}}
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
@@ -38,24 +78,49 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 
 {{#each routes}}
   // {{uppercase method}} {{path}}{{#if isPublished}} [PUBLISHED]{{/if}}
+{{#if parameterSchemas.cookie}}
+  {{!-- Fastify parses no cookies: the route validates them, with the validator Fastify validates the rest with --}}
+  const {{parameterSchemas.cookie}} = { $ref: '{{parameterSchemas.cookie}}#' };
+{{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
-{{#if pathParams.length}}
-      params: { $ref: '{{typeNameBase}}PathParams#' },
+{{#if parameterSchemas.path}}
+      params: { $ref: '{{parameterSchemas.path}}#' },
 {{/if}}
-{{#if queryParams.length}}
-      querystring: { $ref: '{{typeNameBase}}QueryParams#' },
+{{#if parameterSchemas.query}}
+      querystring: { $ref: '{{parameterSchemas.query}}#' },
+{{/if}}
+{{#if parameterSchemas.header}}
+      headers: {{parameterSchemas.header}},
 {{/if}}
 {{#if requestBody}}
       body: { $ref: '{{requestBody.schemaName}}#' },
 {{/if}}
-{{#if responses.length}}
-      response: { {{#each responses}}{{#if schemaName}}{{statusCode}}: { $ref: '{{schemaName}}#' }{{#unless @last}}, {{/unless}}{{/if}}{{/each}} },
+{{#if responseSchemas.length}}
+      response: { {{#each responseSchemas}}'{{status}}': { $ref: '{{schemaName}}#' }{{#unless @last}}, {{/unless}}{{/each}} },
 {{/if}}
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
+{{#if (or cookieParams.length extensions.length)}}
+    const cookies = parseCookies(req.headers.cookie);
+{{/if}}
+{{#if parameterSchemas.cookie}}
+    const cookieParams: Record<string, unknown> = {};
+    for (const name of [{{#each cookieParams}}'{{name}}', {{/each~}} ]) {
+      const value = cookies.get(name);
+      if (value !== undefined) cookieParams[name] = value;
+    }
+    const validateCookies = req.compileValidationSchema({{parameterSchemas.cookie}});
+    if (!validateCookies(cookieParams)) {
+      {{!-- The error Fastify itself raises for a schema it validates --}}
+      throw Object.assign(
+        new Error((validateCookies.errors ?? []).map(e => \`cookies\${e.instancePath} \${e.message}\`).join(', ')),
+        { statusCode: 400, code: 'FST_ERR_VALIDATION', validation: validateCookies.errors, validationContext: 'cookies' },
+      );
+    }
+{{/if}}
 {{#if extensions.length}}
-    const result = await runOverlays('{{operationId}}', handlers, toHttpRequest(req));
+    const result = await runOverlays('{{operationId}}', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
 {{/if}}
     // Build input object (always required, even if empty)
@@ -66,11 +131,21 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{#if queryParams.length}}
       ...(req.query as types.{{typeNameBase}}Params),
 {{/if}}
+{{#if cookieParams.length}}
+      ...(cookieParams as unknown as types.{{typeNameBase}}Params),
+{{/if}}
 {{#if requestBody}}
       data: req.body as types.{{requestBody.schemaName}},
 {{/if}}
     };
-    return {{serviceKey}}.{{serviceMethod}}(input);
+{{!-- The success status is set once the service has returned: an error it throws keeps its own status. --}}
+{{#if (eq responseType "void")}}
+    await {{serviceKey}}.{{serviceMethod}}(input);
+    return reply.code({{successStatus}}).send();
+{{else}}
+    const output = await {{serviceKey}}.{{serviceMethod}}(input);
+    return reply.code({{successStatus}}).send(output);
+{{/if}}
   });
 
 {{/each}}
@@ -85,6 +160,7 @@ const STARTER_FETCH_CLIENT_TEMPLATE = `/**
  * 
  * Client API matches Service API signature (single input object).
  * Internally maps input to HTTP request (path params, query params, body).
+ * Cookie parameters are optional: the browser sends cookies, the client does not.
  */
 
 import type {
@@ -126,7 +202,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 // ==========================================================================
 // {{name}} API Client
 // ==========================================================================
-export const {{key}}Api: {{name}}ServiceApi = {
+export const {{key}}Api = {
 {{#each ../routes}}
 {{#if (eq service ../name)}}
   /**
@@ -134,7 +210,7 @@ export const {{key}}Api: {{name}}ServiceApi = {
    {{#if summary}}* {{summary}}{{/if}}
    {{#if isPublished}}* @published{{/if}}
    */
-  async {{serviceMethod}}(input: {{inputType}}): Promise<{{responseType}}> {
+  async {{serviceMethod}}(input: {{clientInputType}}): Promise<{{responseType}}> {
 {{#if queryParams.length}}
     const searchParams = new URLSearchParams();
 {{#each queryParams}}
@@ -166,34 +242,32 @@ export const {{key}}Api: {{name}}ServiceApi = {
 
 {{/if}}
 {{/each}}
-};
+} satisfies {{name}}ServiceApi;
 
 {{/each}}
 `;
 
-const STARTER_SERVICE_STUBS_TEMPLATE = `{{!-- Service implementation stubs template --}}
-{{!-- Generates skeleton implementations for service methods --}}
+const STARTER_SERVICE_STUBS_TEMPLATE = `{{!-- Service implementation stubs: a class per service, implementing its generated interface --}}
 // Auto-generated service stubs - Edit to implement business logic
-import type { {{#each services}}{{this}}ServiceApi{{#unless @last}}, {{/unless}}{{/each}} } from '{{config.contractPackage}}/services';
-import type * as types from '{{config.contractPackage}}/schemas/types';
+import type { {{#each services}}{{name}}ServiceApi{{#unless @last}}, {{/unless}}{{/each}} } from '{{contractPackage}}/services/index.js';
+import type * as types from '{{contractPackage}}/schemas/types.js';
 
 {{#each services}}
 /**
- * {{this}} Service Implementation
- * 
+ * {{name}} Service Implementation
+ *
  * Implement the methods below with your business logic.
- * Generated methods receive HTTP-agnostic input objects.
+ * Methods receive HTTP-agnostic input objects.
  */
-export class {{this}}Service implements {{this}}ServiceApi {
-{{#each ../operations}}
-{{#if (eq service ../this)}}
+export class {{name}}Service implements {{name}}ServiceApi {
+{{#each ../routes}}
+{{#if (eq service ../name)}}
   /**
-   * {{summary}}
-   * {{method}} {{path}}
+   * {{httpMethod}} {{path}}{{#if summary}}: {{summary}}{{/if}}
    */
-  async {{serviceMethod}}({{#if inputType}}input: types.{{inputType}}{{/if}}): Promise<types.{{responseType}}> {
+  async {{serviceMethod}}(input: types.{{inputType}}): Promise<{{#if (eq responseType "void")}}void{{else}}types.{{responseType}}{{/if}}> {
     // TODO: Implement {{serviceMethod}}
-    throw new Error('Not implemented: {{serviceMethod}}');
+    throw new Error('Not implemented: {{service}}.{{serviceMethod}}');
   }
 
 {{/if}}
@@ -217,11 +291,13 @@ import type { ProblemDetails } from '{{contractPackage}}/schemas/types.js';
 // Types
 // ==========================================================================
 
-/** HTTP request abstraction */
+/** HTTP request abstraction: what a route hands the overlays */
 export interface HttpRequest {
   headers: Record<string, string | string[] | undefined>;
   params: Record<string, string>;
   query: Record<string, unknown>;
+  /** The cookies the request carries, by name */
+  cookies: ReadonlyMap<string, string>;
   body: unknown;
 }
 
@@ -239,14 +315,23 @@ const getQuery = (req: HttpRequest, name: string): unknown => req.query[name];
 
 const getParam = (req: HttpRequest, name: string): string | undefined => req.params[name];
 
+const getCookie = (req: HttpRequest, name: string): string | undefined => req.cookies.get(name);
+
 /** Overlay parameter extractors - each overlay defined once */
 const extractors: Record<string, ParamExtractor> = {
 {{#each uniqueOverlays}}
   '{{name}}': (req) => ({
 {{#each params}}
-    '{{name}}': {{#if (eq location "headers")}}getHeader(req, '{{name}}'){{else if (eq location "query")}}getQuery(req, '{{name}}'){{else}}getParam(req, '{{name}}'){{/if}},
+    '{{name}}': {{#if (eq location "headers")}}getHeader(req, '{{name}}'){{else if (eq location "query")}}getQuery(req, '{{name}}'){{else if (eq location "params")}}getParam(req, '{{name}}'){{else if (eq location "cookies")}}getCookie(req, '{{name}}'){{/if}},
 {{/each}}
   }),
+{{/each}}
+};
+
+/** The parameters each overlay requires: a request without one is refused before the overlay runs */
+const requiredParams: Record<string, string[]> = {
+{{#each uniqueOverlays}}
+  '{{name}}': [{{#each params}}{{#if required}}'{{name}}', {{/if}}{{/each~}} ],
 {{/each}}
 };
 
@@ -282,10 +367,34 @@ export async function runOverlays(
     const extract = extractors[name];
     const handler = handlers[name as keyof OverlayRegistry];
     
-    if (!extract || !handler) continue;
+    // SECURITY: Never skip a required overlay - fail fast if not registered
+    if (!handler) {
+      throw new Error(
+        \`[SECURITY] Overlay handler "\${name}" is required for operation "\${operationId}" but not registered. \` +
+        \`Register it in server.ts: fastify.decorate('overlayHandlers', { \${name}: ... })\`
+      );
+    }
+    if (!extract) {
+      throw new Error(
+        \`[SECURITY] Overlay extractor "\${name}" is missing. This indicates a code generation issue.\`
+      );
+    }
 
+    // The extractor builds the input the handler is declared with, from the
+    // same parameters; looked up by name, TypeScript cannot pair the two.
     const input = extract(req);
-    const result = await (handler as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
+    const missing = (requiredParams[name] ?? []).filter(param => input[param] === undefined);
+    if (missing.length > 0) {
+      return {
+        success: false,
+        error: {
+          type: '/errors/missing_parameter',
+          title: \`Missing required parameter: \${missing.join(', ')}\`,
+          status: 400,
+        },
+      };
+    }
+    const result = await (handler as unknown as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
 
     if (!result.success) {
       return {
@@ -307,18 +416,6 @@ export async function runOverlays(
 }
 
 /**
- * Build HttpRequest from Fastify request
- */
-export function toHttpRequest(req: { headers: unknown; params: unknown; query: unknown; body: unknown }): HttpRequest {
-  return {
-    headers: req.headers as Record<string, string | string[] | undefined>,
-    params: req.params as Record<string, string>,
-    query: req.query as Record<string, unknown>,
-    body: req.body,
-  };
-}
-
-/**
  * Send error response
  */
 export function sendError(reply: FastifyReply, error: ProblemDetails): void {
@@ -326,55 +423,40 @@ export function sendError(reply: FastifyReply, error: ProblemDetails): void {
 }
 `;
 
-const STARTER_OVERLAY_STUBS_TEMPLATE = `{{!-- Extension implementation stubs template --}}
-{{!-- Generates skeleton implementations for overlay handlers --}}
-// Auto-generated extension stubs - Edit to implement overlay logic
+const STARTER_OVERLAY_STUBS_TEMPLATE = `{{!-- Overlay handler stubs: a handler per overlay, in the OverlayRegistry --}}
+// Auto-generated overlay handler stubs - Edit to implement overlay logic
 import type {
   OverlayResult,
-{{#each extensionTypes}}
-  {{this}}OverlayInput,
-  {{this}}Overlay,
+{{#each extensionInfo}}
+  {{overlayTypeName name}}OverlayInput,
 {{/each}}
   OverlayRegistry,
-} from '{{config.contractPackage}}/overlays';
+} from '{{contractPackage}}/overlays/index.js';
 
-{{#each extensions}}
-/**
- * {{name}} overlay handler
- * 
- * Called when an endpoint has x-middleware: [{{name}}]
- * Returns OverlayResult with success/error status
- */
-export async function {{camelCase name}}(
-  input: {{pascalCase name}}OverlayInput
-): Promise<OverlayResult> {
-  // TODO: Implement {{name}} logic
-{{#if injectedParameters}}
-  // Input parameters:
-{{#each injectedParameters}}
-  // - {{name}}: {{schema.type}}{{#if required}} (required){{/if}}
-{{/each}}
-{{/if}}
-
-  // Example implementation:
-  // if (!validateSomething(input)) {
-  //   return {
-  //     success: false,
-  //     error: { status: 4xx, message: 'Error message', code: 'ERROR_CODE' },
-  //   };
-  // }
-
-  return { success: true, context: { /* optional context for service */ } };
-}
-
-{{/each}}
 /**
  * Registry of all overlay handlers
  * Register this with your server framework
  */
 export const overlayHandlers: OverlayRegistry = {
-{{#each extensions}}
-  {{camelCase name}}: {{camelCase name}},
+{{#each extensionInfo}}
+  /**
+   * {{name}} overlay handler
+   *
+   * Runs before every operation the overlay applies to. Return
+   * { success: false, error: { status, message, code } } to refuse the request.
+{{#if injectedParameters.length}}
+   *
+   * Input parameters:
+{{#each injectedParameters}}
+   * - {{name}} (in: {{this.in}}){{#if required}} required{{/if}}
+{{/each}}
+{{/if}}
+   */
+  '{{name}}': async (input: {{overlayTypeName name}}OverlayInput): Promise<OverlayResult> => {
+    // TODO: Implement {{name}}
+    throw new Error('Not implemented: {{name}}');
+  },
+
 {{/each}}
 };
 `;

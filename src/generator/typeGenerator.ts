@@ -10,6 +10,7 @@ import type {
   OperationObject,
   OpenAPIType,
   ResolvedOperation,
+  OperationBody,
 } from '../types.js';
 import { isReference, getRefName, isTsIdentifier, resolveOperation } from '../types.js';
 
@@ -308,38 +309,79 @@ function getOperationTypeName(operation: OperationObject): string {
   return 'Unknown';
 }
 
-/** The parameters an operation's Params type is made of: path and query. */
+/** The request locations whose parameters are validated, and the suffix of each one's schema. */
+const PARAMETER_SCHEMA_SUFFIXES = {
+  path: 'PathParams', query: 'QueryParams', header: 'HeaderParams', cookie: 'CookieParams',
+} as const;
+
+/**
+ * The parameters an operation's Params type is made of: path, query and
+ * cookie. Headers are validated but left out of the service's input.
+ */
 function paramsTypeMembers(resolved: ResolvedOperation): ParameterObject[] {
-  return resolved.parameters.filter(p => p.in === 'query' || p.in === 'path');
+  return resolved.parameters.filter(p => p.in === 'query' || p.in === 'path' || p.in === 'cookie');
 }
 
 /**
  * The type names generated for one operation.
  *
  * The single definition of what an operation contributes to types.ts: the
- * emitter below and the deps/ re-exports both read it, so a re-export cannot
- * name a type that is never generated.
+ * emitter below, validators.ts and the deps/ re-exports all read it, so none
+ * of them can name a type that is never generated.
  */
 export function operationTypeNames(operation: OperationObject, resolved: ResolvedOperation): {
   base: string;
   input: string;
   params?: string;
+  /** The validation schema of the parameters of each request location that has any */
+  parameterSchemas: Partial<Record<keyof typeof PARAMETER_SCHEMA_SUFFIXES, string>>;
+  /**
+   * The input a client calls the operation with, where it differs from the
+   * service's: the input with its cookie parameters optional, since the
+   * browser sends cookies and a client does not.
+   */
+  clientInput?: { name: string; cookies: string[] };
+  /** The request body's type */
   body?: string;
+  /** The success response body's type; absent when the response has no body */
+  response?: string;
+  /** The body type of every other response with a body generated code carries */
+  otherResponses: Array<{ statusCode: string; type: string }>;
+  /** The inline schemas named after the operation, with their names */
+  inline: Array<{ name: string; schema: SchemaObject }>;
 } {
   const base = getOperationTypeName(operation);
   const params = paramsTypeMembers(resolved).length > 0 ? `${base}Params` : undefined;
 
-  let body: string | undefined;
-  const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
-  if (bodySchema) {
-    if (isReference(bodySchema)) {
-      body = getRefName(bodySchema.$ref);
-    } else if (bodySchema.properties || normalizeType(bodySchema).types.includes('object')) {
-      body = `${base}Body`;
-    }
+  const parameterSchemas: Partial<Record<keyof typeof PARAMETER_SCHEMA_SUFFIXES, string>> = {};
+  for (const [location, suffix] of Object.entries(PARAMETER_SCHEMA_SUFFIXES) as Array<[keyof typeof PARAMETER_SCHEMA_SUFFIXES, string]>) {
+    if (resolved.parameters.some(p => p.in === location)) parameterSchemas[location] = `${base}${suffix}`;
   }
 
-  return { base, input: `${base}Input`, params, body };
+  const inline: Array<{ name: string; schema: SchemaObject }> = [];
+  // A $ref body is its component's type; an inline one, of any shape, is
+  // generated under the operation's name.
+  const nameBody = (body: OperationBody | undefined, inlineName: string): string | undefined => {
+    if (!body) return undefined;
+    if (isReference(body.schema)) return getRefName(body.schema.$ref);
+    inline.push({ name: inlineName, schema: body.schema });
+    return inlineName;
+  };
+
+  const body = nameBody(resolved.body, `${base}Body`);
+  const response = nameBody(resolved.success.body, `${base}Response`);
+  // Another response's inline body is named by its status: <base>404Response,
+  // <base>4XXResponse, <base>DefaultResponse.
+  const otherResponses = resolved.otherResponses.flatMap(({ statusCode, body: responseBody }) => {
+    const suffix = statusCode === 'default' ? 'Default' : statusCode;
+    const type = nameBody(responseBody, `${base}${suffix}Response`);
+    return type ? [{ statusCode, type }] : [];
+  });
+
+  const cookies = resolved.parameters.filter(p => p.in === 'cookie').map(p => p.name);
+  const clientInput = cookies.length > 0 ? { name: `${base}ClientInput`, cookies } : undefined;
+
+  return { base, input: `${base}Input`, params, parameterSchemas, clientInput, body, response, otherResponses, inline };
 }
 
 /**
@@ -355,7 +397,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
       if (!operation) continue;
 
       const resolved = resolveOperation(spec, apiPath, method);
-      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName } =
+      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName, clientInput, inline } =
         operationTypeNames(operation, resolved);
 
       if (paramsTypeName && !generatedTypes.has(paramsTypeName)) {
@@ -364,22 +406,31 @@ function generateOperationTypes(spec: OpenAPISpec): string {
         lines.push('');
       }
 
-      // An inline body schema needs its interface emitted; a $ref body names an
-      // existing component schema.
-      const inlineBodySchema = resolved.requestBody?.content?.['application/json']?.schema;
-      if (bodyTypeName && inlineBodySchema && !isReference(inlineBodySchema) && !generatedTypes.has(bodyTypeName)) {
-        generatedTypes.add(bodyTypeName);
-        lines.push(generateRequestBodyType(bodyTypeName, inlineBodySchema, spec));
+      // An inline body or response schema needs its type emitted; a $ref one
+      // names an existing component schema.
+      for (const { name, schema } of inline) {
+        if (generatedTypes.has(name)) continue;
+        generatedTypes.add(name);
+        lines.push(generateSchemaType(name, schema, spec));
         lines.push('');
       }
 
       // Generate Input type that combines params and body
-      // - params are flattened (path + query combined)
+      // - params are flattened (path, query and cookie combined)
       // - body becomes 'data' (not HTTP-specific)
       // - Always generate (empty object for parameterless operations)
       if (!generatedTypes.has(inputTypeName)) {
         generatedTypes.add(inputTypeName);
         lines.push(generateInputType(inputTypeName, paramsTypeName, bodyTypeName));
+        lines.push('');
+      }
+
+      // A client's input leaves the cookies out: the browser sends them. It is
+      // wider than the service's input, so a client implements the service API.
+      if (clientInput && !generatedTypes.has(clientInput.name)) {
+        generatedTypes.add(clientInput.name);
+        const cookies = clientInput.cookies.map(literalType).join(' | ');
+        lines.push(`export type ${clientInput.name} = Omit<${inputTypeName}, ${cookies}> & Partial<Pick<${inputTypeName}, ${cookies}>>;`);
         lines.push('');
       }
     }
@@ -390,7 +441,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
 
 /**
  * Generate Input type that combines params and body
- * - params (path + query) are flattened (HTTP details hidden)
+ * - params (path, query and cookie) are flattened (HTTP details hidden)
  * - body is renamed to 'data' (not HTTP-specific naming)
  * - parameterless operations get empty object type
  * 
@@ -407,7 +458,7 @@ function generateInputType(
 ): string {
   const parts: string[] = [];
   
-  // Flatten params (path + query parameters become direct properties)
+  // Flatten params (path, query and cookie parameters become direct properties)
   if (paramsType) {
     parts.push(paramsType);
   }
@@ -429,38 +480,7 @@ function generateInputType(
 }
 
 /**
- * Generate request body interface
- */
-function generateRequestBodyType(
-  name: string,
-  schema: SchemaObject,
-  spec: OpenAPISpec
-): string {
-  const lines: string[] = [];
-  lines.push(`export interface ${name} {`);
-
-  if (schema.properties) {
-    const required = new Set(schema.required || []);
-    for (const [propName, propSchema] of Object.entries(schema.properties)) {
-      const isRequired = required.has(propName);
-      const optional = isRequired ? '' : '?';
-      const tsType = schemaToTypeString(propSchema, spec);
-      
-      if (isReference(propSchema)) {
-        // No description for refs
-      } else if ((propSchema as SchemaObject).description) {
-        lines.push(`  /** ${(propSchema as SchemaObject).description} */`);
-      }
-      lines.push(`  ${formatPropertyKey(propName)}${optional}: ${tsType};`);
-    }
-  }
-
-  lines.push('}');
-  return lines.join('\n');
-}
-
-/**
- * Generate params interface (combines path + query parameters)
+ * Generate params interface (combines path, query and cookie parameters)
  */
 function generateParamsType(
   name: string,
@@ -489,11 +509,11 @@ function generateParamsType(
 }
 
 /**
- * Render an OpenAPI property name as a TypeScript property key.
- * Schema property names are arbitrary strings, so names that are not
- * identifiers are emitted as quoted keys.
+ * Render a name as a TypeScript property key. Schema property names (and
+ * overlay names) are arbitrary strings, so names that are not identifiers
+ * are emitted as quoted keys.
  */
-function formatPropertyKey(name: string): string {
+export function formatPropertyKey(name: string): string {
   return isTsIdentifier(name) ? name : literalType(name);
 }
 

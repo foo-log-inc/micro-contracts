@@ -438,6 +438,16 @@ would be dropped from every artifact, so they are errors (`MISSING_X_SERVICE`,
 (`screen: true`) operations are consumed via `TemplateContext.screens` and these rules
 do not apply.
 
+An operation's success response is its lowest 2xx status code, else its `2XX` range, else
+`default`: the service returns that response's body and the generated route answers with
+that status (200 for `2XX` and `default`). An operation that declares none of them is an
+error: declare the response a successful call returns. Its request body and success response
+must be in a media type generated code carries — `application/json` — since a body in any
+other media type would be dropped from every generated artifact; one declared otherwise is an
+error: remove that media type, and declare the body as `application/json`. A response of any
+other status, which documents an error, may use any media type; generated code has a schema
+only for an `application/json` one.
+
 `<input>` is linted under the rules of the module in `micro-contracts.config.yaml` whose
 `openapi` it is — the rules `generate` applies to it — and as a service API spec when no
 module declares it.
@@ -612,20 +622,67 @@ export class UserService implements UserServiceApi {
 ### Validators
 
 `schemas/validators.ts` holds every schema as the JSON Schema Fastify validates requests and
-serializes responses with, plus the path, query and inline request body schemas of each
-operation (`<Service>_<method>PathParams`, `…QueryParams`, `…Body`). Every validation keyword
-of the contract is kept. Only what JSON Schema spells differently is translated (`$ref`,
-`nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` / `exclusiveMaximum`), and what never
-validates is left out: `x-*` extensions, the annotations `example`, `examples`, `xml`,
-`externalDocs` and `discriminator`, and `$id` / `$schema` (each schema is named by its
-component name).
+serializes responses with, plus the path, query, header and cookie parameter schemas of each
+operation (`<Service>_<method>PathParams`, `…QueryParams`, `…HeaderParams`, `…CookieParams`)
+and its inline request body and response schemas (`…Body`; `…Response` for the success
+response, and `…404Response`, `…4XXResponse` or `…DefaultResponse` for another).
+`schemas/types.ts` names the inline body types the same way. A header parameter schema names headers in lower case, as a
+request delivers them, and is not in `allSchemas`: the starter routes give it to Fastify
+inline (`schema.headers`), since Fastify matches header names case-insensitively only in an
+inline schema. Fastify does not parse cookies, so a starter route reads the cookie parameters
+from the Cookie header and validates them against `…CookieParams` with the validator Fastify
+validates the rest with (`request.compileValidationSchema`). A request missing a required
+header or cookie, or carrying one that does not match its schema, is answered with 400 before
+the service runs. The service's input holds the path, query and cookie parameters; headers
+are validated only. A client is called without cookies, which the browser sends: an operation
+with cookie parameters gets a client input (`<Service>_<method>ClientInput`) — its input with
+the cookie parameters optional — which the starter fetch client takes. Being wider than the
+service's input, it lets the client still satisfy the service interface.
+
+The starter fetch client calls `fetch` without a `credentials` option and takes no fetch
+options, so the browser sends cookies under fetch's default, `same-origin`: with a request to
+the page's own origin — directly, or through a dev-server proxy — and with no other. For an
+API on another origin, set `credentials: 'include'` on the `fetch` calls in your copy of
+`fetch-client.hbs`, and have the server allow credentialed CORS: an explicit allowed origin and
+`Access-Control-Allow-Credentials: true` (with `@fastify/cors`, `credentials: true`). A cookie
+sent to another site must also be `SameSite=None; Secure`.
+
+Every validation keyword of the contract is kept. Only what JSON Schema spells differently is
+translated (`$ref`, `nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` /
+`exclusiveMaximum`), and what never validates is left out: `x-*` extensions, the annotations
+`example`, `examples`, `xml`, `externalDocs` and `discriminator`, and `$id` / `$schema` (each
+schema is named by its component name). A `oneOf` selects its member by validating each one,
+so a member is chosen by its `discriminator` tag when each member fixes the tag with `enum` or
+`const`.
+
+The starter routes (`fastify-routes.hbs`) register, for each operation, the schema of every
+declared response whose body is `application/json`: the success response's under the status
+the route answers with, any other under its status code — a range as Fastify reads it (`4XX`
+as `4xx`), and `default`. Fastify serializes every response with the schema of its status, an
+error included, so a property the contract does not declare for that status is not sent. The
+server's error handler must therefore send the shape the contract declares for the error's
+status — as the example's ProblemDetails handler (`examples/server/src/server.ts`) does: a body
+missing a required property fails serialization and is answered with 500, which is what
+Fastify's default error handler does for a `ProblemDetails` response.
+
+Validate with Fastify's default validator options except `removeAdditional`, set to `false`.
+Ajv validates each member of a `oneOf` or `anyOf` against the value itself, and with
+`removeAdditional: true` — Fastify's default — validating a member removes every property that
+member's `additionalProperties: false` does not allow, whether or not the member matches: a
+valid value is rejected, or reaches the service with properties missing. With `false`, a
+property a schema does not allow is rejected rather than removed — and a property a schema
+without `additionalProperties: false` does not declare reaches the service, so a service reads
+the fields its input declares rather than storing the value it receives as a whole.
+
+```typescript
+const fastify = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
+```
 
 Fastify validates with Ajv on JSON Schema draft-07. A contract using the keywords JSON Schema
 2019-09 / 2020-12 added — `prefixItems`, `dependentRequired`, `dependentSchemas`,
 `minContains` / `maxContains`, `unevaluatedProperties` / `unevaluatedItems` — stops Fastify
 from starting (`strict mode: unknown keyword`). To use them, validate with Ajv on the 2020-12
-dialect, with the options Fastify validates with by default (add `ajv` and `ajv-formats` to
-your dependencies). A validator set this way does not read `fastify.addSchema`, so it is given
+dialect, with the options above (add `ajv` and `ajv-formats` to your dependencies). A validator set this way does not read `fastify.addSchema`, so it is given
 the generated schemas itself; the generated routes still register them with Fastify, which
 serializes responses with them.
 
@@ -635,8 +692,8 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import ajvFormats from 'ajv-formats';
 import { allSchemas } from '@project/contract/core/schemas/index.js';
 
-// The options Fastify validates with by default, on the 2020-12 dialect.
-const ajv = new Ajv2020({ coerceTypes: 'array', useDefaults: true, removeAdditional: true, allErrors: false });
+// Fastify's default validator options with removeAdditional: false, on the 2020-12 dialect.
+const ajv = new Ajv2020({ coerceTypes: 'array', useDefaults: true, removeAdditional: false, allErrors: false });
 ajvFormats.default(ajv);
 // A custom validator does not read fastify.addSchema: give it every module's schemas, once each.
 for (const schema of allSchemas) {
