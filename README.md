@@ -648,7 +648,9 @@ Ajv validates each member of a `oneOf` or `anyOf` against the value itself, and 
 `removeAdditional: true` — Fastify's default — validating a member removes every property that
 member's `additionalProperties: false` does not allow, whether or not the member matches: a
 valid value is rejected, or reaches the service with properties missing. With `false`, a
-property a schema does not allow is rejected rather than removed.
+property a schema does not allow is rejected rather than removed — and a property a schema
+without `additionalProperties: false` does not declare reaches the service, so a service reads
+the fields its input declares rather than storing the value it receives as a whole.
 
 ```typescript
 const fastify = Fastify({ ajv: { customOptions: { removeAdditional: false } } });

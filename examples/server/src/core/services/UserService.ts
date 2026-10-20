@@ -56,7 +56,15 @@ export class UserService implements UserServiceApi {
     if (index === -1) {
       throw { statusCode: 404, message: 'User not found' };
     }
-    const updated = { ...mockUsers[index], ...data };
+    // Only the fields UpdateUserRequest declares: a property it does not declare
+    // still reaches the service (README, Validators), and must not overwrite
+    // the stored user.
+    const current = mockUsers[index];
+    const updated: types.User = {
+      ...current,
+      name: data.name ?? current.name,
+      role: data.role ?? current.role,
+    };
     mockUsers[index] = updated;
     return updated;
   }
