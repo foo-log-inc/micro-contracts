@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import Handlebars from 'handlebars';
-import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
+import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw, StreamFormat } from '../types.js';
 import { operationKey, overlayTypeName } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
 import { isReference, getRefName, parseComponentRef, resolveOperation } from '../types.js';
@@ -187,7 +187,7 @@ interface RouteContext {
    * one JSON value per line) under `mediaType`, its `discriminator` property
    * naming it.
    */
-  stream?: { format: 'sse' | 'ndjson'; mediaType: string; eventType: string; discriminator: string };
+  stream?: { format: StreamFormat; mediaType: string; eventType: string; discriminator: string };
   /** Request body type (if exists) */
   requestType?: string;
   /** Params type (path + query combined, if exists) */

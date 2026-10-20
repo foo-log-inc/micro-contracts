@@ -1146,7 +1146,7 @@ export function resolveParameter(
 }
 
 /** How a stream response frames its events: server-sent events, or one JSON value per line. */
-type StreamFormat = 'sse' | 'ndjson';
+export type StreamFormat = 'sse' | 'ndjson';
 
 /**
  * The media types generated code carries a body in, and what each one is: a
