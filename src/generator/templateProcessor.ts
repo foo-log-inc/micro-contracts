@@ -11,7 +11,7 @@ import Handlebars from 'handlebars';
 import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
 import { operationKey } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
-import { isReference, getRefName, parseComponentRef, resolveOperation } from '../types.js';
+import { isReference, getRefName, parseComponentRef, resolveOperation, carriedBodySchema } from '../types.js';
 import { operationTypeNames } from './typeGenerator.js';
 
 // =============================================================================
@@ -152,11 +152,13 @@ interface RouteContext {
     schemaName: string;
     required: boolean;
   };
-  /** Response info */
+  /** Every declared response, by status code */
   responses: ResponseContext[];
   /** Type name base for this route (e.g., 'User_getUsers') */
   typeNameBase: string;
-  /** Response type (for return type) */
+  /** The status code a successful call is answered with (200 for a `2XX` response) */
+  successStatus: number;
+  /** The success response body's type, or 'void' when it has none */
   responseType: string;
   /** Request body type (if exists) */
   requestType?: string;
@@ -200,7 +202,9 @@ interface ParameterContext {
 }
 
 interface ResponseContext {
+  /** The response's key under `responses`: a status code, a range or `default` */
   statusCode: string;
+  /** The type of its body: always set for the success response's body, else when the body is a $ref */
   schemaName?: string;
 }
 
@@ -477,16 +481,15 @@ function extractRoutes(
         requestBody = { schemaName: typeNames.body, required: resolved.requestBody.required || false };
       }
 
-      // Extract responses
+      // Extract responses: the success response under the name types.ts gives
+      // its body, any other by the component its body refers to
       const responses: ResponseContext[] = [];
       for (const [statusCode, response] of Object.entries(resolved.responses)) {
-        const schema = response.content?.['application/json']?.schema;
-        if (schema) {
-          const schemaName = isReference(schema) ? getRefName(schema.$ref) : undefined;
-          responses.push({ statusCode, schemaName });
-        } else {
-          responses.push({ statusCode });
-        }
+        const schema = carriedBodySchema(response.content);
+        const schemaName = statusCode === resolved.success.statusCode
+          ? typeNames.response
+          : schema && isReference(schema) ? getRefName(schema.$ref) : undefined;
+        responses.push(schemaName ? { statusCode, schemaName } : { statusCode });
       }
 
       // Client URL pattern: /users/{id} -> /users/${params.id}
@@ -495,9 +498,7 @@ function extractRoutes(
       const clientUrlPatternInput = apiPath.replace(/\{([^}]+)\}/g, '${input.$1}');
       
       // Calculate type names
-      const responseType = responses.length > 0 && responses[0].schemaName 
-        ? responses[0].schemaName 
-        : 'void';
+      const responseType = typeNames.response ?? 'void';
       const requestType = requestBody?.schemaName;
       // Params type combines both path and query parameters
       const paramsType = typeNames.params;
@@ -525,6 +526,7 @@ function extractRoutes(
         requestBody,
         responses,
         typeNameBase,
+        successStatus: resolved.success.status,
         responseType,
         requestType,
         paramsType,
@@ -676,7 +678,7 @@ function deriveEventParams(
  * Extract schema $ref name from a mutation operation's request body.
  */
 function extractSchemaRef(resolved: ResolvedOperation): string {
-  const schema = resolved.requestBody?.content?.['application/json']?.schema;
+  const schema = resolved.body?.schema;
   return schema && isReference(schema) ? getRefName(schema.$ref) : '';
 }
 
@@ -723,9 +725,9 @@ function extractScreens(spec: OpenAPISpec): ScreenContext[] {
 
     let viewModelSchema = operation['x-view-model'] || '';
     if (!viewModelSchema) {
-      const jsonContent = response200?.content?.['application/json'];
-      if (jsonContent?.schema && isReference(jsonContent.schema)) {
-        viewModelSchema = getRefName(jsonContent.schema.$ref);
+      const schema = carriedBodySchema(response200?.content);
+      if (schema && isReference(schema)) {
+        viewModelSchema = getRefName(schema.$ref);
       }
     }
 

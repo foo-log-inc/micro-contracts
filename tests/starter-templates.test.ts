@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execFileSync } from 'child_process';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { generate } from '../src/generator/index.js';
 import { getStarterTemplates } from '../src/cli/templates.js';
@@ -71,6 +72,48 @@ describe('starter templates', () => {
     };
 
     await generate(config);
+  }
+
+  /**
+   * Type-check the generated project as a project using it would: the server
+   * under NodeNext, with the Fastify decorations it registers, and the client
+   * under a bundler's resolution. Returns tsc's diagnostics.
+   */
+  function typecheck(): string {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ type: 'module' }));
+    fs.symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(tmpDir, 'node_modules'), 'dir');
+    const overlays = fs.existsSync(path.join(tmpDir, 'contract/m/overlays'));
+    fs.writeFileSync(path.join(tmpDir, 'server/fastify.d.ts'), [
+      "import type { ServiceRegistry } from '../contract/m/services/index.js';",
+      ...(overlays ? ["import type { OverlayRegistry } from '../contract/m/overlays/index.js';"] : []),
+      "declare module 'fastify' {",
+      '  interface FastifyInstance {',
+      '    services: { m: ServiceRegistry };',
+      ...(overlays ? ['    overlayHandlers: OverlayRegistry;'] : []),
+      '  }',
+      '}',
+    ].join('\n'));
+    fs.writeFileSync(path.join(tmpDir, 'frontend/env.d.ts'),
+      'interface ImportMeta { readonly env?: Record<string, string | undefined> }\n');
+
+    const common = { target: 'ES2022', lib: ['ES2022', 'DOM'], strict: true, noEmit: true, skipLibCheck: true };
+    const projects = {
+      'tsconfig.server.json': { compilerOptions: { ...common, module: 'NodeNext', moduleResolution: 'NodeNext' }, include: ['server', 'contract'] },
+      'tsconfig.frontend.json': { compilerOptions: { ...common, module: 'ESNext', moduleResolution: 'bundler' }, include: ['frontend', 'contract'] },
+    };
+
+    let diagnostics = '';
+    for (const [file, tsconfig] of Object.entries(projects)) {
+      fs.writeFileSync(path.join(tmpDir, file), JSON.stringify(tsconfig));
+      try {
+        execFileSync(process.execPath, [path.join(REPO_ROOT, 'node_modules/typescript/bin/tsc'), '-p', file], {
+          cwd: tmpDir, encoding: 'utf-8', stdio: 'pipe',
+        });
+      } catch (error) {
+        diagnostics += (error as { stdout: string }).stdout;
+      }
+    }
+    return diagnostics;
   }
 
   /** Register the generated routes on a Fastify instance with these services and overlay handlers. */
@@ -221,5 +264,130 @@ actions:
 `,
       })).rejects.toThrow(/'token'.*'body'/);
     });
+  });
+
+  describe('success responses', () => {
+    const orderSpec = `
+openapi: 3.0.3
+info: { title: Orders, version: 1.0.0 }
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: createOrder
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateOrder' } } }
+      responses:
+        '201':
+          description: created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+  /orders/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getOrder
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: getOrder
+      responses:
+        '200':
+          description: ok
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+    delete:
+      operationId: deleteOrder
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: deleteOrder
+      responses:
+        '204': { description: deleted }
+  /stats:
+    get:
+      operationId: getStats
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: getStats
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer }
+  /jobs:
+    post:
+      operationId: startJob
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: startJob
+      responses:
+        '202':
+          description: accepted
+          content: { application/json: { schema: { $ref: '#/components/schemas/Job' } } }
+  /things:
+    get:
+      operationId: listThings
+      x-micro-contracts-service: Order
+      x-micro-contracts-method: listThings
+      responses:
+        '2XX':
+          description: ok
+          content: { application/json: { schema: { $ref: '#/components/schemas/Things' } } }
+        '400':
+          description: bad
+          content: { application/json: { schema: { $ref: '#/components/schemas/Problem' } } }
+components:
+  schemas:
+    CreateOrder: { type: object, required: [qty], properties: { qty: { type: integer } } }
+    Order: { type: object, properties: { id: { type: string } } }
+    Job: { type: object, properties: { id: { type: string } } }
+    Things: { type: object, properties: { items: { type: array, items: { type: string } } } }
+    Problem: { type: object, properties: { title: { type: string } } }
+`;
+
+    it('answer with the declared status, the body shaped by the schema declared for it', async () => {
+      await generateProject(orderSpec);
+      const app = await serve({
+        order: {
+          createOrder: async () => ({ id: 'o1', internalNote: 'not in the contract' }),
+          getOrder: async () => { throw Object.assign(new Error('no such order'), { statusCode: 404 }); },
+          deleteOrder: async () => ({ internalNote: 'not in the contract' }),
+          getStats: async () => ({ count: 3, internalNote: 'not in the contract' }),
+          startJob: async () => ({ id: 'j1', internalNote: 'not in the contract' }),
+          listThings: async () => ({ items: ['a'], internalNote: 'not in the contract' }),
+        },
+      });
+
+      try {
+        const answers = [];
+        for (const [method, url, payload] of [
+          ['POST', '/orders', { qty: 1 }],
+          ['GET', '/orders/o1', undefined],
+          ['DELETE', '/orders/o1', undefined],
+          ['GET', '/stats', undefined],
+          ['POST', '/jobs', undefined],
+          ['GET', '/things', undefined],
+        ] as const) {
+          const res = await app.inject({ method, url, payload });
+          answers.push([`${method} ${url}`, res.statusCode, res.statusCode < 300 ? res.body : undefined]);
+        }
+        expect(answers).toEqual([
+          ['POST /orders', 201, '{"id":"o1"}'],
+          ['GET /orders/o1', 404, undefined],
+          ['DELETE /orders/o1', 204, ''],
+          ['GET /stats', 200, '{"count":3}'],
+          ['POST /jobs', 202, '{"id":"j1"}'],
+          ['GET /things', 200, '{"items":["a"]}'],
+        ]);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('generate routes and a client that type-check against the service interfaces', { timeout: 180_000 }, async () => {
+      await generateProject(orderSpec);
+      expect(typecheck()).toBe('');
+    });
+
   });
 });

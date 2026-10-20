@@ -10,6 +10,7 @@ import type {
   OperationObject,
   OpenAPIType,
   ResolvedOperation,
+  OperationBody,
 } from '../types.js';
 import { isReference, getRefName, isTsIdentifier, resolveOperation } from '../types.js';
 
@@ -317,27 +318,41 @@ function paramsTypeMembers(resolved: ResolvedOperation): ParameterObject[] {
  * The type names generated for one operation.
  *
  * The single definition of what an operation contributes to types.ts: the
- * emitter below and the deps/ re-exports both read it, so a re-export cannot
- * name a type that is never generated.
+ * emitter below, validators.ts and the deps/ re-exports all read it, so none
+ * of them can name a type that is never generated.
  */
 export function operationTypeNames(operation: OperationObject, resolved: ResolvedOperation): {
   base: string;
   input: string;
   params?: string;
+  /** The request body's type */
   body?: string;
+  /** The success response body's type; absent when the response has no body */
+  response?: string;
+  /** The inline schemas named after the operation, with their names */
+  inline: Array<{ name: string; schema: SchemaObject }>;
 } {
   const base = getOperationTypeName(operation);
   const params = paramsTypeMembers(resolved).length > 0 ? `${base}Params` : undefined;
 
+  const inline: Array<{ name: string; schema: SchemaObject }> = [];
   // A $ref body is its component's type; an inline one, of any shape, is
   // generated under the operation's name.
-  let body: string | undefined;
-  const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
-  if (bodySchema) {
-    body = isReference(bodySchema) ? getRefName(bodySchema.$ref) : `${base}Body`;
-  }
+  const nameBody = (body: OperationBody | undefined, inlineName: string): string | undefined => {
+    if (!body) return undefined;
+    if (isReference(body.schema)) return getRefName(body.schema.$ref);
+    inline.push({ name: inlineName, schema: body.schema });
+    return inlineName;
+  };
 
-  return { base, input: `${base}Input`, params, body };
+  return {
+    base,
+    input: `${base}Input`,
+    params,
+    body: nameBody(resolved.body, `${base}Body`),
+    response: nameBody(resolved.success.body, `${base}Response`),
+    inline,
+  };
 }
 
 /**
@@ -353,7 +368,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
       if (!operation) continue;
 
       const resolved = resolveOperation(spec, apiPath, method);
-      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName } =
+      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName, inline } =
         operationTypeNames(operation, resolved);
 
       if (paramsTypeName && !generatedTypes.has(paramsTypeName)) {
@@ -362,12 +377,12 @@ function generateOperationTypes(spec: OpenAPISpec): string {
         lines.push('');
       }
 
-      // An inline body schema needs its interface emitted; a $ref body names an
-      // existing component schema.
-      const inlineBodySchema = resolved.requestBody?.content?.['application/json']?.schema;
-      if (bodyTypeName && inlineBodySchema && !isReference(inlineBodySchema) && !generatedTypes.has(bodyTypeName)) {
-        generatedTypes.add(bodyTypeName);
-        lines.push(generateSchemaType(bodyTypeName, inlineBodySchema, spec));
+      // An inline body or response schema needs its type emitted; a $ref one
+      // names an existing component schema.
+      for (const { name, schema } of inline) {
+        if (generatedTypes.has(name)) continue;
+        generatedTypes.add(name);
+        lines.push(generateSchemaType(name, schema, spec));
         lines.push('');
       }
 

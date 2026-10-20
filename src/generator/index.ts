@@ -673,6 +673,7 @@ function declaredDependencyTypes(
     names.add(typeNames.input);
     if (typeNames.params) names.add(typeNames.params);
     if (typeNames.body) names.add(typeNames.body);
+    if (typeNames.response) names.add(typeNames.response);
 
     // Schemas the operation reaches, named in the published types.
     for (const pointer of collectReachableComponents(resolved, targetSpec)) {

@@ -9,7 +9,7 @@ import type {
   ReferenceObject,
   ParameterObject,
 } from '../types.js';
-import { isReference, getRefName, resolveOperation } from '../types.js';
+import { getRefName, resolveOperation } from '../types.js';
 import { operationTypeNames } from './typeGenerator.js';
 
 /**
@@ -33,10 +33,10 @@ export function generateSchemas(spec: OpenAPISpec): string {
     }
   }
 
-  // Generate the parameter and inline request body schemas of operations
+  // Generate the parameter, inline request body and inline response schemas of operations
   const opSchemas = operationSchemas(spec);
   if (opSchemas.length > 0) {
-    lines.push('// Operation parameter and request body schemas');
+    lines.push('// Operation parameter, request body and response schemas');
     for (const { name, schema } of opSchemas) {
       lines.push(generateSchemaExport(name, schema, spec));
       lines.push('');
@@ -185,7 +185,8 @@ function convertSubschema(value: unknown, spec: OpenAPISpec): unknown {
  *   which is how Fastify validates them (`schema.params` and
  *   `schema.querystring`). A single schema holding both validates neither
  *   location: its required path parameters would be demanded of the query.
- * - an inline request body, under the name types.ts gives it.
+ * - an inline request body and success response, under the names types.ts
+ *   gives them.
  */
 function operationSchemas(spec: OpenAPISpec): Array<{ name: string; schema: SchemaObject }> {
   const schemas: Array<{ name: string; schema: SchemaObject }> = [];
@@ -202,7 +203,7 @@ function operationSchemas(spec: OpenAPISpec): Array<{ name: string; schema: Sche
       if (!operation) continue;
 
       const resolved = resolveOperation(spec, apiPath, method);
-      const { base, body } = operationTypeNames(operation, resolved);
+      const { base, inline } = operationTypeNames(operation, resolved);
 
       for (const [location, suffix] of [['path', 'PathParams'], ['query', 'QueryParams']] as const) {
         const params = resolved.parameters.filter(p => p.in === location);
@@ -211,9 +212,8 @@ function operationSchemas(spec: OpenAPISpec): Array<{ name: string; schema: Sche
         }
       }
 
-      const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
-      if (body && bodySchema && !isReference(bodySchema)) {
-        add(body, bodySchema);
+      for (const { name, schema } of inline) {
+        add(name, schema);
       }
     }
   }

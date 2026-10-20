@@ -199,7 +199,7 @@ export const ProblemDetails = {
     }
   } as const;
 
-// Operation parameter and request body schemas
+// Operation parameter, request body and response schemas
 export const User_getUsersQueryParams = {
     "$id": "User_getUsersQueryParams",
     "type": "object",

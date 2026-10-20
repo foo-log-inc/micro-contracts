@@ -29,7 +29,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/billing/invoices', {
     schema: {
       querystring: { $ref: 'Billing_getInvoicesQueryParams#' },
-      response: { 200: { $ref: 'InvoiceListResponse#' },  },
+      response: { 200: { $ref: 'InvoiceListResponse#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('getInvoices', handlers, toHttpRequest(req));
@@ -38,14 +38,15 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     const input: types.Billing_getInvoicesInput = {
       ...(req.query as types.Billing_getInvoicesParams),
     };
-    return billing.getInvoices(input);
+    const output = await billing.getInvoices(input);
+    return reply.code(200).send(output);
   });
 
   // POST /api/billing/invoices [PUBLISHED]
   fastify.post('/api/billing/invoices', {
     schema: {
       body: { $ref: 'CreateInvoiceRequest#' },
-      response: { 201: { $ref: 'Invoice#' },  },
+      response: { 201: { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('createInvoice', handlers, toHttpRequest(req));
@@ -54,14 +55,15 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     const input: types.Billing_createInvoiceInput = {
       data: req.body as types.CreateInvoiceRequest,
     };
-    return billing.createInvoice(input);
+    const output = await billing.createInvoice(input);
+    return reply.code(201).send(output);
   });
 
   // GET /api/billing/invoices/{id} [PUBLISHED]
   fastify.get('/api/billing/invoices/:id', {
     schema: {
       params: { $ref: 'Billing_getInvoiceByIdPathParams#' },
-      response: { 200: { $ref: 'Invoice#' },  },
+      response: { 200: { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('getInvoiceById', handlers, toHttpRequest(req));
@@ -70,7 +72,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     const input: types.Billing_getInvoiceByIdInput = {
       ...(req.params as types.Billing_getInvoiceByIdParams),
     };
-    return billing.getInvoiceById(input);
+    const output = await billing.getInvoiceById(input);
+    return reply.code(200).send(output);
   });
 
   // POST /api/billing/invoices/{id}/pay [PUBLISHED]
@@ -78,7 +81,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     schema: {
       params: { $ref: 'Billing_payInvoicePathParams#' },
       body: { $ref: 'PayInvoiceRequest#' },
-      response: { 200: { $ref: 'PaymentResult#' },  },
+      response: { 200: { $ref: 'PaymentResult#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('payInvoice', handlers, toHttpRequest(req));
@@ -88,7 +91,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       ...(req.params as types.Billing_payInvoiceParams),
       data: req.body as types.PayInvoiceRequest,
     };
-    return billing.payInvoice(input);
+    const output = await billing.payInvoice(input);
+    return reply.code(200).send(output);
   });
 
 }

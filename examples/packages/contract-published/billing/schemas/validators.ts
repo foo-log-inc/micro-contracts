@@ -206,7 +206,7 @@ export const ProblemDetails = {
     }
   } as const;
 
-// Operation parameter and request body schemas
+// Operation parameter, request body and response schemas
 export const Billing_getInvoicesQueryParams = {
     "$id": "Billing_getInvoicesQueryParams",
     "type": "object",

@@ -15,7 +15,7 @@ import type {
   ServiceMethodInfo,
   HttpMethod,
 } from '../types.js';
-import { isReference, getRefName, resolveOperation } from '../types.js';
+import { resolveOperation } from '../types.js';
 import { operationTypeNames } from './typeGenerator.js';
 
 interface ServiceGeneratorOptions {
@@ -143,24 +143,6 @@ function extractMethodInfo(
   const resolved = resolveOperation(spec, path, httpMethod);
   const typeNames = operationTypeNames(operation, resolved);
 
-  // Request body schema name
-  const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
-  const requestType = bodySchema && isReference(bodySchema) ? getRefName(bodySchema.$ref) : undefined;
-
-  // Get response type
-  let responseType: string | undefined;
-  const successResponse = resolved.responses['200'] || resolved.responses['201'];
-  const responseSchema = successResponse?.content?.['application/json']?.schema;
-  if (responseSchema) {
-    responseType = isReference(responseSchema) ? getRefName(responseSchema.$ref) : undefined;
-  }
-
-  // Check for 204 (void response)
-  if (resolved.responses['204'] && !responseType) {
-    responseType = 'void';
-  }
-
-
   // Collect all x-* extensions from the operation
   const extensions: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(operation as unknown as Record<string, unknown>)) {
@@ -175,12 +157,11 @@ function extractMethodInfo(
     httpMethod,
     path,
     isPublished,
-    requestType,
-    responseType,
+    responseType: typeNames.response ?? 'void',
     inputType: typeNames.input,
     paramsType: typeNames.params,
     parameters: resolved.parameters,
-    requestBodySchema: requestType,
+    requestBodySchema: typeNames.body,
     extensions,
   };
 }
@@ -203,7 +184,7 @@ function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): str
   for (const method of service.methods) {
     // Always use Input type (even for parameterless operations)
     types.add(method.inputType);
-    if (method.responseType && method.responseType !== 'void') types.add(method.responseType);
+    if (method.responseType !== 'void') types.add(method.responseType);
   }
   
   // Generate imports
@@ -229,8 +210,7 @@ function generateServiceInterface(service: ServiceInfo, _spec: OpenAPISpec): str
     
     // Method signature with single Input parameter (always present)
     const inputTypeName = method.inputType;
-    const returnType = method.responseType || 'void';
-    const returnTypeStr = returnType === 'void' ? 'Promise<void>' : `Promise<${returnType}>`;
+    const returnTypeStr = `Promise<${method.responseType}>`;
     
     lines.push(`  ${method.name}(input: ${inputTypeName}): ${returnTypeStr};`);
     lines.push('');
@@ -253,8 +233,8 @@ function generateServiceInterfaceFromTemplate(
   
   const methods: ServiceMethodTemplateContext[] = service.methods.map(method => {
     const inputType = method.inputType;
-    const returnType = method.responseType || 'void';
-    const returnTypeStr = returnType === 'void' ? 'Promise<void>' : `Promise<${returnType}>`;
+    const returnType = method.responseType;
+    const returnTypeStr = `Promise<${returnType}>`;
     
     return {
       name: method.name,
@@ -288,7 +268,7 @@ function collectImportsForService(service: ServiceInfo): string[] {
   const types = new Set<string>();
   for (const method of service.methods) {
     types.add(method.inputType);
-    if (method.responseType && method.responseType !== 'void') {
+    if (method.responseType !== 'void') {
       types.add(method.responseType);
     }
   }

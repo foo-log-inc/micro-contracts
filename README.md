@@ -438,6 +438,14 @@ would be dropped from every artifact, so they are errors (`MISSING_X_SERVICE`,
 (`screen: true`) operations are consumed via `TemplateContext.screens` and these rules
 do not apply.
 
+An operation's success response is its lowest 2xx status code, else its `2XX` range, else
+`default`: the service returns that response's body and the generated route answers with
+that status (200 for `2XX` and `default`). An operation that declares none of them is an
+error. Its request body and success response must be in a media type generated code
+carries — `application/json` — since a body in any other media type would be dropped from
+every generated artifact; one declared otherwise is an error. A response of any other
+status, which documents an error, may use any media type.
+
 `<input>` is linted under the rules of the module in `micro-contracts.config.yaml` whose
 `openapi` it is — the rules `generate` applies to it — and as a service API spec when no
 module declares it.
@@ -612,8 +620,10 @@ export class UserService implements UserServiceApi {
 ### Validators
 
 `schemas/validators.ts` holds every schema as the JSON Schema Fastify validates requests and
-serializes responses with, plus the path, query and inline request body schemas of each
-operation (`<Service>_<method>PathParams`, `…QueryParams`, `…Body`). Every validation keyword
+serializes responses with, plus the path, query, inline request body and inline success
+response schemas of each operation (`<Service>_<method>PathParams`, `…QueryParams`, `…Body`,
+`…Response`). `schemas/types.ts` names the inline request body and success response types
+the same way. Every validation keyword
 of the contract is kept. Only what JSON Schema spells differently is translated (`$ref`,
 `nullable`, OpenAPI 3.0's boolean `exclusiveMinimum` / `exclusiveMaximum`), and what never
 validates is left out: `x-*` extensions, the annotations `example`, `examples`, `xml`,

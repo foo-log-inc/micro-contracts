@@ -50,9 +50,9 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{#if requestBody}}
       body: { $ref: '{{requestBody.schemaName}}#' },
 {{/if}}
-{{#if responses.length}}
-      response: { {{#each responses}}{{#if schemaName}}{{statusCode}}: { $ref: '{{schemaName}}#' }{{#unless @last}}, {{/unless}}{{/if}}{{/each}} },
-{{/if}}
+{{#unless (eq responseType "void")}}
+      response: { {{successStatus}}: { $ref: '{{responseType}}#' } },
+{{/unless}}
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
 {{#if extensions.length}}
@@ -71,7 +71,14 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       data: req.body as types.{{requestBody.schemaName}},
 {{/if}}
     };
-    return {{serviceKey}}.{{serviceMethod}}(input);
+{{!-- The success status is set once the service has returned: an error it throws keeps its own status. --}}
+{{#if (eq responseType "void")}}
+    await {{serviceKey}}.{{serviceMethod}}(input);
+    return reply.code({{successStatus}}).send();
+{{else}}
+    const output = await {{serviceKey}}.{{serviceMethod}}(input);
+    return reply.code({{successStatus}}).send(output);
+{{/if}}
   });
 
 {{/each}}
