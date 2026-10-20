@@ -1773,6 +1773,44 @@ paths:
         await app.close();
       }
     });
+
+    it('names an inline request body of any shape, and validates and passes it (starter Fastify routes)', async () => {
+      const { config } = setupSpec(`
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /tags:
+    put:
+      operationId: setTags
+      x-micro-contracts-service: Tag
+      x-micro-contracts-method: setTags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: array, items: { type: string } }
+      responses:
+        '204': { description: ok }
+`);
+      const received: unknown[] = [];
+      const app = await serveWithStarterRoutes(config, {
+        tag: { setTags: async (input: unknown) => { received.push(input); } },
+      });
+
+      try {
+        const types = read('contracts/core/schemas/types.ts');
+        expect(types).toContain('export type Tag_setTagsBody = string[];');
+        expect(types).toContain('export type Tag_setTagsInput = { data: Tag_setTagsBody };');
+
+        const invalid = await app.inject({ method: 'PUT', url: '/tags', payload: { tags: 'a' } });
+        expect(invalid.statusCode).toBe(400);
+
+        await app.inject({ method: 'PUT', url: '/tags', payload: ['a', 'b'] });
+        expect(received).toEqual([{ data: ['a', 'b'] }]);
+      } finally {
+        await app.close();
+      }
+    });
   });
 });
 

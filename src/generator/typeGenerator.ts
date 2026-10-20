@@ -329,14 +329,12 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
   const base = getOperationTypeName(operation);
   const params = paramsTypeMembers(resolved).length > 0 ? `${base}Params` : undefined;
 
+  // A $ref body is its component's type; an inline one, of any shape, is
+  // generated under the operation's name.
   let body: string | undefined;
   const bodySchema = resolved.requestBody?.content?.['application/json']?.schema;
   if (bodySchema) {
-    if (isReference(bodySchema)) {
-      body = getRefName(bodySchema.$ref);
-    } else if (bodySchema.properties || normalizeType(bodySchema).types.includes('object')) {
-      body = `${base}Body`;
-    }
+    body = isReference(bodySchema) ? getRefName(bodySchema.$ref) : `${base}Body`;
   }
 
   return { base, input: `${base}Input`, params, body };
@@ -369,7 +367,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
       const inlineBodySchema = resolved.requestBody?.content?.['application/json']?.schema;
       if (bodyTypeName && inlineBodySchema && !isReference(inlineBodySchema) && !generatedTypes.has(bodyTypeName)) {
         generatedTypes.add(bodyTypeName);
-        lines.push(generateRequestBodyType(bodyTypeName, inlineBodySchema, spec));
+        lines.push(generateSchemaType(bodyTypeName, inlineBodySchema, spec));
         lines.push('');
       }
 
@@ -426,37 +424,6 @@ function generateInputType(
   } else {
     return `export type ${name} = ${parts.join(' & ')};`;
   }
-}
-
-/**
- * Generate request body interface
- */
-function generateRequestBodyType(
-  name: string,
-  schema: SchemaObject,
-  spec: OpenAPISpec
-): string {
-  const lines: string[] = [];
-  lines.push(`export interface ${name} {`);
-
-  if (schema.properties) {
-    const required = new Set(schema.required || []);
-    for (const [propName, propSchema] of Object.entries(schema.properties)) {
-      const isRequired = required.has(propName);
-      const optional = isRequired ? '' : '?';
-      const tsType = schemaToTypeString(propSchema, spec);
-      
-      if (isReference(propSchema)) {
-        // No description for refs
-      } else if ((propSchema as SchemaObject).description) {
-        lines.push(`  /** ${(propSchema as SchemaObject).description} */`);
-      }
-      lines.push(`  ${formatPropertyKey(propName)}${optional}: ${tsType};`);
-    }
-  }
-
-  lines.push('}');
-  return lines.join('\n');
 }
 
 /**
