@@ -29,7 +29,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/billing/invoices', {
     schema: {
       querystring: { $ref: 'Billing_getInvoicesQueryParams#' },
-      response: { 200: { $ref: 'InvoiceListResponse#' } },
+      response: { '200': { $ref: 'InvoiceListResponse#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('getInvoices', handlers, toHttpRequest(req));
@@ -46,7 +46,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/api/billing/invoices', {
     schema: {
       body: { $ref: 'CreateInvoiceRequest#' },
-      response: { 201: { $ref: 'Invoice#' } },
+      response: { '201': { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('createInvoice', handlers, toHttpRequest(req));
@@ -63,7 +63,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/billing/invoices/:id', {
     schema: {
       params: { $ref: 'Billing_getInvoiceByIdPathParams#' },
-      response: { 200: { $ref: 'Invoice#' } },
+      response: { '200': { $ref: 'Invoice#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('getInvoiceById', handlers, toHttpRequest(req));
@@ -81,7 +81,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     schema: {
       params: { $ref: 'Billing_payInvoicePathParams#' },
       body: { $ref: 'PayInvoiceRequest#' },
-      response: { 200: { $ref: 'PaymentResult#' } },
+      response: { '200': { $ref: 'PaymentResult#' } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const result = await runOverlays('payInvoice', handlers, toHttpRequest(req));

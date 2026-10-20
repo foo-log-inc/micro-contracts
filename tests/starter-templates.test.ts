@@ -547,4 +547,66 @@ components:
       }
     });
   });
+
+  describe('error responses', () => {
+    const itemSpec = (errorKey: string) => `
+openapi: 3.0.3
+info: { title: T, version: 1.0.0 }
+paths:
+  /items/{id}:
+    get:
+      operationId: getItem
+      x-micro-contracts-service: Item
+      x-micro-contracts-method: getItem
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: ok
+          content: { application/json: { schema: { $ref: '#/components/schemas/Item' } } }
+        '${errorKey}':
+          description: failed
+          content: { application/json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+components:
+  schemas:
+    Item: { type: object, properties: { id: { type: integer } } }
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+`;
+
+    /** Serve getItem, failing with 404 for id 404, behind an error handler that copies an internal field into the body. */
+    async function serveItems(): Promise<FastifyInstance> {
+      const { registerRoutes } = await import(path.join(tmpDir, 'server/routes.generated.ts'));
+      const app = Fastify();
+      app.decorate('services', { m: { item: { getItem: async ({ id }: { id: number }) => {
+        if (id === 404) throw Object.assign(new Error('not found'), { statusCode: 404, dbQuery: 'SELECT * FROM secrets' });
+        return { id };
+      } } } });
+      app.setErrorHandler((error: Error & { statusCode?: number; dbQuery?: string }, _req, reply) => {
+        const status = error.statusCode ?? 500;
+        reply.status(status).send({ type: 'about:blank', title: error.message, status, dbQuery: error.dbQuery });
+      });
+      await registerRoutes(app);
+      return app;
+    }
+
+    it.each(['404', '4XX'])('shape an error body by the schema declared under %s', { timeout: 180_000 }, async (errorKey) => {
+      await generateProject(itemSpec(errorKey));
+      const app = await serveItems();
+      try {
+        const res = await app.inject({ method: 'GET', url: '/items/404' });
+        expect(res.statusCode).toBe(404);
+        expect(res.json()).toEqual({ type: 'about:blank', title: 'not found', status: 404 });
+      } finally {
+        await app.close();
+      }
+      expect(typecheck()).toBe('');
+    });
+  });
 });

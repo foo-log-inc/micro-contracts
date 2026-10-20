@@ -11,7 +11,7 @@ import Handlebars from 'handlebars';
 import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefinition, InlineEventDefinition, InteractionDefinitionRaw } from '../types.js';
 import { operationKey, overlayTypeName } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
-import { isReference, getRefName, parseComponentRef, resolveOperation, carriedBodySchema } from '../types.js';
+import { isReference, getRefName, parseComponentRef, resolveOperation } from '../types.js';
 import { operationTypeNames } from './typeGenerator.js';
 
 // =============================================================================
@@ -154,6 +154,13 @@ interface RouteContext {
   };
   /** Every declared response, by status code */
   responses: ResponseContext[];
+  /**
+   * The schemas a route serializes its responses with: the success response's
+   * body under successStatus, and every other declared response's body under
+   * its status code — a range in the form Fastify reads it (`4xx`), or
+   * `default`. Only bodies generated code carries have one.
+   */
+  responseSchemas: Array<{ status: string; schemaName: string }>;
   /** Type name base for this route (e.g., 'User_getUsers') */
   typeNameBase: string;
   /** The status code a successful call is answered with (200 for a `2XX` or `default` response) */
@@ -204,7 +211,7 @@ interface ParameterContext {
 interface ResponseContext {
   /** The response's key under `responses`: a status code, a range or `default` */
   statusCode: string;
-  /** The type of its body: always set for the success response's body, else when the body is a $ref */
+  /** The type of its body, when generated code carries the body */
   schemaName?: string;
 }
 
@@ -481,16 +488,21 @@ function extractRoutes(
         requestBody = { schemaName: typeNames.body, required: resolved.requestBody.required || false };
       }
 
-      // Extract responses: the success response under the name types.ts gives
-      // its body, any other by the component its body refers to
-      const responses: ResponseContext[] = [];
-      for (const [statusCode, response] of Object.entries(resolved.responses)) {
-        const schema = carriedBodySchema(response.content);
-        const schemaName = statusCode === resolved.success.statusCode
-          ? typeNames.response
-          : schema && isReference(schema) ? getRefName(schema.$ref) : undefined;
-        responses.push(schemaName ? { statusCode, schemaName } : { statusCode });
-      }
+      // Extract responses, each body under the name types.ts gives it
+      const bodyTypes = new Map(typeNames.otherResponses.map(r => [r.statusCode, r.type]));
+      if (typeNames.response) bodyTypes.set(resolved.success.statusCode, typeNames.response);
+      const responses: ResponseContext[] = Object.keys(resolved.responses).map(statusCode => {
+        const schemaName = bodyTypes.get(statusCode);
+        return schemaName ? { statusCode, schemaName } : { statusCode };
+      });
+      const responseSchemas = responses.flatMap(({ statusCode, schemaName }) => schemaName
+        ? [{
+            status: statusCode === resolved.success.statusCode
+              ? String(resolved.success.status)
+              : statusCode.toLowerCase(),
+            schemaName,
+          }]
+        : []);
 
       // Client URL pattern: /users/{id} -> /users/${params.id}
       const clientUrlPattern = apiPath.replace(/\{([^}]+)\}/g, '${params.$1}');
@@ -525,6 +537,7 @@ function extractRoutes(
         pathParams,
         requestBody,
         responses,
+        responseSchemas,
         typeNameBase,
         successStatus: resolved.success.status,
         responseType,
@@ -721,11 +734,13 @@ function extractScreens(spec: OpenAPISpec): ScreenContext[] {
       ? operation.security.length > 0 && operation.security.some(s => Object.keys(s).length > 0)
       : false;
 
-    const response200 = resolveOperation(spec, apiPath, 'get').responses['200'];
+    const resolvedGet = resolveOperation(spec, apiPath, 'get');
+    const response200 = resolvedGet.responses['200'];
 
+    // A declared 200 is always the success response (the lowest 2xx code)
     let viewModelSchema = operation['x-view-model'] || '';
-    if (!viewModelSchema) {
-      const schema = carriedBodySchema(response200?.content);
+    if (!viewModelSchema && resolvedGet.success.statusCode === '200') {
+      const schema = resolvedGet.success.body?.schema;
       if (schema && isReference(schema)) {
         viewModelSchema = getRefName(schema.$ref);
       }

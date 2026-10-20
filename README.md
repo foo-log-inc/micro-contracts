@@ -444,7 +444,8 @@ that status (200 for `2XX` and `default`). An operation that declares none of th
 error. Its request body and success response must be in a media type generated code
 carries — `application/json` — since a body in any other media type would be dropped from
 every generated artifact; one declared otherwise is an error. A response of any other
-status, which documents an error, may use any media type.
+status, which documents an error, may use any media type; generated code has a schema only
+for an `application/json` one.
 
 `<input>` is linted under the rules of the module in `micro-contracts.config.yaml` whose
 `openapi` it is — the rules `generate` applies to it — and as a service API spec when no
@@ -630,6 +631,16 @@ differently is translated (`$ref`, `nullable`, OpenAPI 3.0's boolean `exclusiveM
 schema is named by its component name). A `oneOf` selects its member by validating each one,
 so a member is chosen by its `discriminator` tag when each member fixes the tag with `enum` or
 `const`.
+
+The starter routes (`fastify-routes.hbs`) register, for each operation, the schema of every
+declared response whose body is `application/json`: the success response's under the status
+the route answers with, any other under its status code — a range as Fastify reads it (`4XX`
+as `4xx`), and `default`. Fastify serializes every response with the schema of its status, an
+error included, so a property the contract does not declare for that status is not sent. The
+server's error handler must therefore send the shape the contract declares for the error's
+status — as the example's ProblemDetails handler (`examples/server/src/server.ts`) does: a body
+missing a required property fails serialization and is answered with 500, which is what
+Fastify's default error handler does for a `ProblemDetails` response.
 
 Validate with Fastify's default validator options except `removeAdditional`, set to `false`.
 Ajv validates each member of a `oneOf` or `anyOf` against the value itself, and with

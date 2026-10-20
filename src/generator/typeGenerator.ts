@@ -329,6 +329,8 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
   body?: string;
   /** The success response body's type; absent when the response has no body */
   response?: string;
+  /** The body type of every other response with a body generated code carries */
+  otherResponses: Array<{ statusCode: string; type: string }>;
   /** The inline schemas named after the operation, with their names */
   inline: Array<{ name: string; schema: SchemaObject }>;
 } {
@@ -345,14 +347,17 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
     return inlineName;
   };
 
-  return {
-    base,
-    input: `${base}Input`,
-    params,
-    body: nameBody(resolved.body, `${base}Body`),
-    response: nameBody(resolved.success.body, `${base}Response`),
-    inline,
-  };
+  const body = nameBody(resolved.body, `${base}Body`);
+  const response = nameBody(resolved.success.body, `${base}Response`);
+  // Another response's inline body is named by its status: <base>404Response,
+  // <base>4XXResponse, <base>DefaultResponse.
+  const otherResponses = resolved.otherResponses.flatMap(({ statusCode, body: responseBody }) => {
+    const suffix = statusCode === 'default' ? 'Default' : statusCode;
+    const type = nameBody(responseBody, `${base}${suffix}Response`);
+    return type ? [{ statusCode, type }] : [];
+  });
+
+  return { base, input: `${base}Input`, params, body, response, otherResponses, inline };
 }
 
 /**

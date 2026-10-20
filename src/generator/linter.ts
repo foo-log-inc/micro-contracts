@@ -11,7 +11,7 @@ import type {
   LintError,
   ResolvedOperation,
 } from '../types.js';
-import { isReference, hasPrivateProperties, collectReferencedSchemas, collectReachableComponents, isTsIdentifier, parseComponentRef, resolveOperation, carriedBodySchema } from '../types.js';
+import { isReference, hasPrivateProperties, collectReferencedSchemas, collectReachableComponents, isTsIdentifier, parseComponentRef, resolveOperation } from '../types.js';
 
 export interface LintOptions {
   /** Treat warnings as errors */
@@ -392,8 +392,8 @@ function checkPublicEndpointComposition(
     collectReferencedSchemas(resolved.body.schema, spec, referencedSchemas);
   }
   
-  for (const response of Object.values(resolved.responses)) {
-    const schema = carriedBodySchema(response.content);
+  for (const response of [resolved.success, ...resolved.otherResponses]) {
+    const schema = response.body?.schema;
     if (schema) {
       collectReferencedSchemas(schema, spec, referencedSchemas);
     }

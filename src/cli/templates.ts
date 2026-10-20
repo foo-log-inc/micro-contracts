@@ -50,9 +50,9 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{#if requestBody}}
       body: { $ref: '{{requestBody.schemaName}}#' },
 {{/if}}
-{{#unless (eq responseType "void")}}
-      response: { {{successStatus}}: { $ref: '{{responseType}}#' } },
-{{/unless}}
+{{#if responseSchemas.length}}
+      response: { {{#each responseSchemas}}'{{status}}': { $ref: '{{schemaName}}#' }{{#unless @last}}, {{/unless}}{{/each}} },
+{{/if}}
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
 {{#if extensions.length}}

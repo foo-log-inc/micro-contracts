@@ -1158,13 +1158,17 @@ export interface OperationBody {
   schema: SchemaObject | ReferenceObject;
 }
 
-/** The response an operation answers a successful call with. */
-interface SuccessResponse {
-  /** Its key under `responses`: a 2xx status code, the `2XX` range or `default` */
+/** A response an operation declares. */
+interface DeclaredResponse {
+  /** Its key under `responses`: a status code, a range (`4XX`) or `default` */
   statusCode: string;
+  body?: OperationBody;
+}
+
+/** The response an operation answers a successful call with. */
+interface SuccessResponse extends DeclaredResponse {
   /** The status code it is sent with: the code itself, or 200 for `2XX` and `default` */
   status: number;
-  body?: OperationBody;
 }
 
 /**
@@ -1184,43 +1188,42 @@ export interface ResolvedOperation {
   body?: OperationBody;
   /** The response a successful call returns */
   success: SuccessResponse;
+  /**
+   * Every other response, in declaration order. Its body is given when it is
+   * in a media type generated code carries; a response that documents an
+   * error may declare any other besides.
+   */
+  otherResponses: DeclaredResponse[];
 }
 
 /**
- * The schema of the body `content` declares in a media type generated code
- * carries, if it declares one there.
- *
- * Only a request body and the success response must be carried; a response
- * that documents an error may declare any media type besides.
+ * The body `content` declares in a media type generated code carries, if it
+ * declares one there.
  */
-export function carriedBodySchema(
-  content: Record<string, MediaTypeObject> | undefined
-): SchemaObject | ReferenceObject | undefined {
+function carriedBody(content: Record<string, MediaTypeObject> | undefined): OperationBody | undefined {
   const mediaType = Object.keys(content ?? {}).find(m => Object.hasOwn(BODY_MEDIA_TYPES, m));
-  return mediaType === undefined ? undefined : content![mediaType].schema ?? {};
+  if (mediaType === undefined) return undefined;
+  return { kind: BODY_MEDIA_TYPES[mediaType], mediaType, schema: content![mediaType].schema ?? {} };
 }
 
 /**
  * The body `content` declares, as generated code carries it; none when it
- * declares no media type. A media type generated code cannot carry is an
- * error, never skipped: a skipped body vanishes from every artifact.
+ * declares no media type. Generated code reads a request body and returns a
+ * success response, so a media type it cannot carry is an error, never
+ * skipped: a skipped body vanishes from every artifact.
  */
 function readBody(
   content: Record<string, MediaTypeObject> | undefined,
   location: string
 ): OperationBody | undefined {
-  const mediaTypes = Object.keys(content ?? {});
-  const uncarried = mediaTypes.filter(m => !Object.hasOwn(BODY_MEDIA_TYPES, m));
+  const uncarried = Object.keys(content ?? {}).filter(m => !Object.hasOwn(BODY_MEDIA_TYPES, m));
   if (uncarried.length > 0) {
     throw new Error(
       `${location} declares ${uncarried.map(m => `'${m}'`).join(', ')}, which generated code cannot carry ` +
       `(supported: ${Object.keys(BODY_MEDIA_TYPES).join(', ')}).`
     );
   }
-
-  const [mediaType] = mediaTypes;
-  if (mediaType === undefined) return undefined;
-  return { kind: BODY_MEDIA_TYPES[mediaType], mediaType, schema: carriedBodySchema(content)! };
+  return carriedBody(content);
 }
 
 /** Statuses whose response carries no content (RFC 9110). */
@@ -1305,12 +1308,16 @@ export function resolveOperation(
     );
   }
 
+  const success = selectSuccessResponse(responses, location);
   return {
     parameters,
     requestBody,
     responses,
     body: readBody(requestBody?.content, `${location} requestBody`),
-    success: selectSuccessResponse(responses, location),
+    success,
+    otherResponses: Object.entries(responses)
+      .filter(([statusCode]) => statusCode !== success.statusCode)
+      .map(([statusCode, response]) => ({ statusCode, body: carriedBody(response.content) })),
   };
 }
 
