@@ -275,6 +275,11 @@ actions:
       expect(typecheck()).toBe('');
     });
 
+    it('generate an adapter that type-checks for a module with a single overlay', { timeout: 180_000 }, async () => {
+      await generateProject(userSpec, { 'auth.overlay.yaml': authOverlay });
+      expect(typecheck()).toBe('');
+    });
+
     it('fail generation on an overlay parameter in a location requests do not have', async () => {
       await expect(generateProject(userSpec, {
         'auth.overlay.yaml': `

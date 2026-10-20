@@ -103,8 +103,10 @@ export async function runOverlays(
       );
     }
 
+    // The extractor builds the input the handler is declared with, from the
+    // same parameters; looked up by name, TypeScript cannot pair the two.
     const input = extract(req);
-    const result = await (handler as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
+    const result = await (handler as unknown as (input: Record<string, unknown>) => Promise<OverlayResult<unknown>>)(input);
 
     if (!result.success) {
       return {
