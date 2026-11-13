@@ -1900,10 +1900,10 @@ paths:
       requestBody:
         required: true
         content:
-          multipart/form-data:
-            schema: { type: object, properties: { file: { type: string, format: binary } } }
+          application/x-www-form-urlencoded:
+            schema: { type: object, properties: { name: { type: string } } }
       responses:
-        '200': { description: ok }`, /POST \/files requestBody declares 'multipart\/form-data', which generated code cannot carry\. Remove it, and declare the body as application\/json\./],
+        '200': { description: ok }`, /POST \/files requestBody declares 'application\/x-www-form-urlencoded', which generated code cannot carry\. Remove it, and declare the body as one of application\/json, multipart\/form-data\./],
       ['success response', `
       responses:
         '200':
@@ -1925,6 +1925,120 @@ paths:
 
       expect(() => lintSpec(loadOpenAPISpec(specPath))).toThrow(message);
       await expect(generate(config, { skipLint: true, contractsOnly: true })).rejects.toThrow(message);
+    });
+
+    describe('form bodies', () => {
+      /** A spec with one operation taking a multipart/form-data body of `schema` (YAML) */
+      function formSpec(schema: string): string {
+        return `
+openapi: 3.1.0
+info: { title: T, version: 1.0.0 }
+paths:
+  /photos:
+    post:
+      operationId: upload
+      x-micro-contracts-service: Photo
+      x-micro-contracts-method: upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: ${schema}
+            encoding:
+              photo: { contentType: image/jpeg }
+      responses:
+        '201':
+          description: stored
+          content: { application/json: { schema: { $ref: '#/components/schemas/Stored' } } }
+components:
+  schemas:
+    PhotoUpload:
+      type: object
+      required: [jan, photo]
+      additionalProperties: false
+      properties:
+        jan: { type: string, pattern: '^[0-9]{13}$' }
+        rating: { type: integer }
+        photo: { type: string, contentEncoding: binary, contentMediaType: image/jpeg, maxLength: 2097152 }
+        scans: { type: array, items: { type: string, format: binary } }
+        tags: { type: array, items: { $ref: '#/components/schemas/Tag' } }
+    Tag: { type: string, enum: [front, back] }
+    Stored: { type: object, required: [storedAt], properties: { storedAt: { type: string, format: date-time } } }
+`;
+      }
+
+      it('types a form\'s files as bytes, and validates and routes it by its schema', async () => {
+        const { specPath, config } = setupSpec(formSpec(`{ $ref: '#/components/schemas/PhotoUpload' }`));
+
+        expect(lintSpec(loadOpenAPISpec(specPath)).valid).toBe(true);
+        await generate(config, { contractsOnly: true });
+        const types = read('contracts/core/schemas/types.ts');
+        // The schema's own type is unchanged: validators.ts validates the form by it
+        expect(types).toMatch(/export interface PhotoUpload \{\n {2}jan: string;\n {2}rating\?: number;\n {2}photo: string;\n {2}scans\?: string\[\];\n {2}tags\?: Tag\[\];\n\}/);
+        expect(types).toMatch(/export interface Photo_uploadForm \{\n {2}jan: string;\n {2}rating\?: number;\n {2}photo: Uint8Array;\n {2}scans\?: Uint8Array\[\];\n {2}tags\?: Tag\[\];\n\}/);
+        expect(types).toContain('export type Photo_uploadInput = { data: Photo_uploadForm };');
+        expect(read('contracts/core/schemas/validators.ts')).toContain('"$id": "PhotoUpload"');
+        expect(read('contracts/core/services/PhotoServiceApi.ts'))
+          .toContain('upload(input: Photo_uploadInput): Promise<Stored>;');
+        expect(read('contracts/core/forms/index.ts')).toContain('export async function readForm');
+        expect(read('contracts/core/index.ts')).toContain("export * from './forms/index.js';");
+
+        const [route] = buildTemplateContext(loadOpenAPISpec(specPath), 'core').routes;
+        expect(route.requestBody).toBeUndefined();
+        expect(route.requestType).toBeUndefined();
+        expect(route.form).toEqual({
+          schemaName: 'PhotoUpload',
+          type: 'Photo_uploadForm',
+          required: true,
+          files: [{ name: 'photo', many: false }, { name: 'scans', many: true }],
+        });
+      });
+
+      it('gives the service an inline form without files as its schema types it', async () => {
+        const { specPath, config } = setupSpec(formSpec(`{ type: object, required: [jan], properties: { jan: { type: string } } }`));
+
+        await generate(config, { contractsOnly: true });
+        const types = read('contracts/core/schemas/types.ts');
+        expect(types).toContain('export type Photo_uploadInput = { data: Photo_uploadBody };');
+        expect(types).not.toContain('Photo_uploadForm');
+        expect(read('contracts/core/schemas/validators.ts')).toContain('"$id": "Photo_uploadBody"');
+
+        const [route] = buildTemplateContext(loadOpenAPISpec(specPath), 'core').routes;
+        expect(route.form).toEqual({ schemaName: 'Photo_uploadBody', type: 'Photo_uploadBody', required: true, files: [] });
+      });
+
+      it('generates the contract of a module whose form operation\'s routes and client are not generated', async () => {
+        const { config } = setupSpec(formSpec(`{ $ref: '#/components/schemas/PhotoUpload' }`));
+        const disabled = { enabled: false, output: path.join(tmpDir, 'never.ts'), template: path.join(tmpDir, 'never.hbs') };
+        fs.writeFileSync(path.join(tmpDir, 'adapter.hbs'), '{{#each routes}}{{operationId}}\n{{/each}}');
+        config.defaults!.outputs = {
+          routes: disabled,
+          'frontend-api': disabled,
+          adapter: { output: path.join(tmpDir, 'server/adapter.generated.txt'), template: path.join(tmpDir, 'adapter.hbs') },
+        };
+
+        await generate(config);
+        expect(read('contracts/core/schemas/types.ts')).toContain('export type Photo_uploadInput = { data: Photo_uploadForm };');
+        expect(read('server/adapter.generated.txt')).toBe('upload\n');
+        expect(fs.existsSync(path.join(tmpDir, 'never.ts'))).toBe(false);
+      });
+
+      it.each([
+        ['without a schema', `
+            encoding: {}`, /POST \/photos requestBody declares 'multipart\/form-data' without an object schema of properties/],
+        ['whose schema is not an object', `
+            schema: { type: string }`, /POST \/photos requestBody declares 'multipart\/form-data' without an object schema of properties/],
+        ['with an object property', `
+            schema: { type: object, properties: { meta: { type: object, properties: { a: { type: string } } } } }`,
+        /POST \/photos requestBody 'multipart\/form-data' property 'meta' is neither a field .* nor a file .*, which generated code cannot carry/],
+        ['with a nullable field', `
+            schema: { type: object, properties: { note: { type: [string, 'null'] } } }`,
+        /POST \/photos requestBody 'multipart\/form-data' property 'note' is neither a field/],
+      ])('fails on a form %s', (_label, media, message) => {
+        const { specPath } = setupSpec(formSpec(`{ $ref: '#/components/schemas/PhotoUpload' }`)
+          .replace(/\n {12}schema: \{ \$ref: '#\/components\/schemas\/PhotoUpload' \}\n {12}encoding:\n {14}photo: \{ contentType: image\/jpeg \}/, media));
+        expect(() => lintSpec(loadOpenAPISpec(specPath))).toThrow(message);
+      });
     });
 
     describe('stream responses', () => {

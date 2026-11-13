@@ -16,8 +16,34 @@ import { runOverlays, type HttpRequest } from './overlayAdapter.generated.js';
 import { Readable } from 'node:stream';
 import { encodeStream } from '{{contractPackage}}/streams/index.js';
 {{/if}}
+{{#if forms}}
+import type { Multipart } from '@fastify/multipart';
+import { readForm, type FormPart } from '{{contractPackage}}/forms/index.js';
+{{/if}}
 {{#if readsCookies}}
 import { parseCookies } from '{{contractPackage}}/http/index.js';
+{{/if}}
+{{#if forms}}
+
+/** An error answered with 413 */
+function tooLarge(message: string): Error {
+  return Object.assign(new Error(message), { statusCode: 413 });
+}
+
+/** A form's parts as readForm reads them: a field's value, a file's bytes in full */
+async function* formParts(parts: AsyncIterable<Multipart>): AsyncGenerator<FormPart> {
+  for await (const part of parts) {
+    if (part.type === 'file') {
+      const file = await part.toBuffer();
+      {{!-- With throwFileSizeLimit off, @fastify/multipart cuts a file at its limit instead of refusing it --}}
+      if (part.file.truncated) throw tooLarge(`body/${part.fieldname} exceeds the file size limit`);
+      yield { name: part.fieldname, file };
+    } else {
+      if (part.fieldnameTruncated || part.valueTruncated) throw tooLarge(`body/${part.fieldname} exceeds the field size limit`);
+      yield { name: part.fieldname, value: part.value };
+    }
+  }
+}
 {{/if}}
 {{#if extensionInfo.length}}
 
@@ -39,6 +65,12 @@ function sendError(reply: FastifyReply, error: types.ProblemDetails): FastifyRep
 {{/if}}
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
+{{#if forms}}
+  if (!fastify.hasContentTypeParser('multipart/form-data')) {
+    throw new Error('These routes read multipart/form-data bodies with @fastify/multipart: register it before them');
+  }
+
+{{/if}}
   // A component referenced from a shared file is a schema of every module that
   // references it: the first module registers it, and a module defining a
   // different schema under the same id is an error.
@@ -65,6 +97,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{#if stream}}
   {{!-- Events are serialized as a JSON response is: by the schema of one event --}}
   const {{typeNameBase}}EventSchema = { $ref: '{{stream.eventType}}#' };
+{{/if}}
+{{#if form}}
+  {{!-- Fastify parses no form: the route reads it, and validates it with the validator Fastify validates the rest with --}}
+  const {{typeNameBase}}FormSchema = { $ref: '{{form.schemaName}}#' };
 {{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
@@ -107,6 +143,17 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     const result = await runOverlays('{{operationId}}', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
 {{/if}}
+{{#if form}}
+    const validateForm = req.compileValidationSchema({{typeNameBase}}FormSchema);
+    const form = await readForm(formParts(req.parts()), [{{#each form.files}}{ name: {{{json name}}}, many: {{many}} }, {{/each~}} ], body => {
+      if (!validateForm(body)) {
+        throw Object.assign(
+          new Error((validateForm.errors ?? []).map(e => `body${e.instancePath} ${e.message}`).join(', ')),
+          { statusCode: 400, code: 'FST_ERR_VALIDATION', validation: validateForm.errors, validationContext: 'body' },
+        );
+      }
+    });
+{{/if}}
     // Build input object (always required, even if empty)
     const input: types.{{inputType}} = {
 {{#if pathParams.length}}
@@ -120,6 +167,9 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{/if}}
 {{#if requestBody}}
       data: req.body as types.{{requestBody.schemaName}},
+{{/if}}
+{{#if form}}
+      data: form as types.{{form.type}},
 {{/if}}
     };
 {{!-- The success status is set once the service has returned: an error it throws keeps its own status. --}}

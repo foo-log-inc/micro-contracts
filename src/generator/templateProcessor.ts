@@ -54,6 +54,8 @@ export interface TemplateContext {
   readsCookies: boolean;
   /** Some route's success response streams (see RouteContext.stream) */
   streams: boolean;
+  /** Some route's request body is a form (see RouteContext.form) */
+  forms: boolean;
   /** Screen contexts extracted from screen spec (populated when screen mode is enabled) */
   screens: ScreenContext[];
 }
@@ -160,10 +162,22 @@ interface RouteContext {
    * headers in lower case and is not registered: a route gives it inline.
    */
   parameterSchemas: { path?: string; query?: string; header?: string; cookie?: string };
-  /** Request body info */
+  /** A JSON request body: its schema, which is also its type */
   requestBody?: {
     schemaName: string;
     required: boolean;
+  };
+  /**
+   * A form request body (`multipart/form-data`): the schema it is validated
+   * with, the type the service receives it as, and its file properties
+   * (`many` for a list of files). A route reads the parts with readForm; a
+   * client sends each property as a part, a file's bytes as a file.
+   */
+  form?: {
+    schemaName: string;
+    type: string;
+    required: boolean;
+    files: Array<{ name: string; many: boolean }>;
   };
   /** Every declared response, by status code */
   responses: ResponseContext[];
@@ -318,6 +332,7 @@ export function buildTemplateContext(
     uniqueOverlays,
     readsCookies: routes.some(r => r.cookieParams.length > 0 || r.extensions.length > 0),
     streams: routes.some(r => r.stream),
+    forms: routes.some(r => r.form),
     screens,
   };
 }
@@ -512,10 +527,21 @@ function extractRoutes(
         .filter(p => p.in === 'cookie')
         .map(p => ({ name: p.name, required: p.required || false }));
 
-      // Extract request body, under the name types.ts and validators.ts give it
+      // Extract request body, under the names types.ts and validators.ts give it
       let requestBody: RouteContext['requestBody'];
-      if (resolved.requestBody && typeNames.body) {
-        requestBody = { schemaName: typeNames.body, required: resolved.requestBody.required || false };
+      let form: RouteContext['form'];
+      if (resolved.requestBody && resolved.body && typeNames.body) {
+        const required = resolved.requestBody.required || false;
+        if (resolved.body.kind === 'form') {
+          form = {
+            schemaName: typeNames.body,
+            type: typeNames.form ?? typeNames.body,
+            required,
+            files: resolved.body.files.map(({ name, many }) => ({ name, many })),
+          };
+        } else {
+          requestBody = { schemaName: typeNames.body, required };
+        }
       }
 
       // Extract responses, each body under the name types.ts gives it
@@ -568,6 +594,7 @@ function extractRoutes(
         cookieParams,
         parameterSchemas: typeNames.parameterSchemas,
         requestBody,
+        form,
         responses,
         responseSchemas,
         typeNameBase,

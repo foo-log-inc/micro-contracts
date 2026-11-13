@@ -14,6 +14,7 @@ import os from 'os';
 import { execFileSync } from 'child_process';
 import { Writable } from 'stream';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import multipart from '@fastify/multipart';
 import { generate } from '../src/generator/index.js';
 import { getStarterTemplates, getLambdaStarterTemplates } from '../src/cli/templates.js';
 import type { MultiModuleConfig, OutputConfig } from '../src/types.js';
@@ -999,6 +1000,234 @@ components:
 
     it('generate routes, a client and stubs that type-check', { timeout: 180_000 }, async () => {
       await generateProject(chatSpec);
+      expect(typecheck()).toBe('');
+    });
+  });
+
+  describe('form bodies', () => {
+    const photoSpec = `
+openapi: 3.1.0
+info: { title: Photos, version: 1.0.0 }
+paths:
+  /albums/{albumId}/photos:
+    post:
+      operationId: upload
+      x-micro-contracts-service: Photo
+      x-micro-contracts-method: upload
+      parameters:
+        - { name: albumId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/PhotoUpload' }
+            encoding:
+              photo: { contentType: image/jpeg }
+      responses:
+        '201': { description: stored, content: { application/json: { schema: { $ref: '#/components/schemas/Stored' } } } }
+  /notes:
+    post:
+      operationId: note
+      x-micro-contracts-service: Photo
+      x-micro-contracts-method: note
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, required: [text], properties: { text: { type: string, minLength: 1 } } }
+      responses:
+        '204': { description: noted }
+components:
+  schemas:
+    PhotoUpload:
+      type: object
+      required: [caption, photo]
+      additionalProperties: false
+      properties:
+        caption: { type: string, pattern: '^[a-z ]+$' }
+        rating: { type: integer, minimum: 1 }
+        tags: { type: array, items: { type: string } }
+        photo: { type: string, contentEncoding: binary, contentMediaType: image/jpeg, maxLength: 16 }
+        thumbnails: { type: array, items: { type: string, format: binary } }
+    Stored: { type: object, required: [size], properties: { size: { type: integer } } }
+`;
+
+    /** The inputs the services were called with */
+    let calls: Array<Record<string, unknown>>;
+    const photoService = {
+      async upload(input: { albumId: string; data: { photo: Uint8Array } }) {
+        calls.push(input);
+        return { size: input.data.photo.length, internalNote: 'not in the contract' };
+      },
+      async note(input: Record<string, unknown>) {
+        calls.push(input);
+      },
+    };
+
+    beforeEach(() => {
+      calls = [];
+    });
+
+    const bytes = (...values: number[]) => new Uint8Array(values);
+    /** A Blob of these bytes, as a form's file */
+    const file = (data: Uint8Array) => new Blob([new Uint8Array(data)]);
+
+    /** The parts of a form, in order: a Blob is a file */
+    function formOf(parts: Array<[string, string | Blob]>): FormData {
+      const form = new FormData();
+      for (const [name, value] of parts) {
+        if (typeof value === 'string') form.append(name, value);
+        else form.append(name, value, `${name}.bin`);
+      }
+      return form;
+    }
+
+    const valid: Array<[string, string | Blob]> = [
+      ['caption', 'a cat'], ['rating', '3'], ['tags', 'pet'], ['photo', file(bytes(0, 255, 128, 10))],
+      ['thumbnails', file(bytes(1))], ['thumbnails', file(bytes(2, 3))],
+    ];
+
+    /** Serve the photo spec's starter routes on a port, @fastify/multipart registered with these options; returns its base URL */
+    async function listen(options: Record<string, unknown> = {}): Promise<{ app: FastifyInstance; base: string }> {
+      await generateProject(photoSpec);
+      const { registerRoutes } = await import(path.join(tmpDir, 'server/routes.generated.ts'));
+      const app = Fastify();
+      app.decorate('services', { m: { photo: photoService } });
+      await app.register(multipart, options);
+      await registerRoutes(app);
+      await app.listen({ port: 0, host: '127.0.0.1' });
+      return { app, base: `http://127.0.0.1:${(app.server.address() as { port: number }).port}` };
+    }
+
+    const upload = (base: string, form: FormData) => fetch(`${base}/albums/a1/photos`, { method: 'POST', body: form });
+
+    /** What the photo service received: its input, each file as plain bytes */
+    const expectedUpload = {
+      albumId: 'a1',
+      data: {
+        caption: 'a cat', rating: 3, tags: ['pet'], photo: bytes(0, 255, 128, 10), thumbnails: [bytes(1), bytes(2, 3)],
+      },
+    };
+    /** A value with each Uint8Array (a Buffer among them) as the list of its bytes, to compare by content */
+    const plain = (value: unknown): unknown => {
+      if (value instanceof Uint8Array) return { bytes: [...value] };
+      if (Array.isArray(value)) return value.map(plain);
+      if (typeof value === 'object' && value !== null) {
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plain(item)]));
+      }
+      return value;
+    };
+
+    it('refuse to register without @fastify/multipart, which reads the forms', async () => {
+      await generateProject(photoSpec);
+      await expect(serve({ photo: photoService })).rejects.toThrow(
+        'These routes read multipart/form-data bodies with @fastify/multipart: register it before them');
+    });
+
+    it('read each field and file into the service input, typed by the schema, a file as its bytes', async () => {
+      const { app, base } = await listen();
+      try {
+        const res = await upload(base, formOf(valid));
+        expect(res.status).toBe(201);
+        expect(await res.json()).toEqual({ size: 4 });
+        expect(calls.map(plain)).toEqual([plain(expectedUpload)]);
+        expect(calls[0].data).toMatchObject({ photo: expect.any(Uint8Array) });
+
+        const noted = await fetch(`${base}/notes`, { method: 'POST', body: formOf([['text', 'hi']]) });
+        expect(noted.status).toBe(204);
+        expect(calls[1]).toEqual({ data: { text: 'hi' } });
+      } finally {
+        await app.close();
+      }
+    });
+
+    it.each([
+      ['a missing required file', valid.filter(([name]) => name !== 'photo'), "body must have required property 'photo'"],
+      ['a file over its maxLength', [...valid.filter(([name]) => name !== 'photo'), ['photo', file(new Uint8Array(17))]], 'body/photo must NOT have more than 16 characters'],
+      ['a field its schema refuses', [['caption', 'A CAT'], ['photo', file(bytes(1))]], 'body/caption must match pattern "^[a-z ]+$"'],
+      ['a field sent as a file', [['caption', file(bytes(97))], ['photo', file(bytes(1))]], 'body/caption must be a field, not a file'],
+      ['a file sent as a field', [['caption', 'a cat'], ['photo', 'not a file']], 'body/photo must be a file'],
+      ['two files for a property taking one', [['caption', 'a cat'], ['photo', file(bytes(1))], ['photo', file(bytes(2))]], 'body/photo must be one file'],
+      ['a file under a name the schema does not declare', [['caption', 'a cat'], ['photo', file(bytes(1))], ['extra', file(bytes(1))]], 'body/extra must be a field, not a file'],
+    ] as Array<[string, Array<[string, string | Blob]>, string]>)('refuse %s with 400, before the service', async (_label, parts, message) => {
+      const { app, base } = await listen();
+      try {
+        const res = await upload(base, formOf(parts));
+        expect(res.status).toBe(400);
+        expect(await res.json()).toMatchObject({ statusCode: 400, message });
+        expect(calls).toEqual([]);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('refuse a file @fastify/multipart cut at its size limit with 413, before the service', async () => {
+      const { app, base } = await listen({ throwFileSizeLimit: false, limits: { fileSize: 8 } });
+      try {
+        const res = await upload(base, formOf([['caption', 'a cat'], ['photo', file(bytes(1))], ['thumbnails', file(new Uint8Array(9))]]));
+        expect(res.status).toBe(413);
+        expect(await res.json()).toMatchObject({ statusCode: 413, message: 'body/thumbnails exceeds the file size limit' });
+        expect(calls).toEqual([]);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('send a form from the generated client, a file as its bytes', async () => {
+      const { app, base } = await listen();
+      vi.stubEnv('VITE_API_BASE_URL', base);
+      try {
+        const { photoApi } = await import(path.join(tmpDir, 'frontend/api.generated.ts'));
+        expect(await photoApi.upload(expectedUpload)).toEqual({ size: 4 });
+        await photoApi.note({ data: { text: 'hi' } });
+        expect(calls.map(plain)).toEqual([plain(expectedUpload), { data: { text: 'hi' } }]);
+      } finally {
+        vi.unstubAllEnvs();
+        await app.close();
+      }
+    });
+
+    describe('lambda handler', () => {
+      /** An event of this form, its body base64-encoded as API Gateway encodes a binary body */
+      async function formEvent(rawPath: string, form: FormData) {
+        const request = new Request('http://localhost/', { method: 'POST', body: form });
+        return {
+          rawPath, rawQueryString: '', isBase64Encoded: true, requestContext: { http: { method: 'POST' } },
+          headers: { 'Content-Type': request.headers.get('content-type')! },
+          body: Buffer.from(await request.arrayBuffer()).toString('base64'),
+        };
+      }
+
+      async function handler() {
+        await generateProject(photoSpec);
+        const { createHandler } = await import(path.join(tmpDir, 'server/lambda.generated.ts'));
+        return createHandler({ services: { photo: photoService } });
+      }
+
+      it('read each field and file into the service input, as the Fastify route reads them', async () => {
+        const handle = await handler();
+        const res = await handle(await formEvent('/albums/a1/photos', formOf(valid)));
+        expect(res).toMatchObject({ statusCode: 201, body: '{"size":4}' });
+        expect(calls.map(plain)).toEqual([plain(expectedUpload)]);
+      });
+
+      it('refuse a form its schema refuses with 400, and a body that is not a form with 415, before the service', async () => {
+        const handle = await handler();
+        const refused = await handle(await formEvent('/albums/a1/photos', formOf([['caption', 'a cat'], ['photo', 'not a file']])));
+        expect(refused.statusCode).toBe(400);
+        expect(JSON.parse(refused.body)).toMatchObject({ status: 400, title: 'body/photo must be a file' });
+
+        const json = await handle({
+          rawPath: '/notes', rawQueryString: '', isBase64Encoded: false, requestContext: { http: { method: 'POST' } },
+          headers: { 'content-type': 'application/json' }, body: '{"text":"hi"}',
+        });
+        expect(json.statusCode).toBe(415);
+        expect(calls).toEqual([]);
+      });
+    });
+
+    it('generate routes, a Lambda handler, a client and stubs that type-check', { timeout: 180_000 }, async () => {
+      await generateProject(photoSpec);
       expect(typecheck()).toBe('');
     });
   });

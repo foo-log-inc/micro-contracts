@@ -12,6 +12,7 @@ import type {
   GeneratorConfig,
   MultiModuleConfig,
   ResolvedModuleConfig,
+  ResolvedOperation,
   DependencyRef,
 } from '../types.js';
 import {
@@ -373,11 +374,11 @@ function hasPublicEndpoints(spec: OpenAPISpec): boolean {
   return false;
 }
 
-/** True when some operation of the spec answers with a stream. */
-function hasStreamOperations(spec: OpenAPISpec): boolean {
+/** True when some operation of the spec, as resolved, passes `test`. */
+function someOperation(spec: OpenAPISpec, test: (resolved: ResolvedOperation) => boolean): boolean {
   return Object.entries(spec.paths).some(([apiPath, pathItem]) =>
     (['get', 'post', 'put', 'patch', 'delete'] as const).some(method =>
-      pathItem[method] !== undefined && resolveOperation(spec, apiPath, method).success.body?.kind === 'stream'
+      pathItem[method] !== undefined && test(resolveOperation(spec, apiPath, method))
     )
   );
 }
@@ -449,10 +450,17 @@ export { allSchemas } from './validators.js';
   }
 
   // Generate the stream framing, for a module whose operations stream
-  const hasStreams = hasStreamOperations(targetSpec);
+  const hasStreams = someOperation(targetSpec, resolved => resolved.success.body?.kind === 'stream');
   if (hasStreams) {
     console.log(`  Generating stream framing...`);
     writeAndLog(path.join(outputDir, 'streams', 'index.ts'), generateStreams());
+  }
+
+  // Generate the reading of forms, for a module whose operations take one
+  const hasForms = someOperation(targetSpec, resolved => resolved.body?.kind === 'form');
+  if (hasForms) {
+    console.log(`  Generating form reading...`);
+    writeAndLog(path.join(outputDir, 'forms', 'index.ts'), generateForms());
   }
   
   // Generate overlay interfaces if overlays were applied
@@ -474,7 +482,7 @@ export { allSchemas } from './validators.js';
 export * from './services/index.js';
 export * from './schemas/index.js';
 export * from './errors/index.js';
-${hasEndpoints ? "export * from './http/index.js';\n" : ''}${hasOverlays ? "export * from './overlays/index.js';" : ''}${hasStreams ? "\nexport * from './streams/index.js';" : ''}
+${hasEndpoints ? "export * from './http/index.js';\n" : ''}${hasOverlays ? "export * from './overlays/index.js';" : ''}${hasStreams ? "\nexport * from './streams/index.js';" : ''}${hasForms ? "\nexport * from './forms/index.js';" : ''}
 `;
   writeAndLog(path.join(outputDir, 'index.ts'), indexContent);
   
@@ -697,6 +705,7 @@ function declaredDependencyTypes(
     names.add(typeNames.input);
     if (typeNames.params) names.add(typeNames.params);
     if (typeNames.body) names.add(typeNames.body);
+    if (typeNames.form) names.add(typeNames.form);
     if (typeNames.response) names.add(typeNames.response);
     if (typeNames.event) names.add(typeNames.event);
     for (const { type } of typeNames.otherResponses) names.add(type);
@@ -1011,6 +1020,81 @@ export async function* decodeStream<E>(format: StreamFormat, text: AsyncIterable
     }
   }
   if (format === 'ndjson' && buffer.trim() !== '') yield JSON.parse(buffer) as E;
+}
+`;
+}
+
+/**
+ * Generate the reading of a form body (multipart/form-data) that every route
+ * template shares, so each reads a form the same way whichever server it runs on.
+ */
+function generateForms(): string {
+  return `/**
+ * Reading form bodies (multipart/form-data)
+ * Auto-generated - DO NOT EDIT
+ *
+ * A route reads a form's parts with readForm: each field's value, and each
+ * file's bytes.
+ */
+
+/** A part of a form: a field's value, or a file's bytes */
+export type FormPart = { name: string; value: unknown } | { name: string; file: Uint8Array };
+
+/** An error answered with 400 */
+function badRequest(message: string): Error {
+  return Object.assign(new Error(message), { statusCode: 400 });
+}
+
+/** Bytes as a binary string, as a schema reads one: one character per byte */
+function binaryString(bytes: Uint8Array): string {
+  let text = '';
+  for (let start = 0; start < bytes.length; start += 0x8000) {
+    text += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
+  }
+  return text;
+}
+
+/**
+ * The form a request's parts make, by name: a name given more than once is a
+ * list. \`files\` are the properties sent as files, \`many\` for a list of
+ * files; a file under any other name, a field under one of theirs, or a second
+ * file for a property that takes one, is answered with 400.
+ *
+ * \`validate\` checks the form against its schema, throwing when it fails, and
+ * may coerce its values in place. It sees each file as a binary string (one
+ * character per byte), so the schema's maxLength bounds a file's size. The form
+ * it admitted is then returned, each file as its bytes.
+ */
+export async function readForm(
+  parts: AsyncIterable<FormPart> | Iterable<FormPart>,
+  files: ReadonlyArray<{ name: string; many: boolean }>,
+  validate: (form: Record<string, unknown>) => void,
+): Promise<unknown> {
+  const values = new Map<string, unknown[]>();
+  const bytes = new Map<string, Uint8Array[]>();
+  for await (const part of parts) {
+    const declared = files.find(file => file.name === part.name);
+    if ('file' in part) {
+      if (declared === undefined) throw badRequest(\`body/\${part.name} must be a field, not a file\`);
+      const given = bytes.get(part.name) ?? [];
+      if (given.length > 0 && !declared.many) throw badRequest(\`body/\${part.name} must be one file\`);
+      bytes.set(part.name, [...given, part.file]);
+    } else if (declared !== undefined) {
+      throw badRequest(\`body/\${part.name} must be a file\`);
+    }
+    values.set(part.name, [...(values.get(part.name) ?? []), 'file' in part ? binaryString(part.file) : part.value]);
+  }
+
+  // Entries define their names as properties: a part's name never reaches a prototype
+  const form: Record<string, unknown> = Object.fromEntries(
+    [...values].map(([name, given]) => [name, given.length === 1 ? given[0] : given]),
+  );
+  validate(form);
+  return Object.fromEntries(Object.entries(form).map(([name, value]) => {
+    const given = bytes.get(name);
+    if (given === undefined) return [name, value];
+    return [name, files.find(file => file.name === name)?.many ? given : given[0]];
+  }));
 }
 `;
 }
