@@ -48,12 +48,21 @@
     "install:all": "npm run server:install && npm run frontend:install"
   },
   "devDependencies": {
-    "@redocly/cli": "^2.44.2",
-    "@typescript-eslint/eslint-plugin": "^8.51.0",
-    "@typescript-eslint/parser": "^8.51.0",
-    "concurrently": "^9.1.2",
+    "@redocly/cli": "^2.78.0",
+    "@typescript-eslint/eslint-plugin": "^8.72.2",
+    "@typescript-eslint/parser": "^8.72.2",
+    "concurrently": "^9.2.5",
     "embedoc": "^0.14.9",
-    "eslint": "^9.39.2",
-    "eslint-plugin-micro-contracts": "file:../eslint-plugin"
+    "eslint": "^9.39.5",
+    "eslint-plugin-micro-contracts": "file:../eslint-plugin",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.5"
+    },
+    "embedoc": {
+      "glob": "^14.0.6"
+    }
   }
 }
