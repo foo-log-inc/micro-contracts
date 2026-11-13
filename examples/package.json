@@ -52,7 +52,7 @@
     "@typescript-eslint/eslint-plugin": "^8.72.2",
     "@typescript-eslint/parser": "^8.72.2",
     "concurrently": "^9.2.5",
-    "embedoc": "^0.14.9",
+    "embedoc": "^0.14.10",
     "eslint": "^9.39.5",
     "eslint-plugin-micro-contracts": "file:../eslint-plugin",
     "typescript": "^5.9.3"
@@ -60,9 +60,6 @@
   "overrides": {
     "@typescript-eslint/typescript-estree": {
       "minimatch": "^11.0.5"
-    },
-    "embedoc": {
-      "glob": "^14.0.6"
     }
   }
 }
