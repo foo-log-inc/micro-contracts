@@ -24,8 +24,34 @@ import { runOverlays, type HttpRequest } from './overlayAdapter.generated.js';
 import { Readable } from 'node:stream';
 import { encodeStream } from '{{contractPackage}}/streams/index.js';
 {{/if}}
+{{#if forms}}
+import type { Multipart } from '@fastify/multipart';
+import { readForm, type FormPart } from '{{contractPackage}}/forms/index.js';
+{{/if}}
 {{#if readsCookies}}
 import { parseCookies } from '{{contractPackage}}/http/index.js';
+{{/if}}
+{{#if forms}}
+
+/** An error answered with 413 */
+function tooLarge(message: string): Error {
+  return Object.assign(new Error(message), { statusCode: 413 });
+}
+
+/** A form's parts as readForm reads them: a field's value, a file's bytes in full */
+async function* formParts(parts: AsyncIterable<Multipart>): AsyncGenerator<FormPart> {
+  for await (const part of parts) {
+    if (part.type === 'file') {
+      const file = await part.toBuffer();
+      {{!-- With throwFileSizeLimit off, @fastify/multipart cuts a file at its limit instead of refusing it --}}
+      if (part.file.truncated) throw tooLarge(\`body/\${part.fieldname} exceeds the file size limit\`);
+      yield { name: part.fieldname, file };
+    } else {
+      if (part.fieldnameTruncated || part.valueTruncated) throw tooLarge(\`body/\${part.fieldname} exceeds the field size limit\`);
+      yield { name: part.fieldname, value: part.value };
+    }
+  }
+}
 {{/if}}
 {{#if extensionInfo.length}}
 
@@ -47,6 +73,12 @@ function sendError(reply: FastifyReply, error: types.ProblemDetails): FastifyRep
 {{/if}}
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
+{{#if forms}}
+  if (!fastify.hasContentTypeParser('multipart/form-data')) {
+    throw new Error('These routes read multipart/form-data bodies with @fastify/multipart: register it before them');
+  }
+
+{{/if}}
   // A component referenced from a shared file is a schema of every module that
   // references it: the first module registers it, and a module defining a
   // different schema under the same id is an error.
@@ -73,6 +105,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{#if stream}}
   {{!-- Events are serialized as a JSON response is: by the schema of one event --}}
   const {{typeNameBase}}EventSchema = { $ref: '{{stream.eventType}}#' };
+{{/if}}
+{{#if form}}
+  {{!-- Fastify parses no form: the route reads it, and validates it with the validator Fastify validates the rest with --}}
+  const {{typeNameBase}}FormSchema = { $ref: '{{form.schemaName}}#' };
 {{/if}}
   fastify.{{method}}('{{fastifyPath}}', {
     schema: {
@@ -115,6 +151,17 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     const result = await runOverlays('{{operationId}}', handlers, toHttpRequest(req, cookies));
     if (!result.success) return sendError(reply, result.error);
 {{/if}}
+{{#if form}}
+    const validateForm = req.compileValidationSchema({{typeNameBase}}FormSchema);
+    const form = await readForm(formParts(req.parts()), [{{#each form.files}}{ name: {{{json name}}}, many: {{many}} }, {{/each~}} ], body => {
+      if (!validateForm(body)) {
+        throw Object.assign(
+          new Error((validateForm.errors ?? []).map(e => \`body\${e.instancePath} \${e.message}\`).join(', ')),
+          { statusCode: 400, code: 'FST_ERR_VALIDATION', validation: validateForm.errors, validationContext: 'body' },
+        );
+      }
+    });
+{{/if}}
     // Build input object (always required, even if empty)
     const input: types.{{inputType}} = {
 {{#if pathParams.length}}
@@ -128,6 +175,9 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 {{/if}}
 {{#if requestBody}}
       data: req.body as types.{{requestBody.schemaName}},
+{{/if}}
+{{#if form}}
+      data: form as types.{{form.type}},
 {{/if}}
     };
 {{!-- The success status is set once the service has returned: an error it throws keeps its own status. --}}
@@ -219,6 +269,22 @@ async function* bodyText(res: Response): AsyncGenerator<string> {
   }
 }
 {{/if}}
+{{#if forms}}
+
+/** A form as a multipart/form-data body: each property a part, a list one part per item, a file's bytes a file */
+function formBody(data: object): FormData {
+  const body = new FormData();
+  const entries: Array<[string, unknown]> = Object.entries(data);
+  for (const [name, value] of entries) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item === undefined) continue;
+      if (item instanceof Uint8Array) body.append(name, new Blob([new Uint8Array(item)]), name);
+      else body.append(name, String(item));
+    }
+  }
+  return body;
+}
+{{/if}}
 
 {{#each services}}
 // ==========================================================================
@@ -246,6 +312,8 @@ export const {{key}}Api = {
 {{/if}}
 {{#if (eq httpMethod "GET")}}
     const res = await fetch(url);
+{{else if form}}
+    const res = await fetch(url, { method: '{{httpMethod}}', body: formBody(input.data) });
 {{else if requestType}}
     const res = await fetch(url, {
       method: '{{httpMethod}}',
@@ -506,6 +574,9 @@ import { Readable, type Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { encodeStream } from '{{contractPackage}}/streams/index.js';
 {{/if}}
+{{#if forms}}
+import { readForm, type FormPart } from '{{contractPackage}}/forms/index.js';
+{{/if}}
 
 // ==========================================================================
 // Events
@@ -553,6 +624,10 @@ interface RouteRequest {
   /** The route's cookie parameters, by name */
   cookieParams: Record<string, string>;
   body: unknown;
+{{#if forms}}
+  /** The parts of a form body (multipart/form-data) */
+  parts(): Promise<FormPart[]>;
+{{/if}}
 }
 
 /** A response: its body whole, or (a stream operation's) as the service yields it */
@@ -699,6 +774,29 @@ function parseBody(event: HttpApiEvent, contentType: string | undefined): unknow
   if (forbidden) throw httpError(400, 'Object contains forbidden prototype property');
   return body;
 }
+{{#if forms}}
+
+/** The parts of an event's form body (multipart/form-data), parsed as the Fetch API parses one */
+async function formParts(event: HttpApiEvent, contentType: string | undefined): Promise<FormPart[]> {
+  if (contentType === undefined || contentType.split(';')[0].trim().toLowerCase() !== 'multipart/form-data') {
+    throw httpError(415, 'Unsupported Media Type');
+  }
+  const body = Buffer.from(event.body ?? '', event.isBase64Encoded ? 'base64' : 'utf-8');
+  let form: FormData;
+  try {
+    form = await new Response(body, { headers: { 'content-type': contentType } }).formData();
+  } catch {
+    throw httpError(400, 'Body is not valid multipart/form-data');
+  }
+  const parts: Array<Promise<FormPart>> = [];
+  form.forEach((value, name) => {
+    parts.push(typeof value === 'string'
+      ? Promise.resolve({ name, value })
+      : value.arrayBuffer().then(buffer => ({ name, file: new Uint8Array(buffer) })));
+  });
+  return Promise.all(parts);
+}
+{{/if}}
 
 /** Validate a part of the request, coercing it to its schema in place: one that fails is answered with 400 */
 function check(validate: ValidateFunction | undefined, data: unknown, part: string): void {
@@ -725,6 +823,9 @@ async function answer(route: Route, values: string[], event: HttpApiEvent): Prom
       }),
     ),
     body: route.body ? parseBody(event, headers['content-type']) : undefined,
+{{#if forms}}
+    parts: () => formParts(event, headers['content-type']),
+{{/if}}
   };
   check(route.params, request.params, 'params');
   check(route.body, request.body, 'body');
@@ -763,6 +864,11 @@ function createDispatcher(options: HandlerOptions): (event: HttpApiEvent) => Pro
   const { overlays } = options;
 {{/if}}
 
+{{#each routes}}
+{{#if form}}
+  const {{typeNameBase}}FormValidator = ajv.compile({ $ref: '{{form.schemaName}}#' });
+{{/if}}
+{{/each}}
   const routes: Route[] = [
 {{#each routes}}
     // {{httpMethod}} {{path}}{{#if isPublished}} [PUBLISHED]{{/if}}
@@ -791,6 +897,10 @@ function createDispatcher(options: HandlerOptions): (event: HttpApiEvent) => Pro
         const result = await runOverlays('{{operationId}}', overlays, request);
         if (!result.success) return reply.send(result.error.status, result.error);
 {{/if}}
+{{#if form}}
+        {{!-- The form is read once the overlays admit the request, as the Fastify route reads it --}}
+        const form = await readForm(await request.parts(), [{{#each form.files}}{ name: {{{json name}}}, many: {{many}} }, {{/each~}} ], body => check({{typeNameBase}}FormValidator, body, 'body'));
+{{/if}}
         const input: types.{{inputType}} = {
 {{#if pathParams.length}}
           ...(request.params as unknown as types.{{typeNameBase}}Params),
@@ -803,6 +913,9 @@ function createDispatcher(options: HandlerOptions): (event: HttpApiEvent) => Pro
 {{/if}}
 {{#if requestBody}}
           data: request.body as types.{{requestBody.schemaName}},
+{{/if}}
+{{#if form}}
+          data: form as types.{{form.type}},
 {{/if}}
         };
 {{#if stream}}

@@ -447,10 +447,11 @@ An operation's success response is its lowest 2xx status code, else its `2XX` ra
 `default`: the service returns that response's body and the generated route answers with
 that status (200 for `2XX` and `default`). An operation that declares none of them is an
 error: declare the response a successful call returns. Its request body must be
-`application/json`, and its success response `application/json` or a stream —
-`text/event-stream`, `application/x-ndjson` or `application/jsonl` — since a body in any other
-media type would be dropped from every generated artifact; one declared otherwise is an
-error: remove that media type, and declare the body in one of them. A stream declares the
+`application/json` or a form (`multipart/form-data`, see [Form Bodies](#form-bodies)), and its
+success response `application/json` or a stream — `text/event-stream`, `application/x-ndjson`
+or `application/jsonl` — since a body in any other media type would be dropped from every
+generated artifact; one declared otherwise is an error: remove that media type, and declare
+the body in one of them. A stream declares the
 schema of one event under `x-stream-event`, as a `oneOf` with `discriminator.propertyName`:
 a stream without `x-stream-event`, or whose events have no discriminator, is an error. A
 response of any other status, which documents an error, may use any media type; generated
@@ -671,6 +672,65 @@ the client goes away, the service's iterator is closed at its next yield: a serv
 between events keeps running until it yields again. The starter fetch client returns the
 events as an `AsyncIterable` to read with `for await`.
 
+### Form Bodies
+
+An operation whose request body is `multipart/form-data` takes a form. Its schema is an
+object whose properties are its parts: a property that is a binary string — `format: binary`,
+`contentEncoding: binary`, or a `contentMediaType` without `contentEncoding` — is a file, and
+any other is a field, a string, number, integer or boolean (by its `type`, or by the values of
+its `enum` or `const`). An array of either is a list, one part per item. A form schema that is
+not an object of properties, or a property that is neither a field nor a file (an object, or a
+nullable value), is an error.
+
+```yaml
+requestBody:
+  required: true
+  content:
+    multipart/form-data:
+      schema:
+        type: object
+        required: [caption, photo]
+        properties:
+          caption: { type: string }
+          photo: { type: string, contentMediaType: image/jpeg, maxLength: 2097152 }
+```
+
+The schema keeps its own type in `schemas/types.ts` and among the validators, a file being a
+string there. The service receives the form as `<Service>_<method>Form`, the same properties
+with each file as its bytes (`Uint8Array`, or `Uint8Array[]` for a list); a form without files
+is received as its schema's type.
+
+```typescript
+export interface Photo_uploadForm {
+  caption: string;
+  photo: Uint8Array;
+}
+export type Photo_uploadInput = { data: Photo_uploadForm };
+```
+
+The contract package of a module with a form carries `forms/index.ts`: routes read a form's
+parts with `readForm`. It validates the form against its schema with each file as a binary
+string — one character per byte, so `maxLength` bounds a file's size — and gives the service
+each file as its bytes. A file under a property that is not a file, a field under one that is,
+or a second file for a property that takes one, is answered with 400 before the service runs,
+as is a form its schema refuses.
+
+The starter Fastify routes read a form with [`@fastify/multipart`](https://github.com/fastify/fastify-multipart):
+register it, without `attachFieldsToBody`, before the routes, which refuse to register
+otherwise. Its limits apply: a file or field it cuts at a limit is answered with 413. The
+route reads the form once the operation's overlays admit the request, and validates it with
+the validator Fastify validates the rest with (`request.compileValidationSchema`).
+
+```typescript
+import multipart from '@fastify/multipart';
+
+await fastify.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 } });
+await registerRoutes(fastify);
+```
+
+The starter fetch client sends each property as a part — a list as one part per item, a file's
+bytes as a file — in a `FormData` body.
+
 ### Validators
 
 `schemas/validators.ts` holds every schema as the JSON Schema Fastify validates requests and
@@ -787,8 +847,10 @@ The handler answers as the starter Fastify routes do:
   `removeAdditional: false` (see [Validators](#validators)), and words a refusal (400) as
   Fastify does (`querystring/limit must be integer`). The query is read from
   `rawQueryString`, a key given more than once being an array; headers in lower case; cookies
-  from the event's `cookies`. A body is JSON — decoded first when `isBase64Encoded` — and
-  another content type is answered with 415.
+  from the event's `cookies`. A body is JSON, or for an operation taking a
+  [form](#form-bodies), `multipart/form-data` read as the Fetch API reads one — decoded first
+  when `isBase64Encoded` — and another content type is answered with 415. A form is read once
+  the operation's overlays admit the request, as the Fastify route reads it.
 - It runs the operation's overlays (`overlayAdapter.generated.ts`), then the service, and
   answers with the success status and the body serialized by the schema declared for it.
 

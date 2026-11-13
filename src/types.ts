@@ -212,6 +212,10 @@ export interface SchemaObject {
   minLength?: number;
   maxLength?: number;
   pattern?: string;
+  /** How the string encodes its content: `binary` (its characters are octets), `base64`, ... */
+  contentEncoding?: string;
+  /** The media type of the string's content */
+  contentMediaType?: string;
 
   // Arrays
   items?: SchemaObject | ReferenceObject;
@@ -1150,11 +1154,13 @@ export type StreamFormat = 'sse' | 'ndjson';
 
 /**
  * The media types generated code carries a body in, and what each one is: a
- * JSON value, or a stream of JSON events in a framing. A body declared in any
- * other media type is an error: generated code would drop it.
+ * JSON value, a form of fields and files, or a stream of JSON events in a
+ * framing. A body declared in any other media type is an error: generated
+ * code would drop it.
  */
-const BODY_MEDIA_TYPES: Readonly<Record<string, { kind: 'json' } | { kind: 'stream'; format: StreamFormat }>> = {
+const BODY_MEDIA_TYPES: Readonly<Record<string, { kind: 'json' } | { kind: 'form' } | { kind: 'stream'; format: StreamFormat }>> = {
   'application/json': { kind: 'json' },
+  'multipart/form-data': { kind: 'form' },
   'text/event-stream': { kind: 'stream', format: 'sse' },
   'application/x-ndjson': { kind: 'stream', format: 'ndjson' },
   'application/jsonl': { kind: 'stream', format: 'ndjson' },
@@ -1166,6 +1172,28 @@ interface JsonBody {
   mediaType: string;
   /** The body's schema: `{}` (any value) when the contract gives none */
   schema: SchemaObject | ReferenceObject;
+}
+
+/** A property of a form sent as files: one file, or (`many`) a list of them. */
+interface FormFile {
+  name: string;
+  many: boolean;
+}
+
+/**
+ * A request body that is a form (`multipart/form-data`): the properties of an
+ * object schema, each one part. A property that is a binary string is a file,
+ * carried as its bytes; any other is a field, carried as its text.
+ */
+interface FormBody {
+  kind: 'form';
+  mediaType: string;
+  /** The form's schema, as the contract gives it */
+  schema: SchemaObject | ReferenceObject;
+  /** The form's schema, its $ref resolved: an object of properties */
+  object: SchemaObject;
+  /** The properties sent as files, in declaration order */
+  files: FormFile[];
 }
 
 /** A response body that is a stream of JSON events. */
@@ -1180,7 +1208,10 @@ interface StreamBody {
 }
 
 /** A request or response body, in a media type generated code carries. */
-type OperationBody = JsonBody | StreamBody;
+type OperationBody = JsonBody | FormBody | StreamBody;
+
+/** A request body, in a media type generated code carries: one JSON value, or a form. */
+type RequestBody = JsonBody | FormBody;
 
 /** A response an operation declares. */
 interface DeclaredResponse {
@@ -1211,8 +1242,8 @@ export interface ResolvedOperation {
   parameters: ParameterObject[];
   requestBody?: RequestBodyObject;
   responses: Record<string, ResponseObject>;
-  /** The request body, as generated code carries it: one JSON value */
-  body?: JsonBody;
+  /** The request body, as generated code carries it: one JSON value, or a form */
+  body?: RequestBody;
   /** The response a successful call returns */
   success: SuccessResponse;
   /**
@@ -1266,16 +1297,108 @@ function streamBody(
   return { kind: 'stream', format, mediaType, event, discriminator };
 }
 
+/** The types a form field's text is read as. */
+const FIELD_TYPES: ReadonlySet<string> = new Set(['string', 'number', 'integer', 'boolean']);
+
+/**
+ * Whether a schema is a string whose characters are octets: `format: binary`
+ * (OpenAPI 3.0), `contentEncoding: binary`, or a `contentMediaType` without
+ * an encoding (OpenAPI 3.1). In a form, such a property is a file.
+ */
+function isBinaryString(schema: SchemaObject): boolean {
+  const types = [schema.type ?? []].flat();
+  return types.length === 1 && types[0] === 'string' && !schema.nullable && (
+    schema.format === 'binary' ||
+    schema.contentEncoding === 'binary' ||
+    (schema.contentMediaType !== undefined && schema.contentEncoding === undefined)
+  );
+}
+
+/**
+ * Whether a schema is a value a form field's text carries: a string, number,
+ * integer or boolean — by its type, or by the values of its enum or const.
+ */
+function isFieldValue(schema: SchemaObject): boolean {
+  if (schema.properties || schema.allOf || schema.oneOf || schema.anyOf || schema.nullable) return false;
+  const types = [schema.type ?? []].flat();
+  if (types.length > 0) return types.every(type => FIELD_TYPES.has(type));
+  const values = schema.const !== undefined ? [schema.const] : schema.enum ?? [];
+  return values.length > 0 && values.every(value => ['string', 'number', 'boolean'].includes(typeof value));
+}
+
+/**
+ * What a form property is sent as: a file or a field, one or (`many`) a list
+ * of them; none when it is neither.
+ */
+function formPart(
+  property: SchemaObject | ReferenceObject,
+  spec: OpenAPISpec,
+  location: string
+): { file: boolean; many: boolean } | undefined {
+  const schema = resolveComponent<SchemaObject>(property, 'schemas', spec, location);
+  if (isBinaryString(schema)) return { file: true, many: false };
+  if (isFieldValue(schema)) return { file: false, many: false };
+
+  const types = [schema.type ?? []].flat();
+  if (types.length === 1 && types[0] === 'array' && schema.items && !schema.nullable) {
+    const item = resolveComponent<SchemaObject>(schema.items, 'schemas', spec, `${location} items`);
+    if (isBinaryString(item)) return { file: true, many: true };
+    if (isFieldValue(item)) return { file: false, many: true };
+  }
+  return undefined;
+}
+
+/**
+ * A form body: the properties of its object schema, each one part. A schema
+ * that is not an object of properties, or a property that is neither a field
+ * nor a file, is an error: generated code could not carry it.
+ */
+function formBody(
+  mediaType: string,
+  media: MediaTypeObject,
+  spec: OpenAPISpec,
+  location: string
+): FormBody {
+  const schema = media.schema;
+  const form = schema === undefined
+    ? undefined
+    : resolveComponent<SchemaObject>(schema, 'schemas', spec, `${location} schema`);
+  if (
+    schema === undefined ||
+    form?.properties === undefined || form.allOf || form.oneOf || form.anyOf || form.nullable ||
+    [form.type ?? []].flat().some(type => type !== 'object')
+  ) {
+    throw new Error(
+      `${location} declares '${mediaType}' without an object schema of properties. ` +
+      `Declare each part of the form as a property of an object schema.`
+    );
+  }
+
+  const files: FormFile[] = [];
+  for (const [name, property] of Object.entries(form.properties)) {
+    const part = formPart(property, spec, `${location} property '${name}'`);
+    if (part === undefined) {
+      throw new Error(
+        `${location} '${mediaType}' property '${name}' is neither a field (a string, number, integer or ` +
+        `boolean, or a list of them) nor a file (a binary string, or a list of them), which generated code ` +
+        `cannot carry. Declare it as one of them.`
+      );
+    }
+    if (part.file) files.push({ name, many: part.many });
+  }
+  return { kind: 'form', mediaType, schema, object: form, files };
+}
+
 /**
  * The body `content` declares, as generated code carries it; none when it
  * declares no media type. Generated code reads a request body and returns a
  * success response, so a media type it cannot carry there is an error, never
  * skipped: a skipped body vanishes from every artifact. A request body is one
- * JSON value; a success response may also stream.
+ * JSON value or a form; a success response is one JSON value or a stream.
  */
 function readBody(
-  content: Record<string, MediaTypeObject> | undefined, kinds: readonly ['json'], spec: OpenAPISpec, location: string
-): JsonBody | undefined;
+  content: Record<string, MediaTypeObject> | undefined, kinds: readonly ['json', 'form'], spec: OpenAPISpec, location: string
+): RequestBody | undefined;
 function readBody(
   content: Record<string, MediaTypeObject> | undefined, kinds: ReadonlyArray<OperationBody['kind']>, spec: OpenAPISpec, location: string
 ): OperationBody | undefined;
@@ -1305,9 +1428,14 @@ function readBody(
   const [mediaType] = carried;
   if (mediaType === undefined) return undefined;
   const carriedAs = BODY_MEDIA_TYPES[mediaType];
-  return carriedAs.kind === 'json'
-    ? jsonBody(content)
-    : streamBody(mediaType, carriedAs.format, content![mediaType], spec, location);
+  switch (carriedAs.kind) {
+    case 'json':
+      return jsonBody(content);
+    case 'form':
+      return formBody(mediaType, content![mediaType], spec, location);
+    case 'stream':
+      return streamBody(mediaType, carriedAs.format, content![mediaType], spec, location);
+  }
 }
 
 /** Statuses whose response carries no content (RFC 9110). */
@@ -1404,7 +1532,7 @@ export function resolveOperation(
     parameters,
     requestBody,
     responses,
-    body: readBody(requestBody?.content, ['json'] as const, spec, `${location} requestBody`),
+    body: readBody(requestBody?.content, ['json', 'form'] as const, spec, `${location} requestBody`),
     success,
     otherResponses: Object.entries(responses)
       .filter(([statusCode]) => statusCode !== success.statusCode)

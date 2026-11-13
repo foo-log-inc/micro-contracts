@@ -66,6 +66,22 @@ async function* bodyText(res: Response): AsyncGenerator<string> {
   }
 }
 {{/if}}
+{{#if forms}}
+
+/** A form as a multipart/form-data body: each property a part, a list one part per item, a file's bytes a file */
+function formBody(data: object): FormData {
+  const body = new FormData();
+  const entries: Array<[string, unknown]> = Object.entries(data);
+  for (const [name, value] of entries) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item === undefined) continue;
+      if (item instanceof Uint8Array) body.append(name, new Blob([new Uint8Array(item)]), name);
+      else body.append(name, String(item));
+    }
+  }
+  return body;
+}
+{{/if}}
 
 {{#each services}}
 // ==========================================================================
@@ -93,6 +109,8 @@ export const {{key}}Api = {
 {{/if}}
 {{#if (eq httpMethod "GET")}}
     const res = await fetch(url);
+{{else if form}}
+    const res = await fetch(url, { method: '{{httpMethod}}', body: formBody(input.data) });
 {{else if requestType}}
     const res = await fetch(url, {
       method: '{{httpMethod}}',

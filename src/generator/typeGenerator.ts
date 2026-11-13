@@ -129,12 +129,14 @@ function generateSchemaType(
 /**
  * Generate the type of an object schema: an interface, or — when the schema is
  * nullable, which an interface cannot express — the same members as a type
- * alias with `| null`.
+ * alias with `| null`. A property in `propertyTypes` has that type instead of
+ * its schema's.
  */
 function generateInterfaceType(
   name: string, 
   schema: SchemaObject,
-  spec: OpenAPISpec
+  spec: OpenAPISpec,
+  propertyTypes: ReadonlyMap<string, string> = new Map()
 ): string {
   const lines: string[] = [];
   const required = new Set(schema.required || []);
@@ -148,7 +150,7 @@ function generateInterfaceType(
   if (schema.properties) {
     for (const [propName, propSchema] of Object.entries(schema.properties)) {
       const isRequired = required.has(propName);
-      const tsType = schemaToTypeString(propSchema, spec);
+      const tsType = propertyTypes.get(propName) ?? schemaToTypeString(propSchema, spec);
       const optional = isRequired ? '' : '?';
       
       // Add description as JSDoc if available
@@ -340,8 +342,13 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
    * browser sends cookies and a client does not.
    */
   clientInput?: { name: string; cookies: string[] };
-  /** The request body's type */
+  /** The request body's type: its schema's, which validators.ts validates it with */
   body?: string;
+  /**
+   * For a form body with files: the type the service receives the form as,
+   * each file as its bytes (`Uint8Array`) where the schema has a binary string
+   */
+  form?: string;
   /** The success response's JSON body type; absent when the response has none or streams */
   response?: string;
   /** For a success response that streams, the type of one event */
@@ -370,6 +377,7 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
   };
 
   const body = nameSchema(resolved.body?.schema, `${base}Body`);
+  const form = resolved.body?.kind === 'form' && resolved.body.files.length > 0 ? `${base}Form` : undefined;
   const success = resolved.success.body;
   const response = nameSchema(success?.kind === 'json' ? success.schema : undefined, `${base}Response`);
   const event = nameSchema(success?.kind === 'stream' ? success.event : undefined, `${base}Event`);
@@ -384,7 +392,7 @@ export function operationTypeNames(operation: OperationObject, resolved: Resolve
   const cookies = resolved.parameters.filter(p => p.in === 'cookie').map(p => p.name);
   const clientInput = cookies.length > 0 ? { name: `${base}ClientInput`, cookies } : undefined;
 
-  return { base, input: `${base}Input`, params, parameterSchemas, clientInput, body, response, event, otherResponses, inline };
+  return { base, input: `${base}Input`, params, parameterSchemas, clientInput, body, form, response, event, otherResponses, inline };
 }
 
 /**
@@ -400,7 +408,7 @@ function generateOperationTypes(spec: OpenAPISpec): string {
       if (!operation) continue;
 
       const resolved = resolveOperation(spec, apiPath, method);
-      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName, clientInput, inline } =
+      const { input: inputTypeName, params: paramsTypeName, body: bodyTypeName, form: formTypeName, clientInput, inline } =
         operationTypeNames(operation, resolved);
 
       if (paramsTypeName && !generatedTypes.has(paramsTypeName)) {
@@ -418,13 +426,21 @@ function generateOperationTypes(spec: OpenAPISpec): string {
         lines.push('');
       }
 
+      // A form's files reach the service as bytes: its schema declares them as binary strings
+      if (formTypeName && resolved.body?.kind === 'form' && !generatedTypes.has(formTypeName)) {
+        generatedTypes.add(formTypeName);
+        const fileTypes = new Map(resolved.body.files.map(file => [file.name, file.many ? 'Uint8Array[]' : 'Uint8Array']));
+        lines.push(generateInterfaceType(formTypeName, resolved.body.object, spec, fileTypes));
+        lines.push('');
+      }
+
       // Generate Input type that combines params and body
       // - params are flattened (path, query and cookie combined)
       // - body becomes 'data' (not HTTP-specific)
       // - Always generate (empty object for parameterless operations)
       if (!generatedTypes.has(inputTypeName)) {
         generatedTypes.add(inputTypeName);
-        lines.push(generateInputType(inputTypeName, paramsTypeName, bodyTypeName));
+        lines.push(generateInputType(inputTypeName, paramsTypeName, formTypeName ?? bodyTypeName));
         lines.push('');
       }
 
