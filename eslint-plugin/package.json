@@ -26,10 +26,15 @@
     "@typescript-eslint/utils": ">=6.0.0"
   },
   "devDependencies": {
-    "@types/eslint": "^8.56.0",
-    "@typescript-eslint/utils": "^8.0.0",
-    "eslint": "^8.57.0",
-    "typescript": "^5.0.0"
+    "@types/eslint": "^8.56.12",
+    "@typescript-eslint/utils": "^8.72.2",
+    "eslint": "^8.57.1",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.5"
+    }
   }
 }
 
