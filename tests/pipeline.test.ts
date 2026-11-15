@@ -6,7 +6,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execSync, ExecSyncOptionsWithStringEncoding } from 'child_process';
+import yaml from 'js-yaml';
+import { execSync,ExecSyncOptionsWithStringEncoding } from 'child_process';
 
 // Each test spawns the CLI several times, generating as it goes.
 // Real work, not a hang: the default 30s trips on a loaded machine.
@@ -491,6 +492,36 @@ generated:
       expect(fs.existsSync(path.join(tempDir, 'packages/contract/core/schemas/types.ts'))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, 'server/src/core/routes.generated.ts'))).toBe(true);
       expect(fs.existsSync(path.join(tempDir, 'spec/default/templates/lambda-routes.hbs'))).toBe(false);
+    });
+
+    it('init writes a spec that generate reads as it reads the one init was given', () => {
+      // generate reads specs with js-yaml's default schema: a quoted date stays
+      // text, an unquoted one is a date, and a merge key merges.
+      const source = [
+        'openapi: 3.0.0',
+        'info: {title: T, version: 1.0.0}',
+        'x-base: &base {x-micro-contracts-service: A}',
+        'paths:',
+        '  /a:',
+        '    get:',
+        '      <<: *base',
+        '      operationId: getA',
+        '      x-micro-contracts-method: get',
+        `      description: "日本語の説明 🎉 ${'long text '.repeat(20)}"`,
+        '      responses:',
+        "        '200':",
+        '          description: ok',
+        '          content:',
+        '            application/json:',
+        '              schema: {type: object, properties: {d: {type: string, example: "2024-01-01"}, t: {type: string, example: 2024-01-01}}}',
+        '',
+      ].join('\n');
+      fs.writeFileSync(path.join(tempDir, 'my-spec.yaml'), source);
+
+      expect(runCli('init core --openapi my-spec.yaml').exitCode).toBe(0);
+
+      const written = fs.readFileSync(path.join(tempDir, 'spec/core/openapi/core.yaml'), 'utf-8');
+      expect(yaml.load(written)).toEqual(yaml.load(source));
     });
 
     it('runs the quick start with --lambda end to end, generating the Lambda handler as the server', () => {

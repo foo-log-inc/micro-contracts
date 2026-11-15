@@ -29,6 +29,7 @@ import {
   runAllowlistCheck,
   generateGuardrailsTemplate,
 } from '../src/guardrails/index.js';
+import { globFiles } from '../src/glob.js';
 import { execFileSync } from 'child_process';
 
 describe('matchGlob', () => {
@@ -97,6 +98,83 @@ describe('matchWithNegation', () => {
     expect(matchWithNegation(patterns, 'src/index.ts')).toBe(true);
     expect(matchWithNegation(patterns, 'src/test/helper.ts')).toBe(false);
     expect(matchWithNegation(patterns, 'src/test/important.ts')).toBe(true);
+  });
+});
+
+describe('globFiles', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'glob-files-'));
+    const files = [
+      'spec/core/openapi/core.yaml',
+      'spec/core/openapi/core.overlay.yaml',
+      'spec/core/openapi/.hidden.yaml',
+      'spec/.dot/openapi/d.yaml',
+      'spec/_shared/openapi/s.yaml',
+      'spec/x/node_modules/y/openapi/n.yaml',
+      'spec/日本語/openapi/仕様.yaml',
+      'spec/sp ace/openapi/a+b(1)[x].yaml',
+      'spec/a/b/c/openapi/deep.yaml',
+      'spec/openapi.yaml',
+      'other/openapi/o.yaml',
+    ];
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), '');
+    }
+    fs.mkdirSync(path.join(dir, 'spec/core/openapi/dir.yaml'));
+    fs.symlinkSync('core.yaml', path.join(dir, 'spec/core/openapi/link.yaml'));
+    fs.symlinkSync('../../a', path.join(dir, 'spec/core/openapi/linkdir'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('lists the files a pattern matches, sorted, skipping names that begin with a dot', () => {
+    expect(globFiles('spec/**/openapi/*.yaml', { cwd: dir })).toEqual([
+      'spec/_shared/openapi/s.yaml',
+      'spec/a/b/c/openapi/deep.yaml',
+      'spec/core/openapi/core.overlay.yaml',
+      'spec/core/openapi/core.yaml',
+      'spec/core/openapi/link.yaml',
+      'spec/sp ace/openapi/a+b(1)[x].yaml',
+      'spec/x/node_modules/y/openapi/n.yaml',
+      'spec/日本語/openapi/仕様.yaml',
+    ]);
+  });
+
+  it('leaves out ignored files and does not enter ignored directories', () => {
+    const ignore = ['**/node_modules/**', '**/*.overlay.yaml', '**/_shared/**'];
+    expect(globFiles('spec/**/openapi/*.yaml', { cwd: dir, ignore })).toEqual([
+      'spec/a/b/c/openapi/deep.yaml',
+      'spec/core/openapi/core.yaml',
+      'spec/core/openapi/link.yaml',
+      'spec/sp ace/openapi/a+b(1)[x].yaml',
+      'spec/日本語/openapi/仕様.yaml',
+    ]);
+  });
+
+  it('lists symbolic links without following them, and no directories', () => {
+    const files = globFiles('**/*', { cwd: path.join(dir, 'spec/core') });
+    expect(files).toEqual([
+      'openapi/core.overlay.yaml',
+      'openapi/core.yaml',
+      'openapi/link.yaml',
+      'openapi/linkdir',
+    ]);
+  });
+
+  it('matches an ignore pattern without a globstar against the path from cwd', () => {
+    expect(globFiles('**/*', { cwd: path.join(dir, 'spec'), ignore: ['openapi.yaml'] }))
+      .not.toContain('openapi.yaml');
+    expect(globFiles('**/*', { cwd: path.join(dir, 'spec') })).toContain('openapi.yaml');
+  });
+
+  it('finds nothing under a directory that does not exist', () => {
+    expect(globFiles('**/*', { cwd: path.join(dir, 'missing') })).toEqual([]);
+    expect(globFiles('missing/**/*.yaml', { cwd: dir })).toEqual([]);
   });
 });
 

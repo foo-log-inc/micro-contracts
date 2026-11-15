@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatorVersion": "0.20.3",
+  "generatorVersion": "0.20.4",
   "files": {
     "frontend/src/billing/api.generated.ts": {
       "sha256": "a984194c30ea63542f38f5a98c5c2acbd89fe5249d032a6482e6e695017e2437"
@@ -180,6 +180,6 @@
       "sha256": "d478df4b00cca55d6ecb4cb51142aa32f712ff8d9bde4451bb992e2d0aa682ef"
     }
   },
-  "inputHash": "cb319c5fbb00147a586c6bde813189cb6e9b51ddfce8e719d5d9ab3601471e27",
-  "updatedAt": "2026-11-13T14:59:01.904Z"
+  "inputHash": "aece42178eb1da094b223ee8bb62291ab23f2c6b0b70ce3900c782b5c916e034",
+  "updatedAt": "2026-11-15T16:28:15.600Z"
 }

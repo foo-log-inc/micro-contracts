@@ -1,9 +1,13 @@
 /**
  * Glob matching.
  *
- * The single glob implementation: used both for guardrail file allowlists and
- * for selecting outputs by id on the command line.
+ * The single glob implementation: used for guardrail file allowlists, for
+ * selecting outputs by id on the command line, and for listing the files a
+ * pattern matches.
  */
+
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Simple glob pattern matching with negation support
@@ -102,4 +106,45 @@ function matchGlobInternal(file: string, pattern: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * The files under `cwd` that `pattern` matches, as `/`-separated paths
+ * relative to `cwd`, sorted.
+ *
+ * Names beginning with `.` are not matched, files matched by an `ignore`
+ * pattern are left out, and a directory an `ignore` pattern ending in `/**`
+ * matches is not entered. Symbolic links are listed, not followed.
+ */
+export function globFiles(pattern: string, options: { cwd?: string; ignore?: string[] } = {}): string[] {
+  const cwd = options.cwd ?? process.cwd();
+  const ignore = options.ignore ?? [];
+  const ignoredDirs = ignore.filter(p => p.endsWith('/**')).map(p => p.slice(0, -3));
+
+  // Nothing outside the pattern's leading literal directories can match it.
+  const segments = pattern.split('/');
+  const firstWild = segments.findIndex(segment => /[*?]/.test(segment));
+  const base = segments.slice(0, firstWild === -1 ? -1 : firstWild).join('/');
+
+  const files: string[] = [];
+  const walk = (dir: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(path.join(cwd, dir), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const file = dir ? `${dir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (!ignoredDirs.some(p => matchGlob(file, p))) walk(file);
+      } else if (matchGlob(file, pattern) && !ignore.some(p => matchGlob(file, p))) {
+        files.push(file);
+      }
+    }
+  };
+  walk(base);
+
+  return files.sort();
 }
