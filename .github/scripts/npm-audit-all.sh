@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Audit every dependency graph the repository tracks.
+# Audit every dependency graph the repository tracks. Any arguments are passed to every
+# `npm audit` (for example `--omit=dev` to audit only the production dependencies).
 #
 # The root lockfile is audited as installed; the rest are read from disk, since a tooling or
 # example tree is not worth an install to look at. `git ls-files` keeps the set in step with the
@@ -14,10 +15,10 @@ LEVEL=moderate
 
 status=0
 echo "== . =="
-npm audit --audit-level="$LEVEL" || status=1
+npm audit --audit-level="$LEVEL" "$@" || status=1
 for lock in $(git ls-files '*/package-lock.json'); do
   dir=$(dirname "$lock")
   echo "== $dir =="
-  ( cd "$dir" && npm audit --package-lock-only --audit-level="$LEVEL" ) || status=1
+  ( cd "$dir" && npm audit --package-lock-only --audit-level="$LEVEL" "$@" ) || status=1
 done
 exit $status
