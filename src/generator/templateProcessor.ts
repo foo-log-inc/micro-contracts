@@ -12,7 +12,7 @@ import type { OpenAPISpec, ParameterObject, ResolvedOperation, ScreenEventDefini
 import { operationKey, overlayTypeName } from './overlayProcessor.js';
 import type { ExtensionInfo } from './overlayProcessor.js';
 import { isReference, getRefName, parseComponentRef, resolveOperation } from '../types.js';
-import { operationTypeNames } from './typeGenerator.js';
+import { commentText, operationTypeNames } from './typeGenerator.js';
 import { serviceKey as serviceKeyOf } from './serviceGenerator.js';
 
 // =============================================================================
@@ -929,6 +929,8 @@ Handlebars.registerHelper('keys', (obj) => Object.keys(obj || {}));
 Handlebars.registerHelper('values', (obj) => Object.values(obj || {}));
 
 // String helpers
+// Text from the spec inside a generated comment: {{comment summary}}
+Handlebars.registerHelper('comment', (str) => (typeof str === 'string' ? commentText(str) : str));
 Handlebars.registerHelper('uppercase', (str) => str?.toUpperCase());
 Handlebars.registerHelper('lowercase', (str) => str?.toLowerCase());
 Handlebars.registerHelper('capitalize', (str) => str?.charAt(0).toUpperCase() + str?.slice(1));

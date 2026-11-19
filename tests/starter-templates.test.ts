@@ -156,6 +156,46 @@ describe('starter templates', () => {
     }
   });
 
+  it('generate code that type-checks from descriptions and summaries holding */', { timeout: 180_000 }, async () => {
+    await generateProject(`
+openapi: 3.0.3
+info: { title: Files, version: 1.0.0 }
+paths:
+  /files:
+    get:
+      operationId: listFiles
+      x-micro-contracts-service: File
+      x-micro-contracts-method: listFiles
+      x-middleware: [requireAuth]
+      summary: List files matching src/**/*.ts
+      parameters:
+        - { name: glob, in: query, description: 'Pattern such as src/**/*.ts', schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FileFilter' } } } }
+components:
+  schemas:
+    FileFilter:
+      type: object
+      description: Glob filter such as src/**/*.ts
+      required: [include]
+      properties:
+        include: { type: string, description: 'Include glob such as src/**/*.ts' }
+`, {
+      'auth.overlay.yaml': `
+overlay: 1.0.0
+info: { title: auth, version: 1.0.0 }
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'requireAuth')]"
+    update:
+      parameters:
+        - { name: Authorization, in: header, required: true, description: 'Accepts */* tokens', schema: { type: string } }
+      responses:
+        '401': { description: Unauthorized }
+`,
+    });
+    expect(typecheck()).toBe('');
+  });
+
   describe('overlays', () => {
     const userSpec = `
 openapi: 3.0.3

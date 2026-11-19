@@ -11,7 +11,7 @@ import yaml from 'js-yaml';
 import { MICRO_CONTRACTS_OPERATION_EXTENSIONS, resolveParameter } from '../types.js';
 import type { OpenAPISpec, OperationObject, ParameterObject, ReferenceObject, ResponseObject } from '../types.js';
 import { bundleExternalRefs } from './specLoader.js';
-import { formatPropertyKey } from './typeGenerator.js';
+import { commentText, formatPropertyKey } from './typeGenerator.js';
 
 // =============================================================================
 // Types
@@ -614,7 +614,7 @@ function pushOverlayTypes(lines: string[], ext: ExtensionInfo): void {
       const optional = param.required ? '' : '?';
       const tsType = parameterToTsType(param);
       if (param.description) {
-        lines.push(`  /** ${param.description} */`);
+        lines.push(`  /** ${commentText(param.description)} */`);
       }
       // Use OpenAPI parameter name as-is (quoted for names with special chars)
       lines.push(`  '${param.name}'${optional}: ${tsType};`);

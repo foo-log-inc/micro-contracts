@@ -299,7 +299,7 @@ export const {{key}}Api = {
 {{#if (eq service ../name)}}
   /**
    * {{httpMethod}} {{path}}
-   {{#if summary}}* {{summary}}{{/if}}
+   {{#if summary}}* {{comment summary}}{{/if}}
    {{#if isPublished}}* @published{{/if}}
    */
   async {{#if stream}}*{{/if}}{{serviceMethod}}(input: {{clientInputType}}): {{#if stream}}AsyncGenerator<{{stream.eventType}}>{{else}}Promise<{{responseType}}>{{/if}} {
@@ -360,7 +360,7 @@ export class {{name}}Service implements {{name}}ServiceApi {
 {{#each ../routes}}
 {{#if (eq service ../name)}}
   /**
-   * {{httpMethod}} {{path}}{{#if summary}}: {{summary}}{{/if}}
+   * {{httpMethod}} {{path}}{{#if summary}}: {{comment summary}}{{/if}}
    */
   async {{#if stream}}*{{/if}}{{serviceMethod}}(input: types.{{inputType}}): {{#if stream}}AsyncGenerator<types.{{stream.eventType}}>{{else}}Promise<{{#if (eq responseType "void")}}void{{else}}types.{{responseType}}{{/if}}>{{/if}} {
     // TODO: Implement {{serviceMethod}}

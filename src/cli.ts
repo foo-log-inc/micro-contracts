@@ -4,9 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { createProgram, type CommandHandlers } from './generated/program.js';
-import { generate, loadConfig, findConfigFile, findSpecModule, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash, configuredOutputs } from './generator/index.js';
+import { generate, loadConfig, findConfigFile, findSpecModule, loadOpenAPISpec, lintSpec, formatLintResults } from './generator/index.js';
 import type { GeneratorConfig, MultiModuleConfig } from './types.js';
-import { isMultiModuleConfig } from './types.js';
 import { getStarterTemplates, getScreenStarterTemplates, getLambdaStarterTemplates } from './cli/templates.js';
 import {
   runAllChecks,
@@ -19,7 +18,6 @@ import {
   createGuardrailsConfig,
   generateManifest,
   writeManifest,
-  canSkipGeneration,
   generatedFilesRule,
   resolveManifestDir,
   GATE_DESCRIPTIONS,
@@ -32,29 +30,6 @@ import { commandProposeOverlays } from './commands/propose-overlays.js';
 import { commandAuditGuardrails } from './commands/audit-guardrails.js';
 import { commandInsights } from './commands/insights.js';
 import { VERSION } from './version.js';
-
-/**
- * True when the run generates only part of the configured output.
- *
- * A partial run must not stamp the manifest with the input hash: the hash says
- * these inputs have been generated from, and a later full run would skip,
- * leaving whatever this run did not generate permanently missing.
- */
-function isPartialGeneration(opts: {
-  module?: string;
-  output?: string;
-  contractsOnly?: boolean;
-  serverOnly?: boolean;
-  frontendOnly?: boolean;
-}): boolean {
-  return Boolean(
-    opts.module ||
-    opts.output ||
-    opts.contractsOnly ||
-    opts.serverOnly ||
-    opts.frontendOnly
-  );
-}
 
 const handlers: CommandHandlers = {
 
@@ -81,22 +56,6 @@ const handlers: CommandHandlers = {
       console.log(`Using config: ${configPath}`);
       config = loadConfig(configPath);
 
-      const useCache = opts.cache !== false && !opts.force;
-      let inputHash: string | undefined;
-
-      if (isMultiModuleConfig(config)) {
-        inputHash = computeInputHash(config, configPath, VERSION);
-
-        if (useCache) {
-          const rule = generatedFilesRule();
-          const skipCheck = await canSkipGeneration(resolveManifestDir(opts.manifestDir, rule, configPath), inputHash, rule);
-          if (skipCheck.skip) {
-            console.log(`No input changes detected, skipping generation (${skipCheck.reason})`);
-            return;
-          }
-        }
-      }
-
       await generate(config, {
         contractsOnly: opts.contractsOnly,
         serverOnly: opts.serverOnly,
@@ -113,12 +72,8 @@ const handlers: CommandHandlers = {
           const rule = generatedFilesRule();
           const manifestDir = resolveManifestDir(opts.manifestDir, rule, configPath);
           if (fs.existsSync(manifestDir)) {
-            const manifestInputHash =
-              (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-            const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
+            const { manifest, changed } = await generateManifest(manifestDir, rule, {
               generatorVersion: VERSION,
-              inputHash: manifestInputHash,
-              outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
             });
             const fileCount = Object.keys(manifest.files).length;
 
@@ -127,9 +82,6 @@ const handlers: CommandHandlers = {
               console.log(`\nManifest updated: ${manifestPath} (${fileCount} files)`);
             } else {
               console.log(`\nManifest unchanged (${fileCount} files)`);
-            }
-            if (unrecordedOutput) {
-              console.log(`Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}, so the next run regenerates`);
             }
           }
         }
@@ -482,11 +434,6 @@ const handlers: CommandHandlers = {
           if (verbose) console.log(`  Using config: ${configPath}`);
           const config = loadConfig(configPath);
 
-          // The gate always regenerates. The cache reads the manifest the change under review
-          // carries, so a hand-edited generated file recorded under its new hash would read as
-          // intact and the drift and manifest checks would have nothing to compare.
-          const inputHash = isMultiModuleConfig(config) ? computeInputHash(config, configPath, VERSION) : undefined;
-
           const originalLog = console.log;
           if (!verbose) console.log = () => {};
 
@@ -504,12 +451,8 @@ const handlers: CommandHandlers = {
                 const rule = generatedFilesRule(opts.guardrails);
                 const manifestDir = resolveManifestDir(opts.generatedDir, rule, configPath);
                 if (fs.existsSync(manifestDir)) {
-                  const manifestInputHash =
-                    (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-                  const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
+                  const { manifest, changed } = await generateManifest(manifestDir, rule, {
                     generatorVersion: VERSION,
-                    inputHash: manifestInputHash,
-                    outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
                   });
                   if (verbose) {
                     const fileCount = Object.keys(manifest.files).length;
@@ -518,9 +461,6 @@ const handlers: CommandHandlers = {
                       originalLog(`  Manifest updated: ${mPath} (${fileCount} files)`);
                     } else {
                       originalLog(`  Manifest unchanged (${fileCount} files)`);
-                    }
-                    if (unrecordedOutput) {
-                      originalLog(`  Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}`);
                     }
                   } else if (changed) {
                     writeManifest(manifest, manifestDir);

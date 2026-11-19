@@ -143,7 +143,7 @@ function generateInterfaceType(
   const { nullable } = normalizeType(schema);
 
   if (schema.description) {
-    lines.push(`/** ${schema.description} */`);
+    lines.push(`/** ${commentText(schema.description)} */`);
   }
   lines.push(nullable ? `export type ${name} = {` : `export interface ${name} {`);
 
@@ -155,7 +155,7 @@ function generateInterfaceType(
       
       // Add description as JSDoc if available
       if (!isReference(propSchema) && propSchema.description) {
-        lines.push(`  /** ${propSchema.description} */`);
+        lines.push(`  /** ${commentText(propSchema.description)} */`);
       }
       
       lines.push(`  ${formatPropertyKey(propName)}${optional}: ${tsType};`);
@@ -518,7 +518,7 @@ function generateParamsType(
     }
     
     if (param.description) {
-      lines.push(`  /** ${param.description} */`);
+      lines.push(`  /** ${commentText(param.description)} */`);
     }
     lines.push(`  ${formatPropertyKey(param.name)}${optional}: ${tsType};`);
   }
@@ -534,6 +534,15 @@ function generateParamsType(
  */
 export function formatPropertyKey(name: string): string {
   return isTsIdentifier(name) ? name : literalType(name);
+}
+
+/**
+ * Text from the spec (a description, a summary) as the text of a generated
+ * comment: a `*` followed by `/` would close the comment there, so the `/`
+ * is escaped (`src/**\/*.ts` reads the same in an editor's hover).
+ */
+export function commentText(text: string): string {
+  return text.replace(/\*\//g, '*\\/');
 }
 
 /** A JSON value as the TypeScript literal type admitting exactly that value. */

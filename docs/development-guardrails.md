@@ -635,9 +635,8 @@ jobs:
       # Gate 1-2 (pinned)
       - run: ${{ env.MC }} check --gate 1,2
 
-      # Generator (pinned). --force: the cache reads the manifest this pull request
-      # carries, which would let a generated file edited by hand pass as generated
-      - run: ${{ env.MC }} generate --force
+      # Generator (pinned)
+      - run: ${{ env.MC }} generate
 
       # Gate 3-5 (pinned)
       - run: ${{ env.MC }} check --gate 3,4,5

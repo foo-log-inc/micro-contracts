@@ -49,9 +49,6 @@ interface ImportedComponent {
  * they reach.
  */
 class ExternalRefBundler {
-  /** Every file read through a reference into another file. */
-  readonly files = new Set<string>();
-
   private readonly documents = new Map<string, unknown>();
   /** `<file>#<pointer>` of every component already brought in (or being brought in). */
   private readonly reached = new Set<string>();
@@ -169,7 +166,6 @@ class ExternalRefBundler {
           (error instanceof Error ? error.message : String(error))
         );
       }
-      this.files.add(targetFile);
     }
     return this.documents.get(targetFile);
   }
@@ -199,15 +195,4 @@ export function bundleExternalRefs<T>(value: T, file: string, spec: OpenAPISpec)
   const result = bundler.bundle(value, path.resolve(file), true) as T;
   bundler.mergeInto(spec);
   return result;
-}
-
-/**
- * Every file `filePath` reaches through references into other files,
- * transitively: what loading it, or merging its content, reads.
- */
-export function referencedFiles(filePath: string): string[] {
-  const file = path.resolve(filePath);
-  const bundler = new ExternalRefBundler();
-  bundler.bundle(readDocument(file), file, true);
-  return [...bundler.files];
 }

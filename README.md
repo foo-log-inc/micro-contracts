@@ -397,24 +397,13 @@ Generate code from OpenAPI specifications.
 | `--skip-lint` | Skip linting before generation |
 | `--no-manifest` | Skip manifest generation |
 | `--manifest-dir <path>` | Directory for manifest (default: the deepest directory holding every configured output) |
-| `--force` | Bypass input hash cache and always regenerate |
-| `--no-cache` | Run without reading or writing input hash cache |
-
-A run that generates a subset (`--output`, `--module`, or any `--*-only`) does not
-record the input hash, so the next full run regenerates rather than reporting no
-changes.
 
 The manifest (`.generated-manifest.json`) lives in the deepest directory holding every
 location the config generates to — the project root when outputs sit both in
 `packages/` and next to the server code — and records the files there that the
-`generated:` patterns of `micro-contracts.guardrails.yaml` match. A full run records the input hash
-only when the manifest records every file of every configured output, so an output
-outside that directory or outside the `generated:` patterns leaves the hash out and
-generate names the file that did. The cache skips a run only when the manifest
-carries the input hash and finds each recorded file intact; without the hash, every
-run regenerates. The manifest is a committed file, so where the commit is what is
-being checked (CI), run `generate --force`: a skipped run compares the generated
-files only with the hashes the same commit records for them.
+`generated:` patterns of `micro-contracts.guardrails.yaml` match. Every run generates:
+the manifest is a committed file, part of the change a check reads, so it is never
+taken as a record that the outputs need no regenerating.
 
 ### init \<module\>
 
@@ -498,16 +487,6 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--output <ids>` | Output ids to generate, comma-separated; glob patterns allowed (e.g. `'*routes*'`). Fails when a pattern matches no output |
 | `--server-only` | Generate the built-in `server` section only (not valid with an `outputs` configuration) |
 | `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
-| `--no-cache` | Leave the input hash out of the manifest |
-
-The pipeline always regenerates. The cache `generate` reads is the manifest the
-change under review carries: a hand-edited generated file recorded there under its
-new hash would read as intact, and the drift and manifest checks would have nothing
-to compare it with.
-
-A run that generates a subset (`--output`, `--module`, or any `--*-only`) does not
-record the input hash, so the next full run of `generate` regenerates rather than
-reporting no changes.
 
 > See **[Enforceable Guardrails](docs/development-guardrails.md)** for gate details and CI configuration.
 

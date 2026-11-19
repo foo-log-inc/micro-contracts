@@ -126,8 +126,6 @@ export interface GeneratedManifest {
   updatedAt?: string;
   /** Version of micro-contracts that generated this */
   generatorVersion: string;
-  /** SHA-256 hash of all input files (config, specs, templates, overlays) + package version */
-  inputHash?: string;
   /** Map of relative file paths to their metadata */
   files: Record<string, GeneratedFileInfo>;
 }

@@ -10,8 +10,6 @@ export interface GenerateOptions {
   skipLint?: boolean;
   manifest?: boolean;
   manifestDir?: string;
-  force?: boolean;
-  cache?: boolean;
 }
 
 export type GenerateExitCode = 0 | 1;
@@ -84,7 +82,6 @@ export interface PipelineOptions {
   contractsOnly?: boolean;
   serverOnly?: boolean;
   frontendOnly?: boolean;
-  cache?: boolean;
 }
 
 export type PipelineExitCode = 0 | 1;

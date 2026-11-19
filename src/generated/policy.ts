@@ -71,20 +71,6 @@ export const commandDefinitions = {
         "schema": {
           "type": "string"
         }
-      },
-      {
-        "name": "force",
-        "schema": {
-          "type": "boolean",
-          "default": false
-        }
-      },
-      {
-        "name": "cache",
-        "schema": {
-          "type": "boolean",
-          "default": true
-        }
       }
     ]
   },
@@ -314,13 +300,6 @@ export const commandDefinitions = {
         "schema": {
           "type": "boolean",
           "default": false
-        }
-      },
-      {
-        "name": "cache",
-        "schema": {
-          "type": "boolean",
-          "default": true
         }
       }
     ]

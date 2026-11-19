@@ -74,8 +74,6 @@ describe('published entries', () => {
       'loadConfig',
       'findConfigFile',
       'loadOpenAPISpec',
-      'collectInputFiles',
-      'computeInputHash',
       'lintSpec',
       'formatLintResults',
       'generateTypes',
