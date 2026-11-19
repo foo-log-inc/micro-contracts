@@ -43,7 +43,8 @@
     "docs:sync": "npx embedoc build",
     "docs:check": "npx embedoc build && git diff --exit-code README.md docs/",
     "prepublishOnly": "npm run build && npm run bundle:min && npm test",
-    "test:ci": "vitest run"
+    "test:ci": "vitest run",
+    "audit:signatures": "npx --yes npm@11.19.1 audit signatures"
   },
   "keywords": [
     "openapi",
