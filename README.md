@@ -412,7 +412,9 @@ only when the manifest records every file of every configured output, so an outp
 outside that directory or outside the `generated:` patterns leaves the hash out and
 generate names the file that did. The cache skips a run only when the manifest
 carries the input hash and finds each recorded file intact; without the hash, every
-run regenerates.
+run regenerates. The manifest is a committed file, so where the commit is what is
+being checked (CI), run `generate --force`: a skipped run compares the generated
+files only with the hashes the same commit records for them.
 
 ### init \<module\>
 
@@ -496,14 +498,16 @@ Run full guardrails pipeline: **Gate 1,2 → Generate → Gate 3,4,5**.
 | `--output <ids>` | Output ids to generate, comma-separated; glob patterns allowed (e.g. `'*routes*'`). Fails when a pattern matches no output |
 | `--server-only` | Generate the built-in `server` section only (not valid with an `outputs` configuration) |
 | `--frontend-only` | Generate the built-in `frontend` section only (not valid with an `outputs` configuration) |
-| `--force` | Bypass input hash cache and always regenerate |
-| `--no-cache` | Run without reading or writing input hash cache |
+| `--no-cache` | Leave the input hash out of the manifest |
+
+The pipeline always regenerates. The cache `generate` reads is the manifest the
+change under review carries: a hand-edited generated file recorded there under its
+new hash would read as intact, and the drift and manifest checks would have nothing
+to compare it with.
 
 A run that generates a subset (`--output`, `--module`, or any `--*-only`) does not
-record the input hash, so the next full run regenerates rather than reporting no
-changes.
-
-The cache reads the same manifest as `generate`, under the same conditions.
+record the input hash, so the next full run of `generate` regenerates rather than
+reporting no changes.
 
 > See **[Enforceable Guardrails](docs/development-guardrails.md)** for gate details and CI configuration.
 

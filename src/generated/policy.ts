@@ -317,13 +317,6 @@ export const commandDefinitions = {
         }
       },
       {
-        "name": "force",
-        "schema": {
-          "type": "boolean",
-          "default": false
-        }
-      },
-      {
         "name": "cache",
         "schema": {
           "type": "boolean",

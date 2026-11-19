@@ -355,12 +355,15 @@ function createDispatcher(options: HandlerOptions): (event: HttpApiEvent) => Pro
         {{!-- The form is read once the overlays admit the request, as the Fastify route reads it --}}
         const form = await readForm(await request.parts(), [{{#each form.files}}{ name: {{{json name}}}, many: {{many}} }, {{/each~}} ], body => check({{typeNameBase}}FormValidator, body, 'body'));
 {{/if}}
+        {{!-- Each parameter from where it is declared: a query key of another parameter's name would replace that parameter --}}
         const input: types.{{inputType}} = {
 {{#if pathParams.length}}
           ...(request.params as unknown as types.{{typeNameBase}}Params),
 {{/if}}
 {{#if queryParams.length}}
-          ...(request.query as unknown as types.{{typeNameBase}}Params),
+          ...(Object.fromEntries([{{#each queryParams}}'{{name}}', {{/each~}} ].flatMap(name =>
+            Object.hasOwn(request.query, name) ? [[name, request.query[name]]] : [],
+          )) as unknown as types.{{typeNameBase}}Params),
 {{/if}}
 {{#if cookieParams.length}}
           ...(request.cookieParams as unknown as types.{{typeNameBase}}Params),

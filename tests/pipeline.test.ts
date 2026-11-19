@@ -8,6 +8,7 @@ import path from 'path';
 import os from 'os';
 import yaml from 'js-yaml';
 import { execSync,ExecSyncOptionsWithStringEncoding } from 'child_process';
+import { hashFile } from '../src/guardrails/manifest.js';
 
 // Each test spawns the CLI several times, generating as it goes.
 // Real work, not a hang: the default 30s trips on a loaded machine.
@@ -124,6 +125,9 @@ generated:
   - packages/**
 `;
     fs.writeFileSync(path.join(tempDir, 'micro-contracts.guardrails.yaml'), guardrailsContent);
+    // The config is protected whatever it lists, so an uncommitted one is an unapproved
+    // change to a protected file: commit it, as a project has its config committed.
+    execSync('git add micro-contracts.guardrails.yaml && git commit -qm guardrails', { cwd: tempDir, stdio: 'pipe' });
   }
   
   describe.skipIf(!isBuilt)('CLI integration tests', () => {
@@ -423,7 +427,33 @@ generated:
       expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8')).inputHash).toBeUndefined();
     });
 
-    it('pipeline --no-manifest writes no manifest, and --no-cache neither reads nor writes the cache', () => {
+    it('pipeline regenerates: a generated file edited by hand fails drift, its manifest hash rewritten to match or not', () => {
+      createMinimalConfig();
+      createMinimalSpec();
+      createGuardrailsConfig();
+      const git = (...args: string[]) =>
+        execSync(`git ${args.join(' ')}`, { cwd: tempDir, encoding: 'utf-8', stdio: 'pipe' });
+      expect(runCli('generate').exitCode).toBe(0);
+      git('add', '-A');
+      git('commit', '-qm', 'generated');
+
+      const manifestPath = path.join(tempDir, 'packages/.generated-manifest.json');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      expect(manifest.inputHash).toBeDefined();
+      const file = Object.keys(manifest.files).find(f => f.endsWith('.ts'))!;
+      const edited = path.join(tempDir, 'packages', file);
+      fs.appendFileSync(edited, '\nexport const handEdited = true;\n');
+      manifest.files[file].sha256 = hashFile(edited);
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+      git('commit', '-qam', 'hand-edited');
+
+      const { stdout, exitCode } = runCli('pipeline');
+      expect(stdout).toMatch(/Generate\s+PASS/);
+      expect(stdout).toMatch(/drift\s+FAIL/);
+      expect(exitCode).toBe(1);
+    });
+
+    it('pipeline --no-manifest writes no manifest, and --no-cache leaves the input hash out', () => {
       createMinimalConfig();
       createMinimalSpec();
       createGuardrailsConfig();

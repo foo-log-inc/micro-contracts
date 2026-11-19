@@ -226,6 +226,31 @@ actions:
       }
     });
 
+    it('build the service input from where each parameter is declared, never from a query key of its name', async () => {
+      await generateProject(
+        userSpec.replace(
+          '- { name: id, in: path, required: true, schema: { type: string } }',
+          '- { name: id, in: path, required: true, schema: { type: string } }\n' +
+          '        - { name: fields, in: query, required: false, schema: { type: string } }',
+        ),
+        { 'auth.overlay.yaml': authOverlay },
+      );
+      const inputs: unknown[] = [];
+      const getUser = async (input: { id: string }) => {
+        inputs.push(input);
+        return { id: input.id, name: 'n' };
+      };
+      const app = await serve({ user: { getUser } }, { requireAuth: async () => ({ success: true }) });
+
+      try {
+        const res = await app.inject({ method: 'GET', url: '/users/ab?fields=name&id=zz', headers: { authorization: 'Bearer x' } });
+        expect(res.statusCode).toBe(200);
+        expect(inputs).toEqual([{ id: 'ab', fields: 'name' }]);
+      } finally {
+        await app.close();
+      }
+    });
+
     it('read an in: cookie parameter from the Cookie header, never from a header of that name', async () => {
       await generateProject(userSpec, {
         'auth.overlay.yaml': `
@@ -1415,6 +1440,14 @@ actions:
       expect(calls.at(-1)).toEqual({ data: { name: 'pen', qty: 2 } });
 
       expect(typecheck()).toBe('');
+    });
+
+    it('build the service input from where each parameter is declared, never from a query key of its name', async () => {
+      const handle = await handler();
+
+      const res = await handle(getItem('7', { rawQueryString: 'fields=name&id=8&cart_id=zz' }));
+      expect(res.statusCode).toBe(200);
+      expect(calls).toEqual([{ id: 7, fields: 'name', cart_id: 'c1' }]);
     });
 
     it('answer a path no route has with 404, and another method of a route\'s path with 405 and Allow', async () => {

@@ -560,16 +560,11 @@ command_sets:
               type: boolean
               default: false
 
-          - name: force
-            description: Bypass input hash cache and always regenerate.
-            schema:
-              type: boolean
-              default: false
-
           - name: cache
             description: >-
-              Enable input hash caching. Enabled by default.
-              Use --no-cache to disable both reading and writing cache.
+              Record the input hash in the manifest, for the cache generate reads.
+              The pipeline itself always regenerates: the manifest it would read is
+              part of the change under review. Use --no-cache to leave the hash out.
             schema:
               type: boolean
               default: true

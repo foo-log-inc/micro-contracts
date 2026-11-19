@@ -329,8 +329,7 @@ micro-contracts pipeline --contracts-only --skip-lint
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
-| `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
-| `--cache`, `--no-cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
+| `--cache`, `--no-cache` |  | No | `true` | Record the input hash in the manifest, for the cache generate reads. The pipeline itself always regenerates: the manifest it would read is part of the change under review. Use --no-cache to leave the hash out. |
 
 #### Exit Codes
 

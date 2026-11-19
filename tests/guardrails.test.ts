@@ -322,6 +322,28 @@ describe('loadGuardrailsConfig', () => {
     expect(config.protected).toEqual(DEFAULT_GUARDRAILS.protected);
     expect(config.generated).toEqual(DEFAULT_GUARDRAILS.generated);
   });
+
+  describe('a config that no longer protects itself', () => {
+    let dir: string;
+    beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guardrails-config-')); });
+    afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+    const overlay = 'server/src/_shared/overlays/auth.ts';
+    const unprotecting = 'allowed: ["**"]\nprotected: []\n';
+
+    it.each([
+      ['micro-contracts.guardrails.yaml', 'micro-contracts.guardrails.yaml'],
+      ['guardrails.yml', 'guardrails.yml'],
+      ['a name given with --guardrails', 'team-rules.yaml'],
+    ])('still needs approval to change it (%s)', (_, name) => {
+      const configPath = path.join(dir, name);
+      fs.writeFileSync(configPath, unprotecting);
+
+      const result = verifyAllowlist([name, overlay], loadGuardrailsConfig(configPath));
+      expect(result.violations).toEqual([{ file: name, reason: 'protected' }]);
+      expect(verifyAllowlist([name], loadGuardrailsConfig(configPath), 'the label on pull request #1').waived).toEqual([name]);
+    });
+  });
 });
 
 describe('manifest', () => {

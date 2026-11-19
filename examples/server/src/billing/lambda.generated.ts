@@ -284,7 +284,9 @@ function createDispatcher(options: HandlerOptions): (event: HttpApiEvent) => Pro
         const result = await runOverlays('getInvoices', overlays, request);
         if (!result.success) return reply.send(result.error.status, result.error);
         const input: types.Billing_getInvoicesInput = {
-          ...(request.query as unknown as types.Billing_getInvoicesParams),
+          ...(Object.fromEntries(['userId', 'status', ].flatMap(name =>
+            Object.hasOwn(request.query, name) ? [[name, request.query[name]]] : [],
+          )) as unknown as types.Billing_getInvoicesParams),
         };
         const output = await billing.getInvoices(input);
         return reply.send(200, output);

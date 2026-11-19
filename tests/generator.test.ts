@@ -1525,6 +1525,30 @@ components:
 
       expect(() => loadOpenAPISpec(specPath)).toThrow(/\.\/order\.yaml/);
     });
+
+    it('fails on a reference into a part of components that is not a section, leaving Object.prototype as it was', () => {
+      const specPath = path.join(tmpDir, 'spec.yaml');
+      fs.writeFileSync(path.join(tmpDir, 'shared.yaml'), `
+components:
+  __proto__:
+    only: [allowlist]
+`);
+      fs.writeFileSync(specPath, `
+openapi: 3.0.3
+info:
+  title: T
+  version: 1.0.0
+  x-note: { $ref: './shared.yaml#/components/__proto__/only' }
+paths: {}
+`);
+
+      try {
+        expect(() => loadOpenAPISpec(specPath)).toThrow(/__proto__/);
+        expect(({} as Record<string, unknown>).only).toBeUndefined();
+      } finally {
+        delete (Object.prototype as Record<string, unknown>).only;
+      }
+    });
   });
 
   describe('operation parameters, request bodies and responses', () => {

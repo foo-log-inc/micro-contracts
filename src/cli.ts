@@ -454,8 +454,6 @@ const handlers: CommandHandlers = {
       }
 
       // Step 2: Generate
-      let generationCacheSkipped = false;
-
       if (verbose) {
         console.log('┌─────────────────────────────────────────────────┐');
         console.log('│ Step 2: Generate contracts                      │');
@@ -484,87 +482,67 @@ const handlers: CommandHandlers = {
           if (verbose) console.log(`  Using config: ${configPath}`);
           const config = loadConfig(configPath);
 
-          const useCache = opts.cache !== false && !opts.force;
-          let inputHash: string | undefined;
+          // The gate always regenerates. The cache reads the manifest the change under review
+          // carries, so a hand-edited generated file recorded under its new hash would read as
+          // intact and the drift and manifest checks would have nothing to compare.
+          const inputHash = isMultiModuleConfig(config) ? computeInputHash(config, configPath, VERSION) : undefined;
 
-          if (isMultiModuleConfig(config)) {
-            inputHash = computeInputHash(config, configPath, VERSION);
+          const originalLog = console.log;
+          if (!verbose) console.log = () => {};
 
-            if (useCache) {
-              const rule = generatedFilesRule(opts.guardrails);
-              const skipCheck = await canSkipGeneration(resolveManifestDir(opts.generatedDir, rule, configPath), inputHash, rule);
-              if (skipCheck.skip) {
-                generationCacheSkipped = true;
-                generateSkipped = true;
-                generateDuration = Date.now() - generateStartTime;
+          try {
+            await generate(config, {
+              skipLint: opts.skipLint,
+              contractsOnly: opts.contractsOnly,
+              serverOnly: opts.serverOnly,
+              frontendOnly: opts.frontendOnly,
+            });
 
-                if (isStreaming && process.stdout.isTTY) {
-                  process.stdout.clearLine?.(0);
-                  process.stdout.cursorTo?.(0);
-                }
-                console.log(`  ○ Generate              SKIP (${skipCheck.reason})`);
-              }
-            }
-          }
-
-          if (!generationCacheSkipped) {
-            const originalLog = console.log;
-            if (!verbose) console.log = () => {};
-
-            try {
-              await generate(config, {
-                skipLint: opts.skipLint,
-                contractsOnly: opts.contractsOnly,
-                serverOnly: opts.serverOnly,
-                frontendOnly: opts.frontendOnly,
-                      });
-
-              if (opts.manifest !== false) {
-                const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
-                if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
-                  const rule = generatedFilesRule(opts.guardrails);
-                  const manifestDir = resolveManifestDir(opts.generatedDir, rule, configPath);
-                  if (fs.existsSync(manifestDir)) {
-                    const manifestInputHash =
-                      (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-                    const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
-                      generatorVersion: VERSION,
-                      inputHash: manifestInputHash,
-                      outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
-                    });
-                    if (verbose) {
-                      const fileCount = Object.keys(manifest.files).length;
-                      if (changed) {
-                        const mPath = writeManifest(manifest, manifestDir);
-                        originalLog(`  Manifest updated: ${mPath} (${fileCount} files)`);
-                      } else {
-                        originalLog(`  Manifest unchanged (${fileCount} files)`);
-                      }
-                      if (unrecordedOutput) {
-                        originalLog(`  Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}`);
-                      }
-                    } else if (changed) {
-                      writeManifest(manifest, manifestDir);
+            if (opts.manifest !== false) {
+              const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
+              if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
+                const rule = generatedFilesRule(opts.guardrails);
+                const manifestDir = resolveManifestDir(opts.generatedDir, rule, configPath);
+                if (fs.existsSync(manifestDir)) {
+                  const manifestInputHash =
+                    (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
+                  const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
+                    generatorVersion: VERSION,
+                    inputHash: manifestInputHash,
+                    outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
+                  });
+                  if (verbose) {
+                    const fileCount = Object.keys(manifest.files).length;
+                    if (changed) {
+                      const mPath = writeManifest(manifest, manifestDir);
+                      originalLog(`  Manifest updated: ${mPath} (${fileCount} files)`);
+                    } else {
+                      originalLog(`  Manifest unchanged (${fileCount} files)`);
                     }
+                    if (unrecordedOutput) {
+                      originalLog(`  Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}`);
+                    }
+                  } else if (changed) {
+                    writeManifest(manifest, manifestDir);
                   }
                 }
               }
-
-              generatePassed = true;
-            } finally {
-              if (!verbose) console.log = originalLog;
             }
 
-            generateDuration = Date.now() - generateStartTime;
-
-            if (isStreaming && process.stdout.isTTY) {
-              process.stdout.clearLine?.(0);
-              process.stdout.cursorTo?.(0);
-            }
-
-            console.log(`  ✓ Generate              PASS (${generateDuration}ms)`);
-            if (verbose) console.log('');
+            generatePassed = true;
+          } finally {
+            if (!verbose) console.log = originalLog;
           }
+
+          generateDuration = Date.now() - generateStartTime;
+
+          if (isStreaming && process.stdout.isTTY) {
+            process.stdout.clearLine?.(0);
+            process.stdout.cursorTo?.(0);
+          }
+
+          console.log(`  ✓ Generate              PASS (${generateDuration}ms)`);
+          if (verbose) console.log('');
         }
       } catch (error) {
         generateDuration = Date.now() - generateStartTime;
@@ -596,13 +574,9 @@ const handlers: CommandHandlers = {
         console.log('');
       }
 
-      const gate3Skips = generationCacheSkipped
-        ? [...skipChecks, 'drift', 'manifest']
-        : skipChecks;
-
       const gate345Summary = await runAllChecks({
         ...baseCheckOptions,
-        skip: gate3Skips,
+        skip: skipChecks,
         gates: [3, 4, 5],
       });
 

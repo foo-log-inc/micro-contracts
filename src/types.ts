@@ -1085,6 +1085,12 @@ export function collectReachableComponents(
   return reached;
 }
 
+/** The sections of the Components Object (OpenAPI 3.0, and pathItems from 3.1) */
+const COMPONENT_SECTIONS: ReadonlySet<string> = new Set([
+  'schemas', 'responses', 'parameters', 'examples', 'requestBodies',
+  'headers', 'securitySchemes', 'links', 'callbacks', 'pathItems',
+]);
+
 /**
  * Parse a reference to a component of this spec, "#/components/<section>/<name>",
  * into its parts: the single reading of a component reference, whatever the
@@ -1094,11 +1100,17 @@ export function collectReachableComponents(
  * ".../homeView/extra", or nothing after the section) names no component: it
  * comes back with its section and no `name`, so that a reader of that section
  * rejects it rather than taking it for a reference somewhere else.
+ *
+ * The section is one the Components Object defines, or an extension (`x-`).
+ * Any other key is no section, and names no component: every reader indexes
+ * `components` by the section it reads here, and a key such as `__proto__`
+ * would index the object's prototype instead.
  */
 export function parseComponentRef(ref: string): { section: string; name?: string } | null {
   const match = ref.match(/^#\/components\/([^/]+)(?:\/(.*))?$/);
   if (!match) return null;
   const [, section, rest] = match;
+  if (!COMPONENT_SECTIONS.has(section) && !section.startsWith('x-')) return null;
   return rest && !rest.includes('/') ? { section, name: rest } : { section };
 }
 

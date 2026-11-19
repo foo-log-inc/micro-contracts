@@ -84,7 +84,6 @@ export interface PipelineOptions {
   contractsOnly?: boolean;
   serverOnly?: boolean;
   frontendOnly?: boolean;
-  force?: boolean;
   cache?: boolean;
 }
 
