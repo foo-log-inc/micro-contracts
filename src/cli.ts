@@ -2,7 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import yaml from 'yaml';
+import yaml from 'js-yaml';
 import { createProgram, type CommandHandlers } from './generated/program.js';
 import { generate, loadConfig, findConfigFile, findSpecModule, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash, configuredOutputs } from './generator/index.js';
 import type { GeneratorConfig, MultiModuleConfig } from './types.js';
@@ -875,7 +875,9 @@ function processOpenAPIWithExtensions(openapiPath: string): {
   stats: { servicesAdded: number; methodsAdded: number; services: string[] };
 } {
   const content = fs.readFileSync(openapiPath, 'utf-8');
-  const spec = yaml.parse(content);
+  // Read and written the way `generate` reads a spec (js-yaml's default schema),
+  // so what it reads from the written document is what it reads from this one.
+  const spec = yaml.load(content) as { paths?: Record<string, unknown> };
 
   const stats = { servicesAdded: 0, methodsAdded: 0, services: new Set<string>() };
   const httpMethods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
@@ -907,7 +909,7 @@ function processOpenAPIWithExtensions(openapiPath: string): {
     }
   }
 
-  const output = yaml.stringify(spec, { indent: 2 });
+  const output = yaml.dump(spec, { lineWidth: -1 });
   return { yaml: output, stats: { ...stats, services: Array.from(stats.services) } };
 }
 

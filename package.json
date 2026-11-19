@@ -1,6 +1,6 @@
 {
   "name": "micro-contracts",
-  "version": "0.20.3",
+  "version": "0.20.4",
   "description": "Contract-first OpenAPI toolchain that keeps TypeScript UI and microservices aligned via code generation",
   "type": "module",
   "main": "dist/index.js",
@@ -68,22 +68,15 @@
     "url": "https://github.com/foo-log-inc/micro-contracts/issues"
   },
   "dependencies": {
-    "glob": "^14.0.6",
     "handlebars": "^4.7.10",
-    "js-yaml": "^4.3.2",
-    "yaml": "^2.9.1"
+    "js-yaml": "^4.3.2"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.323",
     "@fastify/multipart": "^10.1.8",
-    "@google/genai": "^2.32.0",
-    "@openai/agents": "^0.11.8",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.19.43",
-    "agent-contracts": "^0.34.14",
     "agent-contracts-analyzer": "file:vendor/agent-contracts-analyzer-0.1.1.tgz",
     "agent-contracts-runtime": "^0.36.15",
-    "chalk": "^5.6.2",
     "cli-contracts": "^0.34.12",
     "commander": "^12.1.0",
     "embedoc": "^0.14.10",
@@ -95,6 +88,6 @@
     "zod": "^4.6.7"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.12.0"
   }
 }

@@ -11,7 +11,7 @@ import { spawn } from 'child_process';
 import type { CheckResult, CheckOptions } from './types.js';
 import { findConfigFile, loadConfig } from '../generator/index.js';
 import { isMultiModuleConfig } from '../types.js';
-import { glob } from 'glob';
+import { globFiles } from '../glob.js';
 
 /**
  * Find OpenAPI spec files based on guardrails config or defaults
@@ -52,7 +52,7 @@ export async function findOpenAPISpecs(_options: CheckOptions): Promise<string[]
   const specFiles: string[] = [];
   
   for (const pattern of defaultPatterns) {
-    const matches = await glob(pattern, {
+    const matches = globFiles(pattern, {
       ignore: [
         '**/node_modules/**',
         '**/*.overlay.yaml',

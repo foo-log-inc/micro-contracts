@@ -7,8 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { glob } from 'glob';
-import { matchWithNegation } from '../glob.js';
+import { globFiles, matchWithNegation } from '../glob.js';
 import { loadGuardrailsConfigWithPath } from './config.js';
 import { findConfigFile, loadConfig, configuredOutputs } from '../generator/index.js';
 import { isMultiModuleConfig } from '../types.js';
@@ -130,9 +129,8 @@ export async function getGeneratedFiles(
   baseDir: string,
   rule: GeneratedFilesRule
 ): Promise<string[]> {
-  const files = await glob('**/*', {
+  const files = globFiles('**/*', {
     cwd: baseDir,
-    nodir: true,
     ignore: [
       '**/node_modules/**',
       '**/.git/**',
@@ -184,18 +182,18 @@ function areFilesEqual(
  * full generation run, when the outputs hold what that run wrote; an output
  * absent from disk is one the run had no reason to write.
  */
-async function firstUnrecordedOutput(
+function firstUnrecordedOutput(
   baseDir: string,
   recorded: string[],
   outputs: string[]
-): Promise<string | undefined> {
+): string | undefined {
   const recordedPaths = new Set(recorded.map(file => path.resolve(baseDir, file)));
 
   for (const output of outputs) {
     if (!fs.existsSync(output)) continue;
 
     const files = fs.statSync(output).isDirectory()
-      ? (await glob('**/*', { cwd: output, nodir: true, ignore: ['**/node_modules/**', '**/.git/**'] }))
+      ? globFiles('**/*', { cwd: output, ignore: ['**/node_modules/**', '**/.git/**'] })
         .map(file => path.resolve(output, file))
       : [path.resolve(output)];
     const unrecorded = files.find(file => !recordedPaths.has(file));
@@ -256,7 +254,7 @@ export async function generateManifest(
   }
   
   const unrecordedOutput = options.inputHash !== undefined
-    ? await firstUnrecordedOutput(baseDir, Object.keys(fileInfos), outputs)
+    ? firstUnrecordedOutput(baseDir, Object.keys(fileInfos), outputs)
     : undefined;
   const inputHash = unrecordedOutput ? undefined : options.inputHash;
 
