@@ -156,7 +156,7 @@ describe('globFiles', () => {
     ]);
   });
 
-  it('lists symbolic links without following them, and no directories', () => {
+  it('lists symbolic links, and no directories; a leading ** does not enter a link', () => {
     const files = globFiles('**/*', { cwd: path.join(dir, 'spec/core') });
     expect(files).toEqual([
       'openapi/core.overlay.yaml',
@@ -164,6 +164,25 @@ describe('globFiles', () => {
       'openapi/link.yaml',
       'openapi/linkdir',
     ]);
+  });
+
+  it('enters a linked directory where a segment names it or a ** after the first segment ends at it', () => {
+    for (const file of ['shared/openapi/s.yaml', 'shared2/s2.yaml', 'shared3/inner/openapi/s3.yaml']) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), '');
+    }
+    fs.symlinkSync('../shared', path.join(dir, 'spec/linked'));
+    fs.mkdirSync(path.join(dir, 'spec/m'));
+    fs.symlinkSync('../../shared2', path.join(dir, 'spec/m/openapi'));
+    fs.symlinkSync('../shared3', path.join(dir, 'spec/linked3'));
+    fs.symlinkSync('../../../spec', path.join(dir, 'shared3/inner/openapi/loop'));
+
+    const files = globFiles('spec/**/openapi/*.yaml', { cwd: dir });
+    expect(files).toContain('spec/linked/openapi/s.yaml');
+    expect(files).toContain('spec/m/openapi/s2.yaml');
+    // The ** ends at the link: it is not continued inside, as glob does not.
+    expect(files).not.toContain('spec/linked3/inner/openapi/s3.yaml');
+    expect(globFiles('**/*', { cwd: path.join(dir, 'spec') })).not.toContain('linked/openapi/s.yaml');
   });
 
   it('matches an ignore pattern without a globstar against the path from cwd', () => {

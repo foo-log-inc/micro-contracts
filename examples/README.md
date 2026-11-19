@@ -4,7 +4,7 @@ A sample project for demonstrating micro-contracts functionality.
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20.12+
 - npm
 
 ## Quick Start

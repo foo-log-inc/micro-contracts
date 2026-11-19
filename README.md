@@ -47,7 +47,7 @@ The core architecture is organized along two axes:
 
 ## Quick Start
 
-> **Prerequisites**: Node.js 18+, TypeScript 5.0+, ESM (`"type": "module"`).
+> **Prerequisites**: Node.js 20.12+, TypeScript 5.0+, ESM (`"type": "module"`).
 
 ```bash
 # 1. Install

@@ -75,10 +75,8 @@
     "@fastify/multipart": "^10.1.8",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.19.43",
-    "agent-contracts": "^0.34.14",
     "agent-contracts-analyzer": "file:vendor/agent-contracts-analyzer-0.1.1.tgz",
     "agent-contracts-runtime": "^0.36.15",
-    "chalk": "^5.6.2",
     "cli-contracts": "^0.34.12",
     "commander": "^12.1.0",
     "embedoc": "^0.14.10",
@@ -90,6 +88,6 @@
     "zod": "^4.6.7"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.12.0"
   }
 }
