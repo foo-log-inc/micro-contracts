@@ -170,7 +170,9 @@ Protected files include:
 - Lint rules (`spec/redocly.yaml`, and any rules file or plugin it loads) — security rule tampering
 - Shared overlay implementations (`server/src/_shared/overlays/**`) — security logic
 - The guardrails config itself, under every name it is loaded as
-  (`micro-contracts.guardrails.yaml`/`.yml`, and the legacy `guardrails.yaml`/`.yml`)
+  (`micro-contracts.guardrails.yaml`/`.yml`, and the legacy `guardrails.yaml`/`.yml`) and
+  the one given with `--guardrails` — whatever its own `protected` lists, since a change
+  to the config is checked against the config it makes
 
 #### Approving a protected change
 

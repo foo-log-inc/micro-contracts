@@ -156,6 +156,46 @@ describe('starter templates', () => {
     }
   });
 
+  it('generate code that type-checks from descriptions and summaries holding */', { timeout: 180_000 }, async () => {
+    await generateProject(`
+openapi: 3.0.3
+info: { title: Files, version: 1.0.0 }
+paths:
+  /files:
+    get:
+      operationId: listFiles
+      x-micro-contracts-service: File
+      x-micro-contracts-method: listFiles
+      x-middleware: [requireAuth]
+      summary: List files matching src/**/*.ts
+      parameters:
+        - { name: glob, in: query, description: 'Pattern such as src/**/*.ts', schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/FileFilter' } } } }
+components:
+  schemas:
+    FileFilter:
+      type: object
+      description: Glob filter such as src/**/*.ts
+      required: [include]
+      properties:
+        include: { type: string, description: 'Include glob such as src/**/*.ts' }
+`, {
+      'auth.overlay.yaml': `
+overlay: 1.0.0
+info: { title: auth, version: 1.0.0 }
+actions:
+  - target: "$.paths[*][*][?(@.x-middleware contains 'requireAuth')]"
+    update:
+      parameters:
+        - { name: Authorization, in: header, required: true, description: 'Accepts */* tokens', schema: { type: string } }
+      responses:
+        '401': { description: Unauthorized }
+`,
+    });
+    expect(typecheck()).toBe('');
+  });
+
   describe('overlays', () => {
     const userSpec = `
 openapi: 3.0.3
@@ -221,6 +261,31 @@ actions:
         const admitted = await app.inject({ method: 'GET', url: '/users/ab', headers: { authorization: 'Bearer x' } });
         expect(admitted.statusCode).toBe(200);
         expect(admitted.json()).toEqual({ id: 'ab', name: 'n' });
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('build the service input from where each parameter is declared, never from a query key of its name', async () => {
+      await generateProject(
+        userSpec.replace(
+          '- { name: id, in: path, required: true, schema: { type: string } }',
+          '- { name: id, in: path, required: true, schema: { type: string } }\n' +
+          '        - { name: fields, in: query, required: false, schema: { type: string } }',
+        ),
+        { 'auth.overlay.yaml': authOverlay },
+      );
+      const inputs: unknown[] = [];
+      const getUser = async (input: { id: string }) => {
+        inputs.push(input);
+        return { id: input.id, name: 'n' };
+      };
+      const app = await serve({ user: { getUser } }, { requireAuth: async () => ({ success: true }) });
+
+      try {
+        const res = await app.inject({ method: 'GET', url: '/users/ab?fields=name&id=zz', headers: { authorization: 'Bearer x' } });
+        expect(res.statusCode).toBe(200);
+        expect(inputs).toEqual([{ id: 'ab', fields: 'name' }]);
       } finally {
         await app.close();
       }
@@ -1415,6 +1480,14 @@ actions:
       expect(calls.at(-1)).toEqual({ data: { name: 'pen', qty: 2 } });
 
       expect(typecheck()).toBe('');
+    });
+
+    it('build the service input from where each parameter is declared, never from a query key of its name', async () => {
+      const handle = await handler();
+
+      const res = await handle(getItem('7', { rawQueryString: 'fields=name&id=8&cart_id=zz' }));
+      expect(res.statusCode).toBe(200);
+      expect(calls).toEqual([{ id: 7, fields: 'name', cart_id: 'c1' }]);
     });
 
     it('answer a path no route has with 404, and another method of a route\'s path with 405 and Allow', async () => {

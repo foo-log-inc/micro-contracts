@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { parse as parseYaml } from "yaml";
+import yaml from "js-yaml";
 import { taskRegistry } from "../../src/generated/dsl/tasks.js";
 import { TASK_IDS } from "../../src/agents/types.js";
 
 const contractPath = resolve(import.meta.dirname, "../../cli-contract.yaml");
-const contract = parseYaml(readFileSync(contractPath, "utf8"));
+const contract = yaml.load(readFileSync(contractPath, "utf8")) as {
+  command_sets?: Record<string, { commands?: Record<string, unknown> }>;
+};
 
 function getCommands(): Record<string, { "x-agent"?: { dsl_task?: string } }> {
   const sets = contract.command_sets ?? {};

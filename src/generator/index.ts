@@ -47,7 +47,6 @@ export { lintSpec, formatLintResults } from './linter.js';
 export { processOverlays, generateExtensionInterfaces } from './overlayProcessor.js';
 export { buildTemplateContext, renderTemplate } from './templateProcessor.js';
 export type { ScreenContext, ScreenLink, ScreenAction, ScreenInteraction, TemplateContext } from './templateProcessor.js';
-export { collectInputFiles, computeInputHash } from './inputHash.js';
 export { loadOpenAPISpec } from './specLoader.js';
 
 /**

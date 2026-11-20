@@ -58,7 +58,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     if (!result.success) return sendError(reply, result.error);
     // Build input object (always required, even if empty)
     const input: types.Billing_getInvoicesInput = {
-      ...(req.query as types.Billing_getInvoicesParams),
+      ...(Object.fromEntries(['userId', 'status', ].flatMap(name => {
+        const query = req.query as Record<string, unknown>;
+        return Object.hasOwn(query, name) ? [[name, query[name]]] : [];
+      })) as unknown as types.Billing_getInvoicesParams),
     };
     const output = await billing.getInvoices(input);
     return reply.code(200).send(output);

@@ -16,8 +16,6 @@ export {
   loadConfig,
   findConfigFile,
   loadOpenAPISpec,
-  collectInputFiles,
-  computeInputHash,
 } from './generator/index.js';
 export type { GenerateOptions } from './generator/index.js';
 

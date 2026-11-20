@@ -29,6 +29,7 @@ import {
   runAllowlistCheck,
   generateGuardrailsTemplate,
 } from '../src/guardrails/index.js';
+import { globFiles } from '../src/glob.js';
 import { execFileSync } from 'child_process';
 
 describe('matchGlob', () => {
@@ -97,6 +98,102 @@ describe('matchWithNegation', () => {
     expect(matchWithNegation(patterns, 'src/index.ts')).toBe(true);
     expect(matchWithNegation(patterns, 'src/test/helper.ts')).toBe(false);
     expect(matchWithNegation(patterns, 'src/test/important.ts')).toBe(true);
+  });
+});
+
+describe('globFiles', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'glob-files-'));
+    const files = [
+      'spec/core/openapi/core.yaml',
+      'spec/core/openapi/core.overlay.yaml',
+      'spec/core/openapi/.hidden.yaml',
+      'spec/.dot/openapi/d.yaml',
+      'spec/_shared/openapi/s.yaml',
+      'spec/x/node_modules/y/openapi/n.yaml',
+      'spec/日本語/openapi/仕様.yaml',
+      'spec/sp ace/openapi/a+b(1)[x].yaml',
+      'spec/a/b/c/openapi/deep.yaml',
+      'spec/openapi.yaml',
+      'other/openapi/o.yaml',
+    ];
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), '');
+    }
+    fs.mkdirSync(path.join(dir, 'spec/core/openapi/dir.yaml'));
+    fs.symlinkSync('core.yaml', path.join(dir, 'spec/core/openapi/link.yaml'));
+    fs.symlinkSync('../../a', path.join(dir, 'spec/core/openapi/linkdir'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('lists the files a pattern matches, sorted, skipping names that begin with a dot', () => {
+    expect(globFiles('spec/**/openapi/*.yaml', { cwd: dir })).toEqual([
+      'spec/_shared/openapi/s.yaml',
+      'spec/a/b/c/openapi/deep.yaml',
+      'spec/core/openapi/core.overlay.yaml',
+      'spec/core/openapi/core.yaml',
+      'spec/core/openapi/link.yaml',
+      'spec/sp ace/openapi/a+b(1)[x].yaml',
+      'spec/x/node_modules/y/openapi/n.yaml',
+      'spec/日本語/openapi/仕様.yaml',
+    ]);
+  });
+
+  it('leaves out ignored files and does not enter ignored directories', () => {
+    const ignore = ['**/node_modules/**', '**/*.overlay.yaml', '**/_shared/**'];
+    expect(globFiles('spec/**/openapi/*.yaml', { cwd: dir, ignore })).toEqual([
+      'spec/a/b/c/openapi/deep.yaml',
+      'spec/core/openapi/core.yaml',
+      'spec/core/openapi/link.yaml',
+      'spec/sp ace/openapi/a+b(1)[x].yaml',
+      'spec/日本語/openapi/仕様.yaml',
+    ]);
+  });
+
+  it('lists symbolic links, and no directories; a leading ** does not enter a link', () => {
+    const files = globFiles('**/*', { cwd: path.join(dir, 'spec/core') });
+    expect(files).toEqual([
+      'openapi/core.overlay.yaml',
+      'openapi/core.yaml',
+      'openapi/link.yaml',
+      'openapi/linkdir',
+    ]);
+  });
+
+  it('enters a linked directory where a segment names it or a ** after the first segment ends at it', () => {
+    for (const file of ['shared/openapi/s.yaml', 'shared2/s2.yaml', 'shared3/inner/openapi/s3.yaml']) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), '');
+    }
+    fs.symlinkSync('../shared', path.join(dir, 'spec/linked'));
+    fs.mkdirSync(path.join(dir, 'spec/m'));
+    fs.symlinkSync('../../shared2', path.join(dir, 'spec/m/openapi'));
+    fs.symlinkSync('../shared3', path.join(dir, 'spec/linked3'));
+    fs.symlinkSync('../../../spec', path.join(dir, 'shared3/inner/openapi/loop'));
+
+    const files = globFiles('spec/**/openapi/*.yaml', { cwd: dir });
+    expect(files).toContain('spec/linked/openapi/s.yaml');
+    expect(files).toContain('spec/m/openapi/s2.yaml');
+    // The ** ends at the link: it is not continued inside, as glob does not.
+    expect(files).not.toContain('spec/linked3/inner/openapi/s3.yaml');
+    expect(globFiles('**/*', { cwd: path.join(dir, 'spec') })).not.toContain('linked/openapi/s.yaml');
+  });
+
+  it('matches an ignore pattern without a globstar against the path from cwd', () => {
+    expect(globFiles('**/*', { cwd: path.join(dir, 'spec'), ignore: ['openapi.yaml'] }))
+      .not.toContain('openapi.yaml');
+    expect(globFiles('**/*', { cwd: path.join(dir, 'spec') })).toContain('openapi.yaml');
+  });
+
+  it('finds nothing under a directory that does not exist', () => {
+    expect(globFiles('**/*', { cwd: path.join(dir, 'missing') })).toEqual([]);
+    expect(globFiles('missing/**/*.yaml', { cwd: dir })).toEqual([]);
   });
 });
 
@@ -224,6 +321,28 @@ describe('loadGuardrailsConfig', () => {
     expect(config.allowed).toEqual(DEFAULT_GUARDRAILS.allowed);
     expect(config.protected).toEqual(DEFAULT_GUARDRAILS.protected);
     expect(config.generated).toEqual(DEFAULT_GUARDRAILS.generated);
+  });
+
+  describe('a config that no longer protects itself', () => {
+    let dir: string;
+    beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guardrails-config-')); });
+    afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+    const overlay = 'server/src/_shared/overlays/auth.ts';
+    const unprotecting = 'allowed: ["**"]\nprotected: []\n';
+
+    it.each([
+      ['micro-contracts.guardrails.yaml', 'micro-contracts.guardrails.yaml'],
+      ['guardrails.yml', 'guardrails.yml'],
+      ['a name given with --guardrails', 'team-rules.yaml'],
+    ])('still needs approval to change it (%s)', (_, name) => {
+      const configPath = path.join(dir, name);
+      fs.writeFileSync(configPath, unprotecting);
+
+      const result = verifyAllowlist([name, overlay], loadGuardrailsConfig(configPath));
+      expect(result.violations).toEqual([{ file: name, reason: 'protected' }]);
+      expect(verifyAllowlist([name], loadGuardrailsConfig(configPath), 'the label on pull request #1').waived).toEqual([name]);
+    });
   });
 });
 

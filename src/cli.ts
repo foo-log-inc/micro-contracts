@@ -2,11 +2,10 @@
 
 import fs from 'fs';
 import path from 'path';
-import yaml from 'yaml';
+import yaml from 'js-yaml';
 import { createProgram, type CommandHandlers } from './generated/program.js';
-import { generate, loadConfig, findConfigFile, findSpecModule, loadOpenAPISpec, lintSpec, formatLintResults, computeInputHash, configuredOutputs } from './generator/index.js';
+import { generate, loadConfig, findConfigFile, findSpecModule, loadOpenAPISpec, lintSpec, formatLintResults } from './generator/index.js';
 import type { GeneratorConfig, MultiModuleConfig } from './types.js';
-import { isMultiModuleConfig } from './types.js';
 import { getStarterTemplates, getScreenStarterTemplates, getLambdaStarterTemplates } from './cli/templates.js';
 import {
   runAllChecks,
@@ -19,7 +18,6 @@ import {
   createGuardrailsConfig,
   generateManifest,
   writeManifest,
-  canSkipGeneration,
   generatedFilesRule,
   resolveManifestDir,
   GATE_DESCRIPTIONS,
@@ -32,29 +30,6 @@ import { commandProposeOverlays } from './commands/propose-overlays.js';
 import { commandAuditGuardrails } from './commands/audit-guardrails.js';
 import { commandInsights } from './commands/insights.js';
 import { VERSION } from './version.js';
-
-/**
- * True when the run generates only part of the configured output.
- *
- * A partial run must not stamp the manifest with the input hash: the hash says
- * these inputs have been generated from, and a later full run would skip,
- * leaving whatever this run did not generate permanently missing.
- */
-function isPartialGeneration(opts: {
-  module?: string;
-  output?: string;
-  contractsOnly?: boolean;
-  serverOnly?: boolean;
-  frontendOnly?: boolean;
-}): boolean {
-  return Boolean(
-    opts.module ||
-    opts.output ||
-    opts.contractsOnly ||
-    opts.serverOnly ||
-    opts.frontendOnly
-  );
-}
 
 const handlers: CommandHandlers = {
 
@@ -81,22 +56,6 @@ const handlers: CommandHandlers = {
       console.log(`Using config: ${configPath}`);
       config = loadConfig(configPath);
 
-      const useCache = opts.cache !== false && !opts.force;
-      let inputHash: string | undefined;
-
-      if (isMultiModuleConfig(config)) {
-        inputHash = computeInputHash(config, configPath, VERSION);
-
-        if (useCache) {
-          const rule = generatedFilesRule();
-          const skipCheck = await canSkipGeneration(resolveManifestDir(opts.manifestDir, rule, configPath), inputHash, rule);
-          if (skipCheck.skip) {
-            console.log(`No input changes detected, skipping generation (${skipCheck.reason})`);
-            return;
-          }
-        }
-      }
-
       await generate(config, {
         contractsOnly: opts.contractsOnly,
         serverOnly: opts.serverOnly,
@@ -113,12 +72,8 @@ const handlers: CommandHandlers = {
           const rule = generatedFilesRule();
           const manifestDir = resolveManifestDir(opts.manifestDir, rule, configPath);
           if (fs.existsSync(manifestDir)) {
-            const manifestInputHash =
-              (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-            const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
+            const { manifest, changed } = await generateManifest(manifestDir, rule, {
               generatorVersion: VERSION,
-              inputHash: manifestInputHash,
-              outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
             });
             const fileCount = Object.keys(manifest.files).length;
 
@@ -127,9 +82,6 @@ const handlers: CommandHandlers = {
               console.log(`\nManifest updated: ${manifestPath} (${fileCount} files)`);
             } else {
               console.log(`\nManifest unchanged (${fileCount} files)`);
-            }
-            if (unrecordedOutput) {
-              console.log(`Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}, so the next run regenerates`);
             }
           }
         }
@@ -454,8 +406,6 @@ const handlers: CommandHandlers = {
       }
 
       // Step 2: Generate
-      let generationCacheSkipped = false;
-
       if (verbose) {
         console.log('┌─────────────────────────────────────────────────┐');
         console.log('│ Step 2: Generate contracts                      │');
@@ -484,87 +434,55 @@ const handlers: CommandHandlers = {
           if (verbose) console.log(`  Using config: ${configPath}`);
           const config = loadConfig(configPath);
 
-          const useCache = opts.cache !== false && !opts.force;
-          let inputHash: string | undefined;
+          const originalLog = console.log;
+          if (!verbose) console.log = () => {};
 
-          if (isMultiModuleConfig(config)) {
-            inputHash = computeInputHash(config, configPath, VERSION);
+          try {
+            await generate(config, {
+              skipLint: opts.skipLint,
+              contractsOnly: opts.contractsOnly,
+              serverOnly: opts.serverOnly,
+              frontendOnly: opts.frontendOnly,
+            });
 
-            if (useCache) {
-              const rule = generatedFilesRule(opts.guardrails);
-              const skipCheck = await canSkipGeneration(resolveManifestDir(opts.generatedDir, rule, configPath), inputHash, rule);
-              if (skipCheck.skip) {
-                generationCacheSkipped = true;
-                generateSkipped = true;
-                generateDuration = Date.now() - generateStartTime;
-
-                if (isStreaming && process.stdout.isTTY) {
-                  process.stdout.clearLine?.(0);
-                  process.stdout.cursorTo?.(0);
-                }
-                console.log(`  ○ Generate              SKIP (${skipCheck.reason})`);
-              }
-            }
-          }
-
-          if (!generationCacheSkipped) {
-            const originalLog = console.log;
-            if (!verbose) console.log = () => {};
-
-            try {
-              await generate(config, {
-                skipLint: opts.skipLint,
-                contractsOnly: opts.contractsOnly,
-                serverOnly: opts.serverOnly,
-                frontendOnly: opts.frontendOnly,
-                      });
-
-              if (opts.manifest !== false) {
-                const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
-                if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
-                  const rule = generatedFilesRule(opts.guardrails);
-                  const manifestDir = resolveManifestDir(opts.generatedDir, rule, configPath);
-                  if (fs.existsSync(manifestDir)) {
-                    const manifestInputHash =
-                      (opts.cache !== false && !isPartialGeneration(opts)) ? inputHash : undefined;
-                    const { manifest, changed, unrecordedOutput } = await generateManifest(manifestDir, rule, {
-                      generatorVersion: VERSION,
-                      inputHash: manifestInputHash,
-                      outputs: isMultiModuleConfig(config) ? configuredOutputs(config) : [],
-                    });
-                    if (verbose) {
-                      const fileCount = Object.keys(manifest.files).length;
-                      if (changed) {
-                        const mPath = writeManifest(manifest, manifestDir);
-                        originalLog(`  Manifest updated: ${mPath} (${fileCount} files)`);
-                      } else {
-                        originalLog(`  Manifest unchanged (${fileCount} files)`);
-                      }
-                      if (unrecordedOutput) {
-                        originalLog(`  Input hash not recorded: the manifest in ${manifestDir} does not record ${unrecordedOutput}`);
-                      }
-                    } else if (changed) {
-                      writeManifest(manifest, manifestDir);
+            if (opts.manifest !== false) {
+              const { config: guardrailsConfig } = loadGuardrailsConfigWithPath(opts.guardrails);
+              if (guardrailsConfig?.generated && guardrailsConfig.generated.length > 0) {
+                const rule = generatedFilesRule(opts.guardrails);
+                const manifestDir = resolveManifestDir(opts.generatedDir, rule, configPath);
+                if (fs.existsSync(manifestDir)) {
+                  const { manifest, changed } = await generateManifest(manifestDir, rule, {
+                    generatorVersion: VERSION,
+                  });
+                  if (verbose) {
+                    const fileCount = Object.keys(manifest.files).length;
+                    if (changed) {
+                      const mPath = writeManifest(manifest, manifestDir);
+                      originalLog(`  Manifest updated: ${mPath} (${fileCount} files)`);
+                    } else {
+                      originalLog(`  Manifest unchanged (${fileCount} files)`);
                     }
+                  } else if (changed) {
+                    writeManifest(manifest, manifestDir);
                   }
                 }
               }
-
-              generatePassed = true;
-            } finally {
-              if (!verbose) console.log = originalLog;
             }
 
-            generateDuration = Date.now() - generateStartTime;
-
-            if (isStreaming && process.stdout.isTTY) {
-              process.stdout.clearLine?.(0);
-              process.stdout.cursorTo?.(0);
-            }
-
-            console.log(`  ✓ Generate              PASS (${generateDuration}ms)`);
-            if (verbose) console.log('');
+            generatePassed = true;
+          } finally {
+            if (!verbose) console.log = originalLog;
           }
+
+          generateDuration = Date.now() - generateStartTime;
+
+          if (isStreaming && process.stdout.isTTY) {
+            process.stdout.clearLine?.(0);
+            process.stdout.cursorTo?.(0);
+          }
+
+          console.log(`  ✓ Generate              PASS (${generateDuration}ms)`);
+          if (verbose) console.log('');
         }
       } catch (error) {
         generateDuration = Date.now() - generateStartTime;
@@ -596,13 +514,9 @@ const handlers: CommandHandlers = {
         console.log('');
       }
 
-      const gate3Skips = generationCacheSkipped
-        ? [...skipChecks, 'drift', 'manifest']
-        : skipChecks;
-
       const gate345Summary = await runAllChecks({
         ...baseCheckOptions,
-        skip: gate3Skips,
+        skip: skipChecks,
         gates: [3, 4, 5],
       });
 
@@ -875,7 +789,9 @@ function processOpenAPIWithExtensions(openapiPath: string): {
   stats: { servicesAdded: number; methodsAdded: number; services: string[] };
 } {
   const content = fs.readFileSync(openapiPath, 'utf-8');
-  const spec = yaml.parse(content);
+  // Read and written the way `generate` reads a spec (js-yaml's default schema),
+  // so what it reads from the written document is what it reads from this one.
+  const spec = yaml.load(content) as { paths?: Record<string, unknown> };
 
   const stats = { servicesAdded: 0, methodsAdded: 0, services: new Set<string>() };
   const httpMethods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
@@ -907,7 +823,7 @@ function processOpenAPIWithExtensions(openapiPath: string): {
     }
   }
 
-  const output = yaml.stringify(spec, { indent: 2 });
+  const output = yaml.dump(spec, { lineWidth: -1 });
   return { yaml: output, stats: { ...stats, services: Array.from(stats.services) } };
 }
 

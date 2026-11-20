@@ -2,7 +2,7 @@
 
 Contract-first OpenAPI toolchain for TypeScript Web/API systems. Generates contract packages, server routes, and frontend clients from OpenAPI specifications with enforceable guardrails.
 
-**Version:** 0.20.3
+**Version:** 0.20.4
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ Contract-first OpenAPI toolchain for TypeScript.
 
 Generate code from OpenAPI specifications.
 
-Loads the multi-module config, lints each spec with the rules of the lint command (unless skipped), applies overlays, and generates contract packages, server routes, frontend clients, and documentation from OpenAPI specs. Supports input-hash caching to skip unnecessary regeneration.
+Loads the multi-module config, lints each spec with the rules of the lint command (unless skipped), applies overlays, and generates contract packages, server routes, frontend clients, and documentation from OpenAPI specs.
 
 **Usage:**
 
@@ -54,9 +54,6 @@ micro-contracts generate -m core,billing
 ```
 micro-contracts generate --contracts-only
 ```
-```
-micro-contracts generate --force
-```
 
 #### Options
 
@@ -71,8 +68,6 @@ micro-contracts generate --force
 | `--skip-lint` |  | No | `false` | Skip linting (the rules of the lint command) before generation. |
 | `--manifest`, `--no-manifest` |  | No | `true` | Generate manifest after generation. Enabled by default when micro-contracts.guardrails.yaml has a generated section. Use --no-manifest to disable. |
 | `--manifest-dir` |  | No |  | Directory for manifest output. Defaults to the deepest directory holding every location the config generates to (contract, published contract and outputs), so that the manifest can record each output. |
-| `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
-| `--cache`, `--no-cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
 
 #### Exit Codes
 
@@ -329,8 +324,6 @@ micro-contracts pipeline --contracts-only --skip-lint
 | `--contracts-only` |  | No | `false` | Generate contract packages only. |
 | `--server-only` |  | No | `false` | Generate the built-in server section only. Not valid with an outputs configuration — select outputs with --output instead. |
 | `--frontend-only` |  | No | `false` | Generate the built-in frontend section only. Not valid with an outputs configuration — select outputs with --output instead. |
-| `--force` |  | No | `false` | Bypass input hash cache and always regenerate. |
-| `--cache`, `--no-cache` |  | No | `true` | Enable input hash caching. Enabled by default. Use --no-cache to disable both reading and writing cache. |
 
 #### Exit Codes
 

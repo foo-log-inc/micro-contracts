@@ -92,7 +92,7 @@ export const {{key}}Api = {
 {{#if (eq service ../name)}}
   /**
    * {{httpMethod}} {{path}}
-   {{#if summary}}* {{summary}}{{/if}}
+   {{#if summary}}* {{comment summary}}{{/if}}
    {{#if isPublished}}* @published{{/if}}
    */
   async {{#if stream}}*{{/if}}{{serviceMethod}}(input: {{clientInputType}}): {{#if stream}}AsyncGenerator<{{stream.eventType}}>{{else}}Promise<{{responseType}}>{{/if}} {

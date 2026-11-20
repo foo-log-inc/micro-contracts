@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { styleText } from "node:util";
 import { buildReviewPublishedContext } from "../agents/context-builder.js";
 import {
   runAgentTask,
@@ -54,7 +54,7 @@ export async function commandReviewPublished(opts: CommandReviewPublishedOptions
   } catch (err: unknown) {
     const exitCode = (err as { exitCode?: number }).exitCode;
     if (exitCode === EXIT_RUNTIME_MISSING || exitCode === EXIT_ADAPTER_ERROR) {
-      console.error(chalk.red((err as Error).message));
+      console.error(styleText("red", (err as Error).message, { stream: process.stderr }));
       process.exit(exitCode);
     }
     throw err;

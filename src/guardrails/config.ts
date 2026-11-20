@@ -28,7 +28,7 @@ const GUARDRAILS_CONFIG_NAMES = [
 /**
  * Default guardrails configuration
  */
-export const DEFAULT_GUARDRAILS: GuardrailsConfig = {
+export const DEFAULT_GUARDRAILS = {
   allowed: [
     'spec/**/*.yaml',
     'spec/**/*.yml',
@@ -57,7 +57,7 @@ export const DEFAULT_GUARDRAILS: GuardrailsConfig = {
     '**/*.generated.yaml',
     '**/*.generated.yml',
   ],
-};
+} satisfies GuardrailsConfig;
 
 /**
  * Find guardrails config file in current directory or ancestors
@@ -123,10 +123,17 @@ export function loadGuardrailsConfigWithPath(configPath?: string): LoadedGuardra
     throw new Error(`Invalid guardrails config: ${resolvedPath}`);
   }
   
-  // Merge with defaults for any missing sections
+  // Merge with defaults for any missing sections.
+  // The config is protected whatever its own `protected` says, under every name it is
+  // loaded as and the one it was loaded from: a change that edits the list deciding what
+  // needs approval is read against that very list, so a list leaving itself out would
+  // approve its own edit. Last, so that no negation before it can lift it.
   const mergedConfig: GuardrailsConfig = {
     allowed: config.allowed ?? DEFAULT_GUARDRAILS.allowed,
-    protected: config.protected ?? DEFAULT_GUARDRAILS.protected,
+    protected: [
+      ...(config.protected ?? DEFAULT_GUARDRAILS.protected),
+      ...new Set([...GUARDRAILS_CONFIG_NAMES, path.basename(resolvedPath)]),
+    ],
     generated: config.generated ?? DEFAULT_GUARDRAILS.generated,
     checks: config.checks,  // Pass through checks config
   };

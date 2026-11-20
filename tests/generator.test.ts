@@ -12,7 +12,6 @@ import {
   loadOpenAPISpec,
   loadConfig,
   generate,
-  collectInputFiles,
   buildTemplateContext,
   lintSpec,
 } from '../src/generator/index.js';
@@ -970,50 +969,6 @@ export interface {{interfaceName}} {
     });
   });
 
-  describe('input files for the cache', () => {
-    it('covers every template generation reads', () => {
-      const specPath = path.join(tmpDir, 'spec.yaml');
-      fs.writeFileSync(specPath, [
-        'openapi: 3.0.3',
-        'info:',
-        '  title: T',
-        '  version: 1.0.0',
-        'paths: {}',
-        '',
-      ].join('\n'));
-
-      const serviceTemplate = path.join(tmpDir, 'service.hbs');
-      const outputTemplate = path.join(tmpDir, 'routes.hbs');
-      const serverTemplate = path.join(tmpDir, 'server.hbs');
-      for (const template of [serviceTemplate, outputTemplate, serverTemplate]) {
-        fs.writeFileSync(template, 'x');
-      }
-
-      const configPath = path.join(tmpDir, 'micro-contracts.config.yaml');
-      fs.writeFileSync(configPath, 'modules: {}\n');
-
-      const config: MultiModuleConfig = {
-        defaults: {
-          contract: { output: path.join(tmpDir, 'contracts/{module}'), serviceTemplate },
-          contractPublic: { output: path.join(tmpDir, 'contracts-published/{module}') },
-          server: { output: path.join(tmpDir, 'routes.generated.ts'), template: serverTemplate },
-          outputs: { routes: { output: path.join(tmpDir, 'out.ts'), template: outputTemplate } },
-        },
-        modules: { core: { openapi: specPath } },
-      };
-
-      const files = collectInputFiles(config, configPath);
-
-      // A template missing here does not invalidate the hash when edited, so
-      // the next run skips and leaves the previous output in place.
-      expect(files).toContain(path.resolve(serviceTemplate));
-      expect(files).toContain(path.resolve(outputTemplate));
-      expect(files).toContain(path.resolve(serverTemplate));
-      expect(files).toContain(path.resolve(specPath));
-      expect(files).toContain(path.resolve(configPath));
-    });
-  });
-
   describe('published contract', () => {
     it('keeps only components the public endpoints reach', async () => {
       const specPath = path.join(tmpDir, 'spec.yaml');
@@ -1524,6 +1479,30 @@ components:
 `);
 
       expect(() => loadOpenAPISpec(specPath)).toThrow(/\.\/order\.yaml/);
+    });
+
+    it('fails on a reference into a part of components that is not a section, leaving Object.prototype as it was', () => {
+      const specPath = path.join(tmpDir, 'spec.yaml');
+      fs.writeFileSync(path.join(tmpDir, 'shared.yaml'), `
+components:
+  __proto__:
+    only: [allowlist]
+`);
+      fs.writeFileSync(specPath, `
+openapi: 3.0.3
+info:
+  title: T
+  version: 1.0.0
+  x-note: { $ref: './shared.yaml#/components/__proto__/only' }
+paths: {}
+`);
+
+      try {
+        expect(() => loadOpenAPISpec(specPath)).toThrow(/__proto__/);
+        expect(({} as Record<string, unknown>).only).toBeUndefined();
+      } finally {
+        delete (Object.prototype as Record<string, unknown>).only;
+      }
     });
   });
 
