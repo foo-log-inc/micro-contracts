@@ -119,11 +119,63 @@ function generateSchemaType(
   // A plain object schema becomes an interface; anything else is the same type
   // a property of that schema would get.
   const composed = !isReference(schema) && (schema.allOf || schema.oneOf || schema.anyOf);
-  if (!isReference(schema) && !composed && (normalizeType(schema).types.includes('object') || schema.properties)) {
+  if (!isReference(schema) && !composed && isObjectSchema(schema)) {
     return generateInterfaceType(name, schema, spec);
   }
 
   return `export type ${name} = ${schemaToTypeString(schema, spec)};`;
+}
+
+/**
+ * Whether a schema describes an object: it declares the object type, or
+ * declares properties or required properties, which only an object has.
+ */
+function isObjectSchema(schema: SchemaObject): boolean {
+  return normalizeType(schema).types.includes('object') || !!schema.properties || !!schema.required?.length;
+}
+
+/**
+ * The members of an object schema's type: a member for each property, one of
+ * type `unknown` for each required property the schema has no schema for (a
+ * subschema that only requires it, as a oneOf branch does), and the type of
+ * the index signature for the additional properties it allows. A property in
+ * `propertyTypes` has that type instead of its schema's.
+ */
+function objectMembers(
+  schema: SchemaObject,
+  spec: OpenAPISpec,
+  propertyTypes: ReadonlyMap<string, string> = new Map()
+): { properties: Array<{ description?: string; member: string }>; additionalType?: string } {
+  const required = new Set(schema.required || []);
+  const properties: Array<{ description?: string; member: string }> = [];
+  const memberTypes: string[] = [];
+
+  for (const [propName, propSchema] of Object.entries(schema.properties ?? {})) {
+    const tsType = propertyTypes.get(propName) ?? schemaToTypeString(propSchema, spec);
+    const optional = required.has(propName) ? '' : '?';
+    const description = isReference(propSchema) ? undefined : propSchema.description;
+    properties.push({ description, member: `${formatPropertyKey(propName)}${optional}: ${tsType}` });
+    memberTypes.push(tsType, ...(optional ? ['undefined'] : []));
+  }
+  for (const propName of required) {
+    if (!schema.properties || !Object.hasOwn(schema.properties, propName)) {
+      properties.push({ member: `${formatPropertyKey(propName)}: unknown` });
+      memberTypes.push('unknown');
+    }
+  }
+
+  if (!schema.additionalProperties) {
+    return { properties };
+  }
+  if (typeof schema.additionalProperties === 'boolean') {
+    return { properties, additionalType: 'unknown' };
+  }
+  // Every property's type has to be assignable to the index signature's type
+  // (TS2411), so the index signature admits the properties' types as well.
+  const valueType = schemaToTypeString(schema.additionalProperties, spec);
+  const union = [...new Set([valueType, ...memberTypes])];
+  const additionalType = union.includes('unknown') ? 'unknown' : union.join(' | ');
+  return { properties, additionalType };
 }
 
 /**
@@ -139,37 +191,22 @@ function generateInterfaceType(
   propertyTypes: ReadonlyMap<string, string> = new Map()
 ): string {
   const lines: string[] = [];
-  const required = new Set(schema.required || []);
   const { nullable } = normalizeType(schema);
+  const { properties, additionalType } = objectMembers(schema, spec, propertyTypes);
 
   if (schema.description) {
     lines.push(`/** ${commentText(schema.description)} */`);
   }
   lines.push(nullable ? `export type ${name} = {` : `export interface ${name} {`);
 
-  if (schema.properties) {
-    for (const [propName, propSchema] of Object.entries(schema.properties)) {
-      const isRequired = required.has(propName);
-      const tsType = propertyTypes.get(propName) ?? schemaToTypeString(propSchema, spec);
-      const optional = isRequired ? '' : '?';
-      
-      // Add description as JSDoc if available
-      if (!isReference(propSchema) && propSchema.description) {
-        lines.push(`  /** ${commentText(propSchema.description)} */`);
-      }
-      
-      lines.push(`  ${formatPropertyKey(propName)}${optional}: ${tsType};`);
+  for (const { description, member } of properties) {
+    if (description) {
+      lines.push(`  /** ${commentText(description)} */`);
     }
+    lines.push(`  ${member};`);
   }
-
-  // Handle additionalProperties
-  if (schema.additionalProperties) {
-    if (typeof schema.additionalProperties === 'boolean') {
-      lines.push('  [key: string]: unknown;');
-    } else {
-      const valueType = schemaToTypeString(schema.additionalProperties, spec);
-      lines.push(`  [key: string]: ${valueType};`);
-    }
+  if (additionalType) {
+    lines.push(`  [key: string]: ${additionalType};`);
   }
 
   lines.push(nullable ? '} | null;' : '}');
@@ -190,18 +227,29 @@ function schemaToTypeString(
     return `${getRefName(schema.$ref)}${nullSuffix}`;
   }
 
-  // Handle allOf, oneOf, anyOf
+  // A value of a schema with allOf, oneOf or anyOf is valid against each of
+  // them and against the schema's own keywords: its type is the intersection
+  // of each keyword's type and the type of the schema without them.
+  const compositions: string[] = [];
   if (schema.allOf) {
-    const ts = schema.allOf.map(s => schemaToTypeString(s, spec)).join(' & ');
-    return `(${ts})${nullSuffix}`;
+    compositions.push(`(${schema.allOf.map(s => schemaToTypeString(s, spec)).join(' & ')})`);
   }
   if (schema.oneOf) {
-    const ts = schema.oneOf.map(s => schemaToTypeString(s, spec)).join(' | ');
-    return `(${ts})${nullSuffix}`;
+    compositions.push(`(${schema.oneOf.map(s => schemaToTypeString(s, spec)).join(' | ')})`);
   }
   if (schema.anyOf) {
-    const ts = schema.anyOf.map(s => schemaToTypeString(s, spec)).join(' | ');
-    return `(${ts})${nullSuffix}`;
+    compositions.push(`(${schema.anyOf.map(s => schemaToTypeString(s, spec)).join(' | ')})`);
+  }
+  if (compositions.length > 0) {
+    // The schema's own keywords, with the null it admits left to nullSuffix
+    const own: SchemaObject = { ...schema, type: types.length > 0 ? types : undefined, nullable: undefined };
+    delete own.allOf;
+    delete own.oneOf;
+    delete own.anyOf;
+    const ownType = schemaToTypeString(own, spec);
+    const parts = ownType === 'unknown' ? compositions
+      : [ownType.includes(' | ') ? `(${ownType})` : ownType, ...compositions];
+    return `${parts.join(' & ')}${nullSuffix}`;
   }
 
   // Handle const and enum
@@ -223,26 +271,16 @@ function schemaToTypeString(
   }
 
   // Handle object with inline properties
-  if (types.includes('object') || schema.properties) {
-    if (!schema.properties) {
-      if (schema.additionalProperties) {
-        if (typeof schema.additionalProperties === 'boolean') {
-          return `Record<string, unknown>${nullSuffix}`;
-        }
-        const valueType = schemaToTypeString(schema.additionalProperties, spec);
-        return `Record<string, ${valueType}>${nullSuffix}`;
-      }
-      return `Record<string, unknown>${nullSuffix}`;
+  if (isObjectSchema(schema)) {
+    const { properties, additionalType } = objectMembers(schema, spec);
+    if (properties.length === 0) {
+      return `Record<string, ${additionalType ?? 'unknown'}>${nullSuffix}`;
     }
-    const props: string[] = [];
-    const required = new Set(schema.required || []);
-    for (const [propName, propSchema] of Object.entries(schema.properties)) {
-      const isRequired = required.has(propName);
-      const tsType = schemaToTypeString(propSchema, spec);
-      const optional = isRequired ? '' : '?';
-      props.push(`${formatPropertyKey(propName)}${optional}: ${tsType}`);
+    const members = properties.map(p => p.member);
+    if (additionalType) {
+      members.push(`[key: string]: ${additionalType}`);
     }
-    return `{ ${props.join('; ')} }${nullSuffix}`;
+    return `{ ${members.join('; ')} }${nullSuffix}`;
   }
 
   // Handle primitive types (including type arrays like ['string', 'null'])
