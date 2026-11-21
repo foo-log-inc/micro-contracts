@@ -1,4 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { execFileSync } from 'child_process';
 import { generateTypes } from './typeGenerator.js';
 import type { OpenAPISpec } from '../types.js';
 
@@ -244,5 +248,135 @@ describe('const', () => {
     const iface = extractInterface(output, 'Order');
     expect(iface).toContain("kind?: 'order';");
     expect(iface).toContain('version?: 2;');
+  });
+});
+
+/**
+ * Type-check `check` against the generated `types` as a consumer does (tsc
+ * --strict). Returns tsc's diagnostics: empty when every assignment in `check`
+ * holds and every `@ts-expect-error` marks an error.
+ */
+function typecheck(types: string, check: string[]): string {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'type-generator-'));
+  try {
+    fs.writeFileSync(path.join(tmpDir, 'types.ts'), types);
+    fs.writeFileSync(path.join(tmpDir, 'check.ts'), check.join('\n'));
+    const tsc = path.resolve(__dirname, '../../node_modules/typescript/bin/tsc');
+    execFileSync(process.execPath, [tsc, '--strict', '--noEmit', '--target', 'ES2022', '--module', 'ESNext',
+      '--moduleResolution', 'bundler', 'check.ts'], { cwd: tmpDir, encoding: 'utf-8', stdio: 'pipe' });
+    return '';
+  } catch (error) {
+    return (error as { stdout: string }).stdout;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+
+describe('a composition beside the schema\'s own keywords', () => {
+  /** An object whose properties hold, and one of whose properties is required, by a oneOf of required-only subschemas */
+  const eventRecordSchemas = {
+    PayloadRef: {
+      type: 'object',
+      required: ['bucket', 'key'],
+      additionalProperties: false,
+      properties: { bucket: { type: 'string' }, key: { type: 'string' } },
+    },
+    EventRecord: {
+      type: 'object',
+      required: ['v', 'kind', 'org', 'deliveryId', 'event', 'receivedAt'],
+      additionalProperties: false,
+      oneOf: [{ required: ['payload'] }, { required: ['payloadRef'] }],
+      properties: {
+        v: { type: 'integer', enum: [1] },
+        kind: { type: 'string', enum: ['event'] },
+        org: { type: 'string' },
+        deliveryId: { type: 'string' },
+        event: { type: 'string' },
+        receivedAt: { type: 'string', format: 'date-time' },
+        payload: { type: 'object', additionalProperties: true },
+        payloadRef: { $ref: '#/components/schemas/PayloadRef' },
+      },
+    },
+  };
+
+  it('types the properties and the subschemas\' required properties together', () => {
+    expect(generateTypes(minimalSpec(eventRecordSchemas))).toContain(
+      "export type EventRecord = { v: (1); kind: ('event'); org: string; deliveryId: string; event: string; receivedAt: string; " +
+      'payload?: Record<string, unknown>; payloadRef?: PayloadRef } & ({ payload: unknown } | { payloadRef: unknown });'
+    );
+  });
+
+  it('types an anyOf of required-only subschemas beside an object with additional properties', () => {
+    const output = generateTypes(minimalSpec({
+      Contact: {
+        type: 'object',
+        additionalProperties: true,
+        anyOf: [{ required: ['email'] }, { required: ['phone'] }],
+        properties: { email: { type: 'string' }, phone: { type: 'string' } },
+      },
+    }));
+    expect(output).toContain(
+      'export type Contact = { email?: string; phone?: string; [key: string]: unknown } & ({ email: unknown } | { phone: unknown });'
+    );
+  });
+
+  it('types every composition keyword of a schema', () => {
+    const output = generateTypes(minimalSpec({
+      A: { type: 'object', properties: { a: { type: 'string' } } },
+      B: { type: 'object', properties: { b: { type: 'string' } } },
+      C: { type: 'object', properties: { c: { type: 'string' } } },
+      AB: { allOf: [{ $ref: '#/components/schemas/A' }], oneOf: [{ $ref: '#/components/schemas/B' }, { $ref: '#/components/schemas/C' }] },
+      MaybeAB: { allOf: [{ $ref: '#/components/schemas/A' }], anyOf: [{ $ref: '#/components/schemas/B' }], nullable: true },
+    }));
+    expect(output).toContain('export type AB = (A) & (B | C);');
+    expect(output).toContain('export type MaybeAB = (A) & (B) | null;');
+  });
+
+  it('gives a consumer a type that checks the record', () => {
+    expect(typecheck(generateTypes(minimalSpec(eventRecordSchemas)), [
+      "import type { EventRecord } from './types';",
+      "const base = { v: 1, kind: 'event', org: 'o', deliveryId: 'd', event: 'push', receivedAt: '2026-11-22T00:00:00Z' } as const;",
+      'export const withPayload: EventRecord = { ...base, payload: { action: 1 } };',
+      "export const withRef: EventRecord = { ...base, payloadRef: { bucket: 'b', key: 'k' } };",
+      "export const header: Omit<EventRecord, 'payload' | 'payloadRef'> = { ...base };",
+      '// @ts-expect-error a field the schema does not declare',
+      'export const extra: EventRecord = { ...base, payload: {}, extra: 1 };',
+      '// @ts-expect-error v is 1',
+      'export const wrongV: EventRecord = { ...base, v: 2, payload: {} };',
+      "// @ts-expect-error kind is 'event'",
+      'export const wrongKind: EventRecord = { ...base, kind: 1, payload: {} };',
+      '// @ts-expect-error payloadRef is a PayloadRef',
+      "export const wrongRef: EventRecord = { ...base, payloadRef: { bucket: 'b' } };",
+      '// @ts-expect-error one of payload and payloadRef is required',
+      'export const neither: EventRecord = { ...base };',
+    ])).toBe('');
+  });
+});
+
+describe('additional properties beside properties', () => {
+  it('admits the properties\' types in the index signature, so the type compiles', () => {
+    const output = generateTypes(minimalSpec({
+      Labels: {
+        type: 'object',
+        required: ['name'],
+        properties: { name: { type: 'string' }, count: { type: 'integer' } },
+        additionalProperties: { type: 'string' },
+      },
+      Tags: {
+        type: 'object',
+        required: ['name'],
+        properties: { name: { type: 'string' } },
+        additionalProperties: { type: 'string' },
+      },
+    }));
+    expect(extractInterface(output, 'Labels')).toContain('[key: string]: string | number | undefined;');
+    expect(extractInterface(output, 'Tags')).toContain('[key: string]: string;');
+    expect(typecheck(output, [
+      "import type { Labels } from './types';",
+      "export const labels: Labels = { name: 'n', count: 1, env: 'prod' };",
+      '// @ts-expect-error an additional property is a string',
+      "export const wrong: Labels = { name: 'n', env: {} };",
+    ])).toBe('');
   });
 });
