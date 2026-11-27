@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatorVersion": "0.20.5",
+  "generatorVersion": "0.20.6",
   "files": {
     "frontend/src/billing/api.generated.ts": {
       "sha256": "a984194c30ea63542f38f5a98c5c2acbd89fe5249d032a6482e6e695017e2437"
